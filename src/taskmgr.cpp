@@ -63,11 +63,9 @@ void TaskManager::begin()
     // The idle tasks get created with a priority just ABOVE idle so that they steal idle time but nothing else.  They then
     // measure how much time is "wasted" at that lower priority and deem it to have been free CPU
 
-#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
     xTaskCreatePinnedToCore(IdleTask::IdleTaskEntry, "Idle0", IDLE_STACK_SIZE, &_taskIdle0, tskIDLE_PRIORITY + 1, &_hIdle0, 0);
+#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
     xTaskCreatePinnedToCore(IdleTask::IdleTaskEntry, "Idle1", IDLE_STACK_SIZE, &_taskIdle1, tskIDLE_PRIORITY + 1, &_hIdle1, 1);
-#else
-    xTaskCreate(IdleTask::IdleTaskEntry, "Idle0", IDLE_STACK_SIZE, &_taskIdle0, tskIDLE_PRIORITY + 1, &_hIdle0);
 #endif
 
     // We need to turn off the watchdogs because our idle measurement tasks burn all of the idle time just
@@ -138,11 +136,7 @@ void NightDriverTaskManager::StartScreenThread()
 {
     #if USE_SCREEN
         Serial.print( str_sprintf(">> Launching Screen Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
         xTaskCreatePinnedToCore(ScreenUpdateLoopEntry, "Screen Loop", SCREEN_STACK_SIZE, nullptr, SCREEN_PRIORITY, &_taskScreen, SCREEN_CORE);
-#else
-        xTaskCreate(ScreenUpdateLoopEntry, "Screen Loop", SCREEN_STACK_SIZE, nullptr, SCREEN_PRIORITY, &_taskScreen);
-#endif
         CheckHeap();
     #endif
 }
@@ -151,11 +145,7 @@ void NightDriverTaskManager::StartSerialThread()
 {
     #if ENABLE_AUDIOSERIAL
         Serial.print( str_sprintf(">> Launching Serial Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
         xTaskCreatePinnedToCore(AudioSerialTaskEntry, "Audio Serial Loop", DEFAULT_STACK_SIZE, nullptr, AUDIOSERIAL_PRIORITY, &_taskSerial, AUDIOSERIAL_CORE);
-#else
-        xTaskCreate(AudioSerialTaskEntry, "Audio Serial Loop", DEFAULT_STACK_SIZE, nullptr, AUDIOSERIAL_PRIORITY, &_taskSerial);
-#endif
         CheckHeap();
     #endif
 }
@@ -164,11 +154,7 @@ void NightDriverTaskManager::StartColorDataThread()
 {
     #if COLORDATA_SERVER_ENABLED
         Serial.print( str_sprintf(">> Launching ColorData Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
         xTaskCreatePinnedToCore(ColorDataTaskEntry, "ColorData Loop", DEFAULT_STACK_SIZE, nullptr, COLORDATA_PRIORITY, &_taskColorData, COLORDATA_CORE);
-#else
-        xTaskCreate(ColorDataTaskEntry, "ColorData Loop", DEFAULT_STACK_SIZE, nullptr, COLORDATA_PRIORITY, &_taskColorData);
-#endif
         CheckHeap();
     #endif
 }
@@ -176,11 +162,7 @@ void NightDriverTaskManager::StartColorDataThread()
 void NightDriverTaskManager::StartDrawThread()
 {
     Serial.print( str_sprintf(">> Launching Drawing Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
     xTaskCreatePinnedToCore(DrawLoopTaskEntry, "Draw Loop", DRAWING_STACK_SIZE, nullptr, DRAWING_PRIORITY, &_taskDraw, DRAWING_CORE);
-#else
-    xTaskCreate(DrawLoopTaskEntry, "Draw Loop", DRAWING_STACK_SIZE, nullptr, DRAWING_PRIORITY, &_taskDraw);
-#endif
     CheckHeap();
 }
 
@@ -188,11 +170,7 @@ void NightDriverTaskManager::StartAudioThread()
 {
     #if ENABLE_AUDIO
         Serial.print( str_sprintf(">> Launching Audio Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
         xTaskCreatePinnedToCore(AudioSamplerTaskEntry, "Audio Sampler Loop", AUDIO_STACK_SIZE, nullptr, AUDIO_PRIORITY, &_taskAudio, AUDIO_CORE);
-#else
-        xTaskCreate(AudioSamplerTaskEntry, "Audio Sampler Loop", AUDIO_STACK_SIZE, nullptr, AUDIO_PRIORITY, &_taskAudio);
-#endif
         CheckHeap();
     #endif
 }
@@ -201,11 +179,7 @@ void NightDriverTaskManager::StartNetworkThread()
 {
     #if ENABLE_WIFI
         Serial.print( str_sprintf(">> Launching Network Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
         xTaskCreatePinnedToCore(NetworkHandlingLoopEntry, "NetworkHandlingLoop", NET_STACK_SIZE, nullptr, NET_PRIORITY, &_taskNetwork, NET_CORE);
-#else
-        xTaskCreate(NetworkHandlingLoopEntry, "NetworkHandlingLoop", NET_STACK_SIZE, nullptr, NET_PRIORITY, &_taskNetwork);
-#endif
         CheckHeap();
     #endif
 }
@@ -214,11 +188,7 @@ void NightDriverTaskManager::StartDebugThread()
 {
     #if ENABLE_WIFI
         Serial.print( str_sprintf(">> Launching Debug Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
         xTaskCreatePinnedToCore(DebugLoopTaskEntry, "Debug Loop", DEBUG_STACK_SIZE, nullptr, DEBUG_PRIORITY, &_taskDebug, DEBUG_CORE);
-#else
-        xTaskCreate(DebugLoopTaskEntry, "Debug Loop", DEBUG_STACK_SIZE, nullptr, DEBUG_PRIORITY, &_taskDebug);
-#endif
         CheckHeap();
     #endif
 }
@@ -227,11 +197,7 @@ void NightDriverTaskManager::StartSocketThread()
 {
     #if INCOMING_WIFI_ENABLED
         Serial.print( str_sprintf(">> Launching Socket Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
         xTaskCreatePinnedToCore(SocketServerTaskEntry, "Socket Server Loop", SOCKET_STACK_SIZE, nullptr, SOCKET_PRIORITY, &_taskSocket, SOCKET_CORE);
-#else
-        xTaskCreate(SocketServerTaskEntry, "Socket Server Loop", SOCKET_STACK_SIZE, nullptr, SOCKET_PRIORITY, &_taskSocket);
-#endif
         CheckHeap();
     #endif
 }
@@ -240,11 +206,7 @@ void NightDriverTaskManager::StartRemoteThread()
 {
     #if ENABLE_REMOTE
         Serial.print( str_sprintf(">> Launching Remote Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
         xTaskCreatePinnedToCore(RemoteLoopEntry, "IR Remote Loop", REMOTE_STACK_SIZE, nullptr, REMOTE_PRIORITY, &_taskRemote, REMOTE_CORE);
-#else
-        xTaskCreate(RemoteLoopEntry, "IR Remote Loop", REMOTE_STACK_SIZE, nullptr, REMOTE_PRIORITY, &_taskRemote);
-#endif
         CheckHeap();
     #endif
 }
@@ -252,11 +214,7 @@ void NightDriverTaskManager::StartRemoteThread()
 void NightDriverTaskManager::StartJSONWriterThread()
 {
     Serial.print( str_sprintf(">> Launching JSON Writer Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
     xTaskCreatePinnedToCore(JSONWriterTaskEntry, "JSON Writer Loop", JSON_STACK_SIZE, nullptr, JSONWRITER_PRIORITY, &_taskJSONWriter, JSONWRITER_CORE);
-#else
-    xTaskCreate(JSONWriterTaskEntry, "JSON Writer Loop", JSON_STACK_SIZE, nullptr, JSONWRITER_PRIORITY, &_taskJSONWriter);
-#endif
     CheckHeap();
 }
 
@@ -292,11 +250,7 @@ TaskHandle_t NightDriverTaskManager::StartEffectThread(EffectTaskFunction functi
 
     Serial.print( str_sprintf(">> Launching %s Effect Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", name, (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
 
-#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
     if (xTaskCreatePinnedToCore(EffectTaskEntry, name, DEFAULT_STACK_SIZE, pTaskParams, priority, &effectTask, core) == pdPASS)
-#else
-    if (xTaskCreate(EffectTaskEntry, name, DEFAULT_STACK_SIZE, pTaskParams, priority, &effectTask) == pdPASS)
-#endif
         _vEffectTasks.push_back(effectTask);
     else
         // Clean up the task params object if the thread was not actually created
