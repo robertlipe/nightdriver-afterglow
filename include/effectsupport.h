@@ -22,49 +22,32 @@
 //    along with Nightdriver.  It is normally found in copying.txt
 //    If not, see <https://www.gnu.org/licenses/>.
 //
+//
 // Description:
 //
-//    Support functions and definitions for LED effects.
+//    Declarations of different types for the effect initializers included
+//    in effects.cpp.
 //
-// History:     May-23-2023         Rbergen      Created
+// History:     Sep-26-2023         Rbergen     Created for NightDriverStrip
 //
 //---------------------------------------------------------------------------
 
 #include "globals.h"
-#include "interfaces.h"
+#include "effectfactories.h"
 
-#include <vector>
+// Palettes used by a number of effects
 
-// Forward declarations
-class LEDStripEffect;
-class EffectManager;
-
-// RegisterAll
-//
-// Template helper that registers all effects in a list with an EffectManager.
-// The list must be a collection of types that can be instantiated with an
-// EffectManager and a DeviceConfig.
-template<typename... T>
-void RegisterAll(EffectManager& manager, const std::shared_ptr<GFXBase>& device)
-{
-    (manager.RegisterEffect<T>(device), ...);
-}
-
-// RegisterAll
-//
-// Template helper that registers all effects in a list with an EffectManager
-// for all devices in a collection.
-template<typename... T>
-void RegisterAll(EffectManager& manager, const std::vector<std::shared_ptr<GFXBase>>& devices)
-{
-    for (auto& device : devices)
-        RegisterAll<T...>(manager, device);
-}
-
-// Global Palettes
+extern const CRGBPalette16 BlueColors_p;
+extern const CRGBPalette16 RedColors_p;
+extern const CRGBPalette16 GreenColors_p;
+extern const CRGBPalette16 RGBColors_p;
+extern const CRGBPalette16 spectrumBasicColors;
+extern const CRGBPalette16 spectrumAltColors;
 extern const CRGBPalette16 USAColors_p;
 extern const CRGBPalette16 rainbowPalette;
-extern const CRGBPalette16 spectrumBasicColors;
+
+// A pointer to the global effect factories.
+extern std::unique_ptr<EffectFactories> g_ptrEffectFactories;
 
 // Defines used by some StarEffect instances
 

@@ -642,12 +642,12 @@ static const command core_commands[] = {
         cli_printf("SimBeat: %s  BPM: %d\n", g_Analyzer.GetSimulateBeat() ? "ON" : "OFF", g_Analyzer.GetSimulateBPM());
      }},
     {"+", "Nudge brightness up", "Brightness +10", [](const cli_argv &) {
-        int val = std::min(255, g_ptrSystem->GetDeviceConfig().GetBrightness() + 10);
+        int val = std::min(255, (int)g_ptrSystem->GetDeviceConfig().GetBrightness() + 10);
         g_ptrSystem->GetDeviceConfig().SetBrightness(val);
         cli_printf("Brightness: %d\n", val);
     }},
     {"-", "Nudge brightness down", "Brightness -10", [](const cli_argv &) {
-        int val = std::max(0, g_ptrSystem->GetDeviceConfig().GetBrightness() - 10);
+        int val = std::max(0, (int)g_ptrSystem->GetDeviceConfig().GetBrightness() - 10);
         g_ptrSystem->GetDeviceConfig().SetBrightness(val);
         cli_printf("Brightness: %d\n", val);
     }},
