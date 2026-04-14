@@ -1,0 +1,4 @@
+set -ex
+pio run -e kitch
+sh go-k1
+sh go-k2

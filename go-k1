@@ -1,0 +1,13 @@
+#!/bin/sh
+
+set -e
+
+export PLATFORMIO_UPLOAD_PORT=192.168.2.103
+
+E=kitch
+
+pio run    --target upload -e $E
+
+# pio device monitor -e $E
+
+# (stty 115200 ; cat -u) < $PLATFORMIO_UPLOAD_PORT
