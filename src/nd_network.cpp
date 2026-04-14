@@ -482,15 +482,31 @@ namespace nd_network
         }
     }
 
+    static void DoStatsCommand()
+    {
+        auto& bufferManager = g_ptrSystem->GetBufferManagers()[0];
+
+        DebugCLI::cli_printf("%s:%zux%d %zuK", FLASH_VERSION_NAME, g_ptrSystem->GetDevices().size(), NUM_LEDS, (size_t)(ESP.getFreeHeap() / 1024));
+        DebugCLI::cli_printf("%sdB:%s",String(WiFi.RSSI()).substring(1).c_str(), WiFi.isConnected() ? WiFi.localIP().toString().c_str() : "None");
+        DebugCLI::cli_printf("BUFR:%02zu/%02zu [%lufps]", (size_t)bufferManager.Depth(), (size_t)bufferManager.BufferCount(), (unsigned long)g_Values.FPS);
+        DebugCLI::cli_printf("DATA:%+04.2lf-%+04.2lf", bufferManager.AgeOfOldestBuffer(), bufferManager.AgeOfNewestBuffer());
+
+        #if ENABLE_AUDIO
+        DebugCLI::cli_printf("g_Analyzer._VU: %.2f, g_Analyzer._MinVU: %.2f, g_Analyzer.g_Analyzer._PeakVU: %.2f, g_Analyzer.gVURatio: %.2f", g_Analyzer.VU(), g_Analyzer.MinVU(), g_Analyzer.PeakVU(), g_Analyzer.VURatio());
+        #endif
+
+        #if INCOMING_WIFI_ENABLED
+        DebugCLI::cli_printf("Socket Buffer _cbReceived: %zu", g_ptrSystem->GetSocketServer()._cbReceived);
+        #endif
+    }
+
     void InitNetworkCLI()
     {
         static const DebugCLI::command cmds[] = {
             #if ENABLE_NTP
             {"clock", "Refresh time", "Refreshing", [](const DebugCLI::cli_argv &) { NTPTimeClient::UpdateClockFromWeb(&l_Udp); }},
             #endif
-            {"stats", "Display stats", "Displaying", [](const DebugCLI::cli_argv &) {
-                DebugCLI::cli_printf("%s:%zux%d %zuK %ddB:%s", FLASH_VERSION_NAME, g_ptrSystem->GetDevices().size(), NUM_LEDS, (size_t)(ESP.getFreeHeap()/1024), abs(WiFi.RSSI()), WiFi.isConnected() ? WiFi.localIP().toString().c_str() : "None");
-            }}
+            {"stats", "Display stats", "Displaying", [](const DebugCLI::cli_argv &) { DoStatsCommand(); }}
         };
         DebugCLI::RegisterCommands(cmds, sizeof(cmds) / sizeof(cmds[0]));
     }
@@ -526,17 +542,61 @@ namespace nd_network
 // Global Support Helpers
 
 #if ENABLE_ESPNOW
+// ESPNOW Support
+//
+// We accept ESPNOW commands to change effects and so on.  This is a simple structure that we'll receive over ESPNOW.
+enum class ESPNowCommand : uint8_t
+{
+    ESPNOW_NEXTEFFECT = 1,
+    ESPNOW_PREVEFFECT,
+    ESPNOW_SETEFFECT,
+    ESPNOW_INVALID = 255    // Followed by a uint32_t argument
+};
+
+// Message class
+//
+// Encapsulates an ESPNOW message, which is a command and an optional argument
+struct Message
+{
+    uint8_t       cbSize;
+    ESPNowCommand command;
+    uint32_t      arg1;
+} __attribute__((packed));
+
 void onReceiveESPNOW(const uint8_t *macAddr, const uint8_t *data, int dataLen)
 {
-    struct Message { uint8_t cbSize; uint8_t command; uint32_t arg1; } __attribute__((packed));
     Message message;
     if (dataLen < sizeof(message)) return;
     memcpy(&message, data, sizeof(message));
-    switch (message.command)
+    
+    debugI("ESPNOW Message received.");
+
+    if (message.cbSize != sizeof(message))
     {
-        case 1: g_ptrSystem->GetEffectManager().NextEffect(); break;
-        case 2: g_ptrSystem->GetEffectManager().PreviousEffect(); break;
-        case 3: g_ptrSystem->GetEffectManager().SetCurrentEffectIndex(message.arg1); break;
+        debugE("ESPNOW Message received with wrong structure size: %u but should be %zu", message.cbSize, sizeof(message));
+        return;
+    }
+
+    switch(message.command)
+    {
+        case ESPNowCommand::ESPNOW_NEXTEFFECT:
+            debugI("ESPNOW Next effect");
+            g_ptrSystem->GetEffectManager().NextEffect();
+            break;
+
+        case ESPNowCommand::ESPNOW_PREVEFFECT:
+            debugI("ESPNOW Previous effect");
+            g_ptrSystem->GetEffectManager().PreviousEffect();
+            break;
+
+        case ESPNowCommand::ESPNOW_SETEFFECT:
+            debugI("ESPNOW Setting effect index to %u", message.arg1);
+            g_ptrSystem->GetEffectManager().SetCurrentEffectIndex(message.arg1);
+            break;
+
+        default:
+            debugE("ESPNOW Message received with unknown command: %d", (int) message.command);
+            break;
     }
 }
 #endif
@@ -580,16 +640,42 @@ void SetupOTA(const String &strHostname)
     if (!strHostname.isEmpty()) ArduinoOTA.setHostname(strHostname.c_str());
     else                        ArduinoOTA.setMdnsEnabled(false);
 
-    ArduinoOTA.onStart([]() {
-        g_Values.UpdateStarted = true;
-        #if ENABLE_REMOTE
-            g_ptrSystem->GetRemoteControl().end();
-        #endif
-    }).onEnd([]() {
-        g_Values.UpdateStarted = false;
-    }).onError([](ota_error_t) {
-        g_Values.UpdateStarted = false;
-    });
+    ArduinoOTA
+        .onStart([]() {
+            g_Values.UpdateStarted = true;
+            debugI("Stopping IR remote");
+            #if ENABLE_REMOTE
+                g_ptrSystem->GetRemoteControl().end();
+            #endif
+            debugI("Start updating from OTA");
+        })
+        .onEnd([]() {
+            debugI("\nEnd OTA");
+            g_Values.UpdateStarted = false;
+        })
+        .onProgress([](unsigned int progress, unsigned int total) {
+            static uint last_time = millis();
+            if (millis() - last_time > 1000)
+            {
+                last_time = millis();
+                auto p = (progress / (total / 100));
+                debugI("OTA Progress: %u%%\r", p);
+
+                #if USE_HUB75
+                    auto pMatrix = std::static_pointer_cast<HUB75GFX>(g_ptrSystem->GetEffectManager().GetBaseGraphics()[0]);
+                    pMatrix->SetCaption(str_sprintf("Update:%d%%", p), CAPTION_TIME);
+                #endif
+            }
+            else
+            {
+                debugV("OTA Progress: %u%%\r", (progress / (total / 100)));
+            }
+        })
+        .onError([](ota_error_t error) {
+            g_Values.UpdateStarted = false;
+            debugW("Error[%u]: ", error);
+            throw std::runtime_error("OTA Flash update failed.");
+        });
     ArduinoOTA.begin();
 #endif
 }
@@ -606,8 +692,21 @@ bool ProcessIncomingData(std::unique_ptr<uint8_t[]> &payloadData, size_t payload
         return false;
     #else
         uint16_t command16 = payloadData[1] << 8 | payloadData[0];
+        debugV("payloadLength: %zu, command16: %d", payloadLength, command16);
+
         if (command16 == WIFI_COMMAND_PEAKDATA) {
             #if ENABLE_AUDIO
+                uint16_t numbands  = WORDFromMemory(&payloadData[2]);
+                uint32_t length32  = DWORDFromMemory(&payloadData[4]);
+                uint64_t seconds   = ULONGFromMemory(&payloadData[8]);
+                uint64_t micros    = ULONGFromMemory(&payloadData[16]);
+
+                debugV("ProcessIncomingData -- Bands: %u, Length: %lu, Seconds: %llu, Micros: %llu ... ",
+                       (unsigned int)numbands,
+                       (unsigned long)length32,
+                       seconds,
+                       micros);
+
                 PeakData peaks{};
                 const float *pFloats = reinterpret_cast<const float *>(payloadData.get() + STANDARD_DATA_HEADER_SIZE);
                 std::copy_n(pFloats, std::min<size_t>(NUM_BANDS, (payloadLength - STANDARD_DATA_HEADER_SIZE)/sizeof(float)), peaks.begin());
@@ -617,6 +716,16 @@ bool ProcessIncomingData(std::unique_ptr<uint8_t[]> &payloadData, size_t payload
         }
         if (command16 == WIFI_COMMAND_PIXELDATA64) {
             uint16_t channel16 = WORDFromMemory(&payloadData[2]);
+            uint32_t length32  = DWORDFromMemory(&payloadData[4]);
+            uint64_t seconds   = ULONGFromMemory(&payloadData[8]);
+            uint64_t micros    = ULONGFromMemory(&payloadData[16]);
+
+            debugV("ProcessIncomingData -- Channel: %u, Length: %lu, Seconds: %llu, Micros: %llu ... ",
+                (unsigned int)channel16,
+                (unsigned long)length32,
+                seconds,
+                micros);
+
             if (channel16 == 0) channel16 = 1;
             std::lock_guard<std::mutex> guard(g_buffer_mutex);
             for (int i = 0; i < g_ptrSystem->GetBufferManagers().size(); i++) {
@@ -628,6 +737,7 @@ bool ProcessIncomingData(std::unique_ptr<uint8_t[]> &payloadData, size_t payload
             }
             return true;
         }
+        debugV("ProcessIncomingData -- Unknown command: 0x%x", command16);
         return false;
     #endif
 }
