@@ -30,6 +30,7 @@
 
 #include "globals.h"
 #include <fcntl.h>
+#include <esp_mac.h>
 
 #if ENABLE_WIFI
     #include <algorithm>
