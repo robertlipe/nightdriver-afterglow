@@ -29,17 +29,20 @@
 //
 //---------------------------------------------------------------------------
 
-#include <esp_task_wdt.h>
 #include "globals.h"
-#include "soundanalyzer.h"
 
-ProjectSoundAnalyzer g_Analyzer;
+#include <algorithm>
+#include <esp_task_wdt.h>
+#include <fcntl.h>
+#include <memory>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #if ENABLE_AUDIO
-
-#if ENABLE_VICE_SERVER
 #include "nd_network.h"
-#endif
+#include "soundanalyzer.h"
+#include "time_utils.h"
 
 // AudioSamplerTaskEntry
 // A background task that samples audio, computes the VU, stores it for effect use, etc.
@@ -51,7 +54,7 @@ void IRAM_ATTR AudioSamplerTaskEntry(void *)
     // Enable microphone input
     pinMode(INPUT_PIN, INPUT);
 
-    g_Analyzer.SampleBufferInitI2S();
+    g_Analyzer.InitAudioInput();
 
     for (;;)
     {
@@ -163,7 +166,7 @@ public:
             release();
             return false;
         }
-        SetSocketBlockingEnabled(_server_fd, false);
+        nd_network::SetSocketBlockingEnabled(_server_fd, false);
 
         memset(&_address, 0, sizeof(_address));
         _address.sin_family = AF_INET;
@@ -238,8 +241,6 @@ void IRAM_ATTR AudioSerialTaskEntry(void *)
 {
     //  SoftwareSerial Serial64(SERIAL_PINRX, SERIAL_PINTX);
     debugI(">>> Sampler Task Started");
-
-    SoundAnalyzer Analyzer;
 
 #if ENABLE_VICE_SERVER
     VICESocketServer socketServer(NetworkPort::VICESocketServer);

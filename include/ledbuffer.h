@@ -1,3 +1,5 @@
+#pragma once
+
 //+--------------------------------------------------------------------------
 //
 // File:        LEDBuffer.h
@@ -20,137 +22,56 @@
 //    along with Nightdriver.  It is normally found in copying.txt
 //    If not, see <https://www.gnu.org/licenses/>.
 //
-//
 // Description:
 //
-//   Provides a timestamped buffer of colordata.  The LEDBufferManager keeps
-//   N of these buffers in a circular queue, and each has a timestamp on it
-//   indicating when it becomes valid.
+//    Storage and management of buffers of LED color data.
 //
-// History:     Oct-9-2018         Davepl      Created from other projects
+// History:     Oct-26-2018         Davepl      Created
 //
 //---------------------------------------------------------------------------
 
-#pragma once
-
 #include "globals.h"
+#include "interfaces.h"
+#include "gfxbase.h"
 
-#include <pixeltypes.h>
 #include <memory>
-#include <iostream>
-#include <utility>
-#include "values.h"
+#include <vector>
 
-#include "esp_log.h"
+// LEDBuffer
+//
+// Provides a timestamped buffer of colordata.  The LEDBufferManager keeps
+// N of these buffers in a circular queue, and each has a timestamp on it
+// indicating when it becomes valid.
 
 class LEDBuffer
 {
-  public:
-
-     std::shared_ptr<GFXBase> _pStrand;
-
   private:
 
-    std::unique_ptr<CRGB []> _leds;
-    uint32_t                 _pixelCount;
-    uint64_t                 _timeStampMicroseconds;
-    uint64_t                 _timeStampSeconds;
+    std::shared_ptr<GFXBase>    _pStrand;
+    std::unique_ptr<CRGB[]>     _leds;
+    uint32_t                    _pixelCount;
+    uint64_t                    _timeStampMicroseconds;
+    uint64_t                    _timeStampSeconds;
 
   public:
 
-    explicit LEDBuffer(std::shared_ptr<GFXBase> pStrand) :
-                 _pStrand(std::move(pStrand)),
-                 _pixelCount(0),
-                 _timeStampMicroseconds(0),
-                 _timeStampSeconds(0)
-    {
-        _leds.reset(psram_allocator<CRGB>().allocate(NUM_LEDS));
-    }
+    LEDBuffer(std::shared_ptr<GFXBase> pStrand);
 
-    ~LEDBuffer()
-    = default;
+    uint64_t Seconds()      const;
+    uint64_t MicroSeconds() const;
+    uint32_t Length()       const;
 
-    uint64_t Seconds()      const  { return _timeStampSeconds;      }
-    uint64_t MicroSeconds() const  { return _timeStampMicroseconds; }
-    uint32_t Length()       const  { return _pixelCount;            }
+    double TimeTillDue() const;
 
-    double TimeTillDue() const
-    {
-        return g_Values.AppTime.CurrentTime() - _timeStampSeconds - (_timeStampMicroseconds / (double) MICROS_PER_SECOND);
-    }
-
-    bool IsBufferOlderThan(const timeval & tv) const
-    {
-        if (Seconds() < tv.tv_sec)
-            return true;
-
-        if (Seconds() == tv.tv_sec)
-            if (MicroSeconds() < tv.tv_usec)
-                return true;
-
-        return false;
-    }
+    bool IsBufferOlderThan(const timeval & tv) const;
 
     // UpdateFromWire
     //
     // Parse and deposit a WiFi packet into a buffer
-#define TAG "ledbuffer"
-    bool UpdateFromWire(std::unique_ptr<uint8_t []> & payloadData, size_t payloadLength)
-    {
-        if (payloadLength < 24)                 // Our header size
-        {
-            ESP_LOGW(TAG, "Not enough data received to process");
-            return false;
-        }
 
-        #if 0
-            debugV("========");
-            for (int i = 0; i < 24; i++)
-                debugV("%02x ", payloadData[i]);
-            debugV("========");
-        #endif
+    bool UpdateFromWire(std::unique_ptr<uint8_t []> & payloadData, size_t payloadLength);
 
-        uint16_t command16 = WORDFromMemory(&payloadData[0]);
-        uint16_t channel16 = WORDFromMemory(&payloadData[2]);
-        uint32_t length32  = DWORDFromMemory(&payloadData[4]);
-        uint64_t seconds   = ULONGFromMemory(&payloadData[8]);
-        uint64_t micros    = ULONGFromMemory(&payloadData[16]);
-
-        //printf("UpdateFromWire -- Command: %u, Channel: %d, Length: %u, Seconds: %u, Micros: %u\n", command16, channel16, length32, seconds, micros);
-
-        const size_t cbHeader = sizeof(command16) + sizeof(channel16) + sizeof(length32) + sizeof(seconds) + sizeof(micros);
-
-        _timeStampSeconds      = seconds;
-        _timeStampMicroseconds = micros;
-        _pixelCount            = length32;
-
-        if (payloadLength < length32 * sizeof(CRGB) + cbHeader)
-        {
-            ESP_LOGW(TAG, "command16: %hu   length32: %lu,  payloadLength: %zu\n", command16, (unsigned long)length32, payloadLength);
-            ESP_LOGW(TAG, "Data size mismatch");
-            return false;
-        }
-        if (length32 > NUM_LEDS)
-        {
-            ESP_LOGW(TAG, "More data than we have LEDs\n");
-            return false;
-        }
-        ESP_LOGV(TAG, "PayloadLength: %zu, command16: %hu, Length32: %lu", payloadLength, command16, (unsigned long)length32);
-
-        CRGB * pRGB = reinterpret_cast<CRGB *>(&payloadData[cbHeader]);
-
-        memcpy(_leds.get(), pRGB, length32 * sizeof(CRGB));
-        ESP_LOGV(TAG,"seconds, micros: %llu.%llu", seconds, micros);
-        ESP_LOGV(TAG,"Color0: %08lx", (unsigned long)(uint32_t) _leds[0]);
-        return true;
-    }
-
-    void DrawBuffer()
-    {
-        _timeStampMicroseconds = 0;
-        _timeStampSeconds      = 0;
-        _pStrand->fillLeds(_leds);
-    }
+    void DrawBuffer();
 };
 
 // LEDBufferManager
@@ -161,146 +82,62 @@ class LEDBuffer
 
 class LEDBufferManager
 {
-    std::unique_ptr<std::vector<std::shared_ptr<LEDBuffer>>> _ppBuffers;          // The circular array of buffer ptrs
-    std::shared_ptr<LEDBuffer> _pLastBufferAdded;   // Keeps track of the MRU buffer
-    size_t                                               _iNextBuffer;        // Head pointer index
-    size_t                                               _iLastBuffer;        // Tail pointer index
-    uint32_t                                             _cBuffers;           // Number of buffers
+  private:
+
+    std::unique_ptr<std::vector<std::shared_ptr<LEDBuffer>>>    _ppBuffers;
+    std::shared_ptr<LEDBuffer>                                  _pLastBufferAdded;
+    uint32_t                                                    _iNextBuffer;
+    uint32_t                                                    _iLastBuffer;
+    uint32_t                                                    _cBuffers;
 
   public:
 
-    LEDBufferManager(uint32_t cBuffers, const std::shared_ptr<GFXBase>& pGFX)
-     : _ppBuffers(std::make_unique<std::vector<std::shared_ptr<LEDBuffer>>>()), // Create the circular array of ptrs
-       _iNextBuffer(0),
-       _iLastBuffer(0),
-       _cBuffers(cBuffers)
-    {
-        // The initializer creates a uniquely owned table of shared pointers.
-        // We exclusively can see the table, but the buffer objects it contains
-        // are returned back out to callers so they must be shared pointers.
+    LEDBufferManager(uint32_t cBuffers, const std::shared_ptr<GFXBase>& pGFX);
 
-        for (int i = 0; i < _cBuffers; i++)
-            _ppBuffers->push_back(make_shared_psram<LEDBuffer>(pGFX));
-    }
-
-    double AgeOfOldestBuffer() const
-    {
-        if (false == IsEmpty())
-        {
-            auto pOldest = PeekOldestBuffer();
-            return (pOldest->Seconds() + pOldest->MicroSeconds() / MICROS_PER_SECOND) - g_Values.AppTime.CurrentTime();
-        }
-        else
-        {
-            return 0.0;
-        }
-    }
-
-    double AgeOfNewestBuffer() const
-    {
-        if (false == IsEmpty())
-        {
-            auto pNewest = PeekNewestBuffer();
-            return (pNewest->Seconds() + pNewest->MicroSeconds() / MICROS_PER_SECOND) - g_Values.AppTime.CurrentTime();
-        }
-        else
-        {
-            return 0.0;
-        }
-    }
+    double AgeOfOldestBuffer() const;
+    double AgeOfNewestBuffer() const;
 
     // BufferCount
     //
     // The fixed, maximum size of the whole thing if it were full
 
-    size_t BufferCount() const
-    {
-        return _cBuffers;
-    }
+    size_t BufferCount() const;
 
     // Depth
     //
     // The variable, current count of buffers in use
 
-    size_t Depth() const
-    {
-        if (_iNextBuffer < _iLastBuffer)
-            return (_iNextBuffer + _cBuffers - _iLastBuffer);
-        else
-            return _iNextBuffer - _iLastBuffer;
-    }
+    size_t Depth() const;
 
-    inline bool IsEmpty() const
-    {
-        return _iNextBuffer == _iLastBuffer;
-    }
+    bool IsEmpty() const;
 
     // PeekNewestBuffer
     //
     // Get a pointer to the most recently added (newest) buffer, or nullptr if empty
 
-    std::shared_ptr<LEDBuffer> PeekNewestBuffer() const
-    {
-        if (IsEmpty())
-            return nullptr;
-        return _pLastBufferAdded;
-    }
+    std::shared_ptr<LEDBuffer> PeekNewestBuffer() const;
 
     // GetNewBuffer
     //
     // Grabs the next buffer in the circle, advancing the tail pointer as well if we've
     // 'caught up' to the head pointer, which effective throws away that buffer via reuse
 
-    std::shared_ptr<LEDBuffer> GetNewBuffer()
-    {
-        auto pResult = (*_ppBuffers)[_iNextBuffer++];
-
-        if (IsEmpty())
-            _iLastBuffer++;
-
-        _iLastBuffer %= _cBuffers;
-        _iNextBuffer %= _cBuffers;
-
-        _pLastBufferAdded = pResult;
-
-        return pResult;
-    }
+    std::shared_ptr<LEDBuffer> GetNewBuffer();
 
     // GetOldestBuffer
     //
     // Return a pointer to the very oldest buffer, or nullptr if empty
 
-    std::shared_ptr<LEDBuffer> GetOldestBuffer()
-    {
-        if (IsEmpty())
-            return nullptr;
-
-        auto pResult = (*_ppBuffers)[_iLastBuffer];
-        _iLastBuffer++;
-        _iLastBuffer %= _cBuffers;
-
-        return pResult;
-    }
+    std::shared_ptr<LEDBuffer> GetOldestBuffer();
 
     // PeekOldestBuffer
     //
     // Take a "peek" at the newest buffer, or nullptr if empty
 
-    std::shared_ptr<LEDBuffer> PeekOldestBuffer() const
-    {
-        if (IsEmpty())
-            return nullptr;
+    std::shared_ptr<LEDBuffer> PeekOldestBuffer() const;
 
-        return (*_ppBuffers)[_iLastBuffer];
-    }
-
-    std::shared_ptr<LEDBuffer> operator[](size_t index) const
-    {
-        if (IsEmpty())
-            return nullptr;
-        size_t i = (_iLastBuffer + index) % _cBuffers;
-        return (*_ppBuffers)[i];
-    }
+    // operator[]
+    //
+    // Returns a pointer to the buffer at the specified logical index, or nullptr if empty
+    std::shared_ptr<LEDBuffer> operator[](size_t index) const;
 };
-#undef TAG
-
