@@ -138,6 +138,19 @@ class NightDriver:
         """Gets the settings for a specific effect."""
         return self._get("/settings/effect", params={"effectIndex": effect_index})
 
+    def get_coredump(self):
+        """Fetches the coredump binary from the device."""
+        try:
+            response = requests.get(f"{self.base_url}/coredump", timeout=30)
+            if response.status_code == 200:
+                return response.content
+            else:
+                print(f"Failed to fetch coredump: HTTP {response.status_code}")
+                return None
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching coredump: {e}")
+            return None
+
     def set_effect_settings(self, effect_index, settings):
         """
         Sets settings for a specific effect.
@@ -941,7 +954,7 @@ def main():
     parser.add_argument("--set-brightness", type=int, metavar="VALUE", help="Set the device brightness (0-255).")
     parser.add_argument("--capture", type=str, metavar="EFFECT_ID", help="Capture an effect and save it as a GIF.")
     parser.add_argument("--duration", type=int, default=5, metavar="SECONDS", help="Duration to capture the effect in seconds (default: 5).")
-    parser.add_argument("--output", default="effect_capture.gif", metavar="FILENAME", help="Output filename for the captured GIF (default: effect_capture.gif).")
+    parser.add_argument("--output", metavar="FILENAME", help="Output filename (defaults based on action).")
     parser.add_argument("--scale", type=int, metavar="FACTOR", help="Scale factor for the output GIF (e.g., 8 for 8x). Default: auto-scale if width or height < 256.")
     parser.add_argument("--save-png", action="store_true", help="Save captured frames as a sequence of PNG files.")
     parser.add_argument("--save-contact-sheet", action="store_true", help="Save captured frames as a single contact sheet image.")
@@ -951,6 +964,7 @@ def main():
     parser.add_argument("--preview-gain", type=float, default=1.0, help="Brightness gain for live view (e.g., 2.0 to double brightness). Useful for previewing low-brightness settings.")
     parser.add_argument("--backup", metavar="FILENAME", help="Save the device configuration to a JSON file.")
     parser.add_argument("--restore", metavar="FILENAME", help="Restore the device configuration from a JSON file.")
+    parser.add_argument("--get-coredump", action="store_true", help="Fetch the coredump partition from the device.")
     parser.add_argument("--generate-gallery", action="store_true", help="Generate an HTML gallery from captured GIFs.")
     parser.add_argument("--mapping", type=str, default="auto", choices=["auto", "row-major", "serpentine", "spectrum"], help="Specify the pixel mapping/layout (auto, row-major, serpentine, or spectrum). Default: auto.")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output for debugging.")
@@ -1001,7 +1015,11 @@ def main():
     # Handle positional commands (intent divining)
     if args.command:
         cmd = " ".join(args.command)
-        if cmd.lower() == "next":
+        if args.get_coredump or args.backup or args.restore:
+            # If we're doing a file operation, the positional arg is likely the filename
+            if not args.output:
+                args.output = cmd
+        elif cmd.lower() == "next":
             args.next = True
         elif cmd.lower() == "prev":
             args.prev = True
@@ -1026,11 +1044,12 @@ def main():
         effect_to_capture = find_effect_index(args.capture)
 
         if effect_to_capture is not None:
-            outputs = [args.output, args.output.replace('.gif', '.raw')]
+            out_name = args.output if args.output else "effect_capture.gif"
+            outputs = [out_name, out_name.replace('.gif', '.raw')]
             if args.save_png:
-                outputs.append(os.path.splitext(args.output)[0] + "-*.png")
+                outputs.append(os.path.splitext(out_name)[0] + "-*.png")
             if args.save_contact_sheet:
-                outputs.append(os.path.splitext(args.output)[0] + "_sheet.png")
+                outputs.append(os.path.splitext(out_name)[0] + "_sheet.png")
 
             print(f"Capturing effect {effect_to_capture} for {args.duration} seconds...")
             print(f"Outputs: {', '.join(outputs)}")
@@ -1039,14 +1058,14 @@ def main():
                 frames = color_client.capture_frames(args.duration)
 
             if frames:
-                create_animated_gif(frames, args.output, scale=args.scale, verbose=args.verbose)
-                raw_filename = args.output.replace('.gif', '.raw')
+                create_animated_gif(frames, out_name, scale=args.scale, verbose=args.verbose)
+                raw_filename = out_name.replace('.gif', '.raw')
                 save_raw_frames(frames, raw_filename, verbose=args.verbose)
                 if args.save_png:
-                    save_png_sequence(frames, args.output, scale=args.scale, verbose=args.verbose)
+                    save_png_sequence(frames, out_name, scale=args.scale, verbose=args.verbose)
                 if args.save_contact_sheet:
-                    create_contact_sheet(frames, args.output, scale=args.scale, verbose=args.verbose)
-                captured_files.append(args.output)
+                    create_contact_sheet(frames, out_name, scale=args.scale, verbose=args.verbose)
+                captured_files.append(out_name)
 
     elif args.capture_all:
         print("Capturing all effects...")
@@ -1088,6 +1107,15 @@ def main():
 
     if args.restore:
         restore_configuration(client, args.restore)
+
+    if args.get_coredump:
+        print(f"Fetching coredump from {args.host}...")
+        dump = client.get_coredump()
+        if dump:
+            filename = args.output if args.output else "coredump.bin"
+            with open(filename, "wb") as f:
+                f.write(dump)
+            print(f"Coredump saved to {filename}")
 
     if args.generate_gallery:
         generate_gallery(captured_files if captured_files else None)

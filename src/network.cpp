@@ -418,7 +418,21 @@ namespace nd_network
     void NetworkHandlingLoopEntry(void *)
     {
         static unsigned long lastConnected = millis();
+#if 0
+uint64_t mac = ESP.getEfuseMac();
+char name[32];
+snprintf(name, sizeof(name), "nightdriver-%02X%02X%02X",
+         (uint8_t)(mac >> 16),
+         (uint8_t)(mac >> 8),
+         (uint8_t)(mac));
+MDNS.begin(name);
+// dns-sd -B _http._tcp
+// dns-sd -L <instance-name> _http._tcp local
+#endif
         if (!MDNS.begin("esp32")) Serial.println("Error starting mDNS");
+
+        MDNS.addService("http", "tcp", 80);
+        MDNS.addServiceTxt("http", "tcp", "name", "NightDriver");
 
         TickType_t notifyWait = 0;
         for (;;)

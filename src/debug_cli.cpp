@@ -33,7 +33,9 @@
 #include <cstring>
 #include <esp_heap_caps.h>
 #include <esp_log.h>
+#include <esp_partition.h>
 #include <esp_system.h>
+#include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <FS.h>
@@ -55,9 +57,23 @@ namespace DebugCLI
 {
 
 //
-// Private Globals
+// Private Globals & Persistence
 //
 static std::vector<const command *> g_CommandTable;
+
+// persistent record in RTC RAM
+static RTC_NOINIT_ATTR RTC_PanicRecord l_rtcPanicRecord;
+
+void RecordPanicMessage(const char* message)
+{
+    if (message == nullptr)
+    {
+        return;
+    }
+    l_rtcPanicRecord.Magic = RTC_PANIC_MAGIC;
+    strncpy(l_rtcPanicRecord.Message, message, sizeof(l_rtcPanicRecord.Message) - 1);
+    l_rtcPanicRecord.Message[sizeof(l_rtcPanicRecord.Message) - 1] = '\0';
+}
 
 //
 // Tokenizer (Internal)
@@ -521,18 +537,22 @@ static void DoCat(const cli_argv &argv)
 
 void DoUptime(const cli_argv &)
 {
-    struct timeval timeval = { 0 };
     // Microseconds since boot. File wrap bugreport in 292 million years.
-    auto uptime = esp_timer_get_time();
+    auto uptime_us = esp_timer_get_time();
+    uint64_t total_seconds = uptime_us / 1000000;
 
-    timeval.tv_sec = uptime / MICROS_PER_SECOND;
+    uint32_t days    = (uint32_t)(total_seconds / 86400);
+    uint32_t hours   = (uint32_t)((total_seconds % 86400) / 3600);
+    uint32_t minutes = (uint32_t)((total_seconds % 3600) / 60);
+    uint32_t seconds = (uint32_t)(total_seconds % 60);
 
-    char buf[128];
-    struct tm *tm = gmtime(&timeval.tv_sec);
-    // No, I don't care about leap seconds.
-    strftime(buf, sizeof(buf), "%X", tm);
-    int ndays = timeval.tv_sec / (24 * 60 * 60);
-    cli_printf("Uptime: %d days - %s\n", ndays, buf);
+    cli_printf("Uptime: %u days, %02u:%02u:%02u\n", (unsigned int)days, (unsigned int)hours, (unsigned int)minutes, (unsigned int)seconds);
+
+    if (l_rtcPanicRecord.Magic == RTC_PANIC_MAGIC)
+    {
+        cli_printf("Persistent Panic Message: %s\n", l_rtcPanicRecord.Message);
+        l_rtcPanicRecord.Magic = 0; // Clear it so we don't report it every time uptime is called
+    }
 
     const char* reason_text = "Unknown";
     esp_reset_reason_t reason = esp_reset_reason();
@@ -552,64 +572,88 @@ void DoUptime(const cli_argv &)
         // case ESP_RST_USB: reason_text = "Reset by USB peripheral"; break;
         default: reason_text = "Unknown"; break;
     }
-    cli_printf("Last boot reason: (%d): %s\n", reason, reason_text);
+    cli_printf("Last boot reason: (%d): %s\n", (int)reason, reason_text);
+}
+
+static void DoClearCoredump(const cli_argv &)
+{
+    const esp_partition_t* part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_COREDUMP, NULL);
+    if (part != NULL)
+    {
+        cli_printf("Erasing coredump partition (%lu bytes)...\n", (unsigned long)part->size);
+        esp_err_t err = esp_partition_erase_range(part, 0, part->size);
+        if (err == ESP_OK)
+        {
+            cli_printf("Coredump cleared.\n");
+        }
+        else
+        {
+            cli_printf("Error erasing partition: %d\n", (int)err);
+        }
+    }
+    else
+    {
+        cli_printf("Coredump partition not found.\n");
+    }
+}
+
+static void DoPartitions(const cli_argv &)
+{
+    cli_printf("%-16s %-10s %-10s %-10s %-10s\n", "Name", "Type", "Sub", "Offset", "Size");
+    cli_printf("----------------------------------------------------------------------\n");
+
+    esp_partition_iterator_t it = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
+    while (it != NULL)
+    {
+        const esp_partition_t* p = esp_partition_get(it);
+        cli_printf("%-16s 0x%02x       0x%02x       0x%08lx 0x%08lx (%lu KB)\n",
+                   p->label, (unsigned int)p->type, (unsigned int)p->subtype, (unsigned long)p->address, (unsigned long)p->size, (unsigned long)p->size / 1024);
+        it = esp_partition_next(it);
+    }
+    esp_partition_iterator_release(it);
+}
+
+static void DoCrashMe(const cli_argv& argv)
+{
+    std::string_view mode = (argv.size() > 1) ? argv[1] : "null";
+
+    if (mode == "null")
+    {
+        cli_printf("Writing 0xDEADBEEF to NULL...\n");
+        delay(100);
+        *(volatile int*)0 = 0xDEADBEEF;
+    }
+    else if (mode == "abort")
+    {
+        cli_printf("Calling abort()...\n");
+        delay(100);
+        abort();
+    }
+    else if (mode == "wdt")
+    {
+        cli_printf("Stalling in tight loop (Task WDT should trip)...\n");
+        delay(100);
+        while(true);
+    }
+    else
+    {
+        cli_printf("Unknown mode: %.*s (try null, abort, wdt)\n", (int)mode.length(), mode.data());
+    }
+}
+
+static void DoSetPanic(const cli_argv& argv)
+{
+    if (argv.size() < 2)
+    {
+        cli_printf("Usage: setpanic <message>\n");
+        return;
+    }
+
+    RecordPanicMessage(std::string(argv[1]).c_str());
+    cli_printf("Persistent panic message set to: %s\n", l_rtcPanicRecord.Message);
 }
 
 static const command core_commands[] = {
-    {"cat", "Display file content", "Printing file...", DoCat},
-    {"reboot", "Reboot system", "Rebooting. Please stand by...", [](const cli_argv &) { esp_restart(); }},
-    {"clearsettings", "Reset persisted user settings", "Removing persisted settings",
-     [](const cli_argv &) {
-         g_ptrSystem->GetDeviceConfig().RemovePersisted();
-         RemoveEffectManagerConfig(); // Helper from effectmanager.h
-     }},
-    {"tasks", "Display FreeRTOS task list", "Task List:",
-     [](const cli_argv &) {
-#if configUSE_TRACE_FACILITY && configUSE_STATS_FORMATTING_FUNCTIONS
-         char buf[1024];
-         vTaskList(buf);
-         cli_printf("\nName          State      Prio  Stack  Num Core\n%s", buf);
-#else
-         cli_printf("Task list not enabled in FreeRTOS config\n");
-#endif
-     }},
-    {"heap", "Display heap memory info",
-     "Heap usage:", [](const cli_argv &) { heap_caps_print_heap_info(MALLOC_CAP_DEFAULT); }},
-    {"log", "[tag] <level> Get/set log level", nullptr,
-     [](const cli_argv &argv) {
-         static const struct
-         {
-             const char *name;
-             esp_log_level_t level;
-         } levels[] = {{"none", ESP_LOG_NONE}, {"error", ESP_LOG_ERROR}, {"warn", ESP_LOG_WARN},
-                       {"info", ESP_LOG_INFO}, {"debug", ESP_LOG_DEBUG}, {"verbose", ESP_LOG_VERBOSE}};
-
-         if (argv.size() < 2)
-         {
-             // No args: show the current global log level
-             esp_log_level_t current = esp_log_level_get("*");
-             const char *name = "unknown";
-             for (const auto &l : levels)
-                 if (l.level == current) { name = l.name; break; }
-             cli_printf("Log level: %s\n", name);
-             return;
-         }
-         std::string_view levelStr = argv.back();
-         std::string_view tag = "*";
-         if (argv.size() > 2)
-             tag = argv[1];
-
-         for (const auto &l : levels)
-         {
-             if (StringCompareInsensitive(levelStr, l.name))
-             {
-                 esp_log_level_set(std::string(tag).c_str(), l.level);
-                 cli_printf("Set level for tag '%s' to %d (%s)\n", std::string(tag).c_str(), l.level, l.name);
-                 return;
-             }
-         }
-         cli_printf("Invalid level '%s'. Valid: none error warn info debug verbose\n", std::string(levelStr).c_str());
-     }},
     {"bright", "[level] Display/Set brightness 0-255", "Brightness:",
      [](const cli_argv &argv) {
          if (argv.size() > 1)
@@ -619,39 +663,13 @@ static const command core_commands[] = {
          }
          cli_printf("Brightness: %lu\n", (unsigned long)g_ptrSystem->GetDeviceConfig().GetBrightness());
      }},
-    {"debug", "emix | log ... Debugging utilities", nullptr,
-     [](const cli_argv &argv) {
-        if (argv.size() > 1 && StringCompareInsensitive(argv[1], "emix")) {
-            DoEmitMix(argv);
-        } else {
-            cli_printf("Usage: debug emix\n");
-        }
+    {"cat", "Display file content", "Printing file...", DoCat},
+    {"clearcoredump", "Erase the coredump partition", "Clearing...", DoClearCoredump},
+    {"clearsettings", "Reset persisted user settings", "Removing persisted settings",
+     [](const cli_argv &) {
+         g_ptrSystem->GetDeviceConfig().RemovePersisted();
+         RemoveEffectManagerConfig(); // Helper from effectmanager.h
      }},
-    {"ls", "Show filesytem directory", "NAME", DoDirectoryListing},                    // Function pointer
-    {"effect", "[next|prev|name|index] Show/change current effect", "Effects.", DoEffectCommand}, // Function pointer
-    {"simbeat", "[on|off] [bpm] Simulate audio beat", "Simulate Beat:",
-     [](const cli_argv &argv) {
-        if (argv.size() > 1) {
-            if (StringCompareInsensitive(argv[1], "on")) g_Analyzer.SetSimulateBeat(true);
-            else if (StringCompareInsensitive(argv[1], "off")) g_Analyzer.SetSimulateBeat(false);
-            else if (isdigit(argv[1][0])) g_Analyzer.SetSimulateBPM(atoi(std::string(argv[1]).c_str()));
-        }
-        if (argv.size() > 2) {
-             g_Analyzer.SetSimulateBPM(atoi(std::string(argv[2]).c_str()));
-        }
-        cli_printf("SimBeat: %s  BPM: %d\n", g_Analyzer.GetSimulateBeat() ? "ON" : "OFF", g_Analyzer.GetSimulateBPM());
-     }},
-    {"+", "Nudge brightness up", "Brightness +10", [](const cli_argv &) {
-        int val = std::min(255, (int)g_ptrSystem->GetDeviceConfig().GetBrightness() + 10);
-        g_ptrSystem->GetDeviceConfig().SetBrightness(val);
-        cli_printf("Brightness: %d\n", val);
-    }},
-    {"-", "Nudge brightness down", "Brightness -10", [](const cli_argv &) {
-        int val = std::max(0, (int)g_ptrSystem->GetDeviceConfig().GetBrightness() - 10);
-        g_ptrSystem->GetDeviceConfig().SetBrightness(val);
-        cli_printf("Brightness: %d\n", val);
-    }},
-    {"uptime", "Show system uptime", "Showing uptime...", DoUptime},
     {"color", "[on|off] | [r g b | hex] Set or show colors", "Global Color:",
      [](const cli_argv &argv) {
          if (argv.size() > 1)
@@ -690,8 +708,92 @@ static const command core_commands[] = {
              cli_printf("Log colors: %s\n", _activeSession->ShowColors() ? "ON" : "OFF");
          }
      }},
+    {"crashme", "[null|abort|wdt] Trigger a system crash", "Crashing...", DoCrashMe},
+    {"debug", "emix | log ... Debugging utilities", nullptr,
+     [](const cli_argv &argv) {
+        if (argv.size() > 1 && StringCompareInsensitive(argv[1], "emix")) {
+            DoEmitMix(argv);
+        } else {
+            cli_printf("Usage: debug emix\n");
+        }
+     }},
+    {"effect", "[next|prev|name|index] Show/change current effect", "Effects.", DoEffectCommand}, // Function pointer
+    {"heap", "Display heap memory info",
+     "Heap usage:", [](const cli_argv &) { heap_caps_print_heap_info(MALLOC_CAP_DEFAULT); }},
     {"help", "Display command line options", "Displaying system help",
      PrintHelp}, // Function pointer logic requires PrintHelp signature match. It does.
+    {"log", "[tag] <level> Get/set log level", nullptr,
+     [](const cli_argv &argv) {
+         static const struct
+         {
+             const char *name;
+             esp_log_level_t level;
+         } levels[] = {{"none", ESP_LOG_NONE}, {"error", ESP_LOG_ERROR}, {"warn", ESP_LOG_WARN},
+                       {"info", ESP_LOG_INFO}, {"debug", ESP_LOG_DEBUG}, {"verbose", ESP_LOG_VERBOSE}};
+
+         if (argv.size() < 2)
+         {
+             // No args: show the current global log level
+             esp_log_level_t current = esp_log_level_get("*");
+             const char *name = "unknown";
+             for (const auto &l : levels)
+                 if (l.level == current) { name = l.name; break; }
+             cli_printf("Log level: %s\n", name);
+             return;
+         }
+         std::string_view levelStr = argv.back();
+         std::string_view tag = "*";
+         if (argv.size() > 2)
+             tag = argv[1];
+
+         for (const auto &l : levels)
+         {
+             if (StringCompareInsensitive(levelStr, l.name))
+             {
+                 esp_log_level_set(std::string(tag).c_str(), l.level);
+                 cli_printf("Set level for tag '%s' to %d (%s)\n", std::string(tag).c_str(), l.level, l.name);
+                 return;
+             }
+         }
+         cli_printf("Invalid level '%s'. Valid: none error warn info debug verbose\n", std::string(levelStr).c_str());
+     }},
+    {"ls", "Show filesytem directory", "NAME", DoDirectoryListing},                    // Function pointer
+    {"partitions", "Display partition table", "Partition Table:", DoPartitions},
+    {"reboot", "Reboot system", "Rebooting. Please stand by...", [](const cli_argv &) { esp_restart(); }},
+    {"setpanic", "<msg> Set persistent panic message for next boot", "Setting...", DoSetPanic},
+    {"simbeat", "[on|off] [bpm] Simulate audio beat", "Simulate Beat:",
+     [](const cli_argv &argv) {
+        if (argv.size() > 1) {
+            if (StringCompareInsensitive(argv[1], "on")) g_Analyzer.SetSimulateBeat(true);
+            else if (StringCompareInsensitive(argv[1], "off")) g_Analyzer.SetSimulateBeat(false);
+            else if (isdigit(argv[1][0])) g_Analyzer.SetSimulateBPM(atoi(std::string(argv[1]).c_str()));
+        }
+        if (argv.size() > 2) {
+             g_Analyzer.SetSimulateBPM(atoi(std::string(argv[2]).c_str()));
+        }
+        cli_printf("SimBeat: %s  BPM: %d\n", g_Analyzer.GetSimulateBeat() ? "ON" : "OFF", g_Analyzer.GetSimulateBPM());
+     }},
+    {"tasks", "Display FreeRTOS task list", "Task List:",
+     [](const cli_argv &) {
+#if configUSE_TRACE_FACILITY && configUSE_STATS_FORMATTING_FUNCTIONS
+         char buf[1024];
+         vTaskList(buf);
+         cli_printf("\nName          State      Prio  Stack  Num Core\n%s", buf);
+#else
+         cli_printf("Task list not enabled in FreeRTOS config\n");
+#endif
+     }},
+    {"uptime", "Show system uptime", "Showing uptime...", DoUptime},
+    {"+", "Nudge brightness up", "Brightness +10", [](const cli_argv &) {
+        int val = std::min(255, (int)g_ptrSystem->GetDeviceConfig().GetBrightness() + 10);
+        g_ptrSystem->GetDeviceConfig().SetBrightness(val);
+        cli_printf("Brightness: %d\n", val);
+    }},
+    {"-", "Nudge brightness down", "Brightness -10", [](const cli_argv &) {
+        int val = std::max(0, (int)g_ptrSystem->GetDeviceConfig().GetBrightness() - 10);
+        g_ptrSystem->GetDeviceConfig().SetBrightness(val);
+        cli_printf("Brightness: %d\n", val);
+    }},
     {"?", "Display command line options", "Displaying system help",
      PrintHelp}
 };

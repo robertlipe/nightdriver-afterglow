@@ -269,8 +269,8 @@ void PrintOutputHeader()
         debugI("ESP32 PSRAM Init: %s", psramInit() ? "OK" : "FAIL");
     #endif
 
-    debugI("Version %u: Wifi SSID: \"%s\" - ESP32 Free Memory: %zu, PSRAM:%zu, PSRAM Free: %zu",
-            FLASH_VERSION, cszSSID, (size_t)ESP.getFreeHeap(), (size_t)ESP.getPsramSize(), (size_t)ESP.getFreePsram());
+    debugI("Version %u: Wifi SSID: \"%s\" - ESP32 Free Memory: %lu, PSRAM:%lu, PSRAM Free: %lu",
+            (unsigned int)FLASH_VERSION, cszSSID, (unsigned long)ESP.getFreeHeap(), (unsigned long)ESP.getPsramSize(), (unsigned long)ESP.getFreePsram());
     debugI("ESP32 Clock Freq : %lu MHz", (unsigned long)ESP.getCpuFreqMHz());
 }
 
@@ -286,14 +286,24 @@ void TerminateHandler()
 
     PrintOutputHeader();
 
-    try {
+    try
+    {
         std::rethrow_exception(std::current_exception());
     }
-    catch (std::exception &ex) {
+    catch (const std::exception& ex)
+    {
         debugE("Terminated due to exception: %s", ex.what());
+        DebugCLI::RecordPanicMessage(ex.what());
+    }
+    catch (...)
+    {
+        debugE("Terminated due to unknown exception type");
+        DebugCLI::RecordPanicMessage("Unknown Exception");
     }
 
     Serial.flush();
+    delay(100);
+    esp_restart();
 }
 
 // Buttons are now owned/managed by Screen
