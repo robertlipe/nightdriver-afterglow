@@ -6,6 +6,7 @@ export PLATFORMIO_UPLOAD_PORT=192.168.2.116
 
 E=kitch
 
+(/bin/echo "clearcoredump" ; sleep 1)  | telnet $PLATFORMIO_UPLOAD_PORT || true
 pio run    --target upload -e $E
 
 # pio device monitor -e $E
