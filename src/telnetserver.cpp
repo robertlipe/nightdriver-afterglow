@@ -45,6 +45,7 @@
 #include <cstddef>
 #include <cstring>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -173,6 +174,18 @@ void DebugLoopTaskEntry(void* pvParameters)
         }
 
         debugI("Telnet client connected from %s", inet_ntoa(cli_addr.sin_addr));
+
+        // Enable TCP keepalive so ghost connections are aggressively pruned
+        // instead of blocking the recv() loop forever.
+        int keepAlive = 1;
+        int keepIdle = 30;     // Wait 30s of silence before probing
+        int keepInterval = 5;  // Send probes every 5s
+        int keepCount = 3;     // Drop connection after 3 failed probes (45s total to drop)
+        
+        setsockopt(client_fd, SOL_SOCKET, SO_KEEPALIVE, &keepAlive, sizeof(int));
+        setsockopt(client_fd, IPPROTO_TCP, TCP_KEEPIDLE, &keepIdle, sizeof(int));
+        setsockopt(client_fd, IPPROTO_TCP, TCP_KEEPINTVL, &keepInterval, sizeof(int));
+        setsockopt(client_fd, IPPROTO_TCP, TCP_KEEPCNT, &keepCount, sizeof(int));
 
         // Negotiate character-at-a-time mode and server-side echo before
         // registering the sink, so the client is in the right mode before
