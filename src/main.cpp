@@ -658,6 +658,10 @@ void loop()
 
         EVERY_N_SECONDS(5)
         {
+            #if ENABLE_NTP
+                NTPTimeClient::ProcessPendingSyncNotification();
+            #endif
+
             if (g_Values.ShowStatusLog)
             {
                 String strOutput;

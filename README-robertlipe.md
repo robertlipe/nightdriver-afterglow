@@ -52,4 +52,5 @@ This file documents the custom reliability, diagnostic, and performance improvem
 - **Sync Interval**: Customized the sync interval to 15 minutes (900,000 ms) instead of the default 1 hour, maintaining clock accuracy against hardware tick drift without spamming requests.
 - **Simplified Main Loop**: Modified `UpdateNTPTime()` in `src/network.cpp` to only initialize the native SNTP client once at boot. ESP-IDF manages all periodic updates and timing corrections in the background.
 - **Reduced Log Spam**: Removed periodic UDP sync debug outputs, logging only a single info message via the time sync callback (`time_sync_notification_cb`) when a synchronization completes.
+- **LwIP Deadlock Fix (Safe Callback Logging)**: Fixed a deadlock where the background SNTP/LwIP network thread would call `debugI` inside the callback, blocking on the `ConsoleManager` mutex while another thread holding that mutex was blocked waiting for LwIP socket operations. The callback now stores the sync event in an atomic flag and `timeval` structure, which are processed and logged safely on the network and main threads via `NTPTimeClient::ProcessPendingSyncNotification()`.
 

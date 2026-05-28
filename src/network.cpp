@@ -292,6 +292,7 @@ namespace nd_network
                     NTPTimeClient::UpdateClockFromWeb(&l_Udp);
                 }
             }
+            NTPTimeClient::ProcessPendingSyncNotification();
         }
     #endif
 

@@ -29,6 +29,7 @@
 //---------------------------------------------------------------------------
 
 #include "globals.h"
+#include <atomic>
 #include <ctime>
 #include <mutex>
 #include <sys/time.h>
@@ -46,6 +47,8 @@
 #include <esp_sntp.h>
 
 static DRAM_ATTR bool l_bClockSet = false;
+static DRAM_ATTR std::atomic<bool> l_bPendingNotification{false};
+static DRAM_ATTR timeval l_pendingTv;
 
 bool NTPTimeClient::HasClockBeenSet()
 {
@@ -55,15 +58,29 @@ bool NTPTimeClient::HasClockBeenSet()
 static void time_sync_notification_cb(struct timeval *tv)
 {
     l_bClockSet = true;
+    if (tv)
+    {
+        l_pendingTv = *tv;
+        l_bPendingNotification.store(true, std::memory_order_release);
+    }
+}
 
-    struct tm timeinfo;
-    localtime_r(&tv->tv_sec, &timeinfo);
-    char time_str[64];
-    strftime(time_str, sizeof(time_str), "%d %b %Y %H:%M:%S", &timeinfo);
-    debugI("NTP clock: response received, updated time to: %lld.%06lld, Local: %s",
-           (long long)tv->tv_sec,
-           (long long)tv->tv_usec,
-           time_str);
+void NTPTimeClient::ProcessPendingSyncNotification()
+{
+    if (l_bPendingNotification.load(std::memory_order_acquire))
+    {
+        l_bPendingNotification.store(false, std::memory_order_relaxed);
+
+        timeval tv = l_pendingTv;
+        struct tm timeinfo;
+        localtime_r(&tv.tv_sec, &timeinfo);
+        char time_str[64];
+        strftime(time_str, sizeof(time_str), "%d %b %Y %H:%M:%S", &timeinfo);
+        debugI("NTP clock: response received, updated time to: %lld.%06lld, Local: %s",
+               (long long)tv.tv_sec,
+               (long long)tv.tv_usec,
+               time_str);
+    }
 }
 
 // UpdateClockFromWeb
