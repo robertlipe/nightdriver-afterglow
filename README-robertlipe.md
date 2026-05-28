@@ -41,3 +41,15 @@ This file documents the custom reliability, diagnostic, and performance improvem
 - **`statuslog [on|off]`**: Disables/enables the periodic 5-second console status print.
 - **`stats` update**: Now outputs the number of active WebSocket clients (`WS  : frames:X effects:Y`) to diagnose socket exhaustion.
 - **`heap` update**: Replaced the direct ESP-IDF `heap_caps_print_heap_info` call (which writes directly to raw serial stdout) with a custom query and format using `cli_printf`. This enables the `heap` command to print correctly over telnet as well as serial.
+
+---
+
+## ⏰ NTP Clock Optimization & Native SNTP
+
+### 1. ESP-IDF Native SNTP Integration
+- **Migration**: Replaced the custom UDP-based NTP packet client (`src/ntptimeclient.cpp`) with the native ESP-IDF LwIP SNTP service, leveraging standard OS-level networking.
+- **Smooth Slewing**: Configured the clock sync mode to `SNTP_SYNC_MODE_SMOOTH`. This instructs ESP-IDF to use `adjtime()` to gradually slew the system clock for offsets up to 35 minutes, eliminating sudden time steps and rendering jitter. Large offsets (e.g. at boot) are still corrected instantly.
+- **Sync Interval**: Customized the sync interval to 15 minutes (900,000 ms) instead of the default 1 hour, maintaining clock accuracy against hardware tick drift without spamming requests.
+- **Simplified Main Loop**: Modified `UpdateNTPTime()` in `src/network.cpp` to only initialize the native SNTP client once at boot. ESP-IDF manages all periodic updates and timing corrections in the background.
+- **Reduced Log Spam**: Removed periodic UDP sync debug outputs, logging only a single info message via the time sync callback (`time_sync_notification_cb`) when a synchronization completes.
+
