@@ -199,6 +199,7 @@
 #include "soundanalyzer.h"
 #include "systemcontainer.h"
 #include "taskmgr.h"
+#include "sensors.h"
 #if INCOMING_WIFI_ENABLED
 extern "C"
 {
@@ -363,6 +364,9 @@ void setup()
     // Display a simple startup header on the serial port
     PrintOutputHeader();
     debugI("Startup!");
+
+    // Initialize sensors
+    SensorManager::begin();
 
     // Initialize Non-Volatile Storage
     esp_err_t err = nvs_flash_init();
@@ -658,6 +662,11 @@ void loop()
             }
         #endif
 
+        EVERY_N_SECONDS(10)
+        {
+            SensorManager::Update();
+        }
+
         EVERY_N_SECONDS(5)
         {
             #if ENABLE_NTP
@@ -695,6 +704,19 @@ void loop()
                     auto& bufferManager = g_ptrSystem->GetBufferManagers()[0];
                     strOutput += str_sprintf("Buffer: %zu/%zu, ", (size_t)bufferManager.Depth(), (size_t)bufferManager.BufferCount());
                 #endif
+
+                if (g_Values.InternalTemp.has_value())
+                {
+                    strOutput += str_sprintf("CoreTemp: %.1fF ", g_Values.InternalTemp.value());
+                }
+                if (g_Values.AmbientTemp.has_value())
+                {
+                    strOutput += str_sprintf("Temp: %.1fF ", g_Values.AmbientTemp.value());
+                }
+                if (g_Values.AmbientHumidity.has_value())
+                {
+                    strOutput += str_sprintf("Hum: %.1f%% ", g_Values.AmbientHumidity.value());
+                }
 
                 const auto& taskManager = g_ptrSystem->GetTaskManager();
                 strOutput += str_sprintf("CPU: %03.0f%%, %03.0f%%, FreeDraw: %4.3lf", taskManager.GetCPUUsagePercent(0), taskManager.GetCPUUsagePercent(1), g_Values.FreeDrawTime);

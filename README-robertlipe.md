@@ -58,3 +58,19 @@ This file documents the custom reliability, diagnostic, and performance improvem
 - **Reduced Log Spam**: Removed periodic UDP sync debug outputs, logging only a single info message via the time sync callback (`time_sync_notification_cb`) when a synchronization completes.
 - **LwIP Deadlock Fix (Safe Callback Logging)**: Fixed a deadlock where the background SNTP/LwIP network thread would call `debugI` inside the callback, blocking on the `ConsoleManager` mutex while another thread holding that mutex was blocked waiting for LwIP socket operations. The callback now stores the sync event in an atomic flag and `timeval` structure, which are processed and logged safely on the network and main threads via `NTPTimeClient::ProcessPendingSyncNotification()`.
 
+---
+
+## 🌡️ Sensors & Environmental Telemetry
+
+### 1. Unified Sensor Management (`include/sensors.h` & `src/sensors.cpp`)
+- **Abstracted Interface**: Introduced `SensorManager` to encapsulate initialization, periodic updates, and status checks of hardware sensors, decoupling telemetry from specific driver structures.
+- **ESP32-C6 Chip Core Temperature**: Integrated the native ESP-IDF `temperature_sensor` driver on supported targets, surfacing internal chip temperature directly to telemetry.
+- **`std::optional` Telemetry Values (`include/values.h`)**: Refactored `g_Values` temperature and humidity fields to use `std::optional<float>` instead of floating-point magic numbers (like `-999.0f`), ensuring precise indication of sensor status.
+
+### 2. Reliable DHT11 Timing & Preemption Lock
+- **Interrupt Preemption Fix**: Wrapped the 4ms timing-critical bit-reading sequence in `noInterrupts()` and `interrupts()`. This prevents FreeRTOS tick interrupts (running every 1ms) from preempting the CPU mid-read and triggering timing timeouts.
+- **Bus Contention Fix**: Shortened the active-high start signal drive time from 40µs to 2µs. This prevents host-side active-high drive contention when the DHT11 sensor starts driving the data line low (which it does as early as 20µs).
+- **Background Retries**: Added background retry logic (retrying once every 10 seconds for up to 12 attempts) during startup. This allows the system to boot immediately without blocking, while gracefully waiting for the DHT11 sensor to stabilize and power up.
+- **Thermal Safety Throttle**: Configured automatic brightness throttling (capping `g_Values.Brite` at `10.0f`) if ambient temperatures exceed 120°F to prevent overheating in enclosed cabinets.
+
+
