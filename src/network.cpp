@@ -513,6 +513,11 @@ MDNS.begin(name);
         #if INCOMING_WIFI_ENABLED
         DebugCLI::cli_printf("Socket Buffer _cbReceived: %zu", g_ptrSystem->GetSocketServer()._cbReceived);
         #endif
+
+        #if WEB_SOCKETS_ANY_ENABLED
+        auto& ws = g_ptrSystem->GetWebSocketServer();
+        DebugCLI::cli_printf("WS  : frames:%zu effects:%zu", ws.ColorDataClientCount(), ws.EffectChangeClientCount());
+        #endif
     }
 
     void InitNetworkCLI()

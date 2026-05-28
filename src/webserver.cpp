@@ -38,6 +38,7 @@
 #include <esp_partition.h>
 #include <FS.h>
 #include <utility>
+#include <memory>
 
 #include "deviceconfig.h"
 #include "effectmanager.h"
@@ -280,7 +281,7 @@ void CWebServer::GetEffectListText(AsyncWebServerRequest * pRequest)
 {
     debugV("GetEffectListText");
 
-    auto response = new AsyncJsonResponse();
+    auto response = std::make_unique<AsyncJsonResponse>();
     auto& j = response->getRoot();
     auto& effectManager = g_ptrSystem->GetEffectManager();
 
@@ -305,14 +306,14 @@ void CWebServer::GetEffectListText(AsyncWebServerRequest * pRequest)
         }
     }
 
-    AddCORSHeaderAndSendResponse(pRequest, response);
+    AddCORSHeaderAndSendResponse(pRequest, response.release());
 }
 
 void CWebServer::GetStatistics(AsyncWebServerRequest * pRequest, StatisticsType statsType) const
 {
 //    debugV("GetStatistics");
 
-    auto response = new AsyncJsonResponse();
+    auto response = std::make_unique<AsyncJsonResponse>();
     auto& j = response->getRoot();
 
     if ((statsType & StatisticsType::Static) != StatisticsType::None)
@@ -351,7 +352,7 @@ void CWebServer::GetStatistics(AsyncWebServerRequest * pRequest, StatisticsType 
         j["CPU_USED_CORE1"]        = taskManager.GetCPUUsagePercent(1);
     }
 
-    AddCORSHeaderAndSendResponse(pRequest, response);
+    AddCORSHeaderAndSendResponse(pRequest, response.release());
 }
 
 void CWebServer::SetCurrentEffectIndex(AsyncWebServerRequest * pRequest)
@@ -453,7 +454,7 @@ void CWebServer::PreviousEffect(AsyncWebServerRequest * pRequest)
 
 void CWebServer::SendSettingSpecsResponse(AsyncWebServerRequest * pRequest, const std::vector<std::reference_wrapper<SettingSpec>> & settingSpecs)
 {
-    auto response = new AsyncJsonResponse();
+    auto response = std::make_unique<AsyncJsonResponse>();
     auto jsonArray = response->getRoot().to<JsonArray>();
 
     for (const auto& specWrapper : settingSpecs)
@@ -500,7 +501,7 @@ void CWebServer::SendSettingSpecsResponse(AsyncWebServerRequest * pRequest, cons
         }
     }
 
-    AddCORSHeaderAndSendResponse(pRequest, response);
+    AddCORSHeaderAndSendResponse(pRequest, response.release());
 }
 
 const std::vector<std::reference_wrapper<SettingSpec>> & CWebServer::LoadDeviceSettingSpecs()
@@ -532,7 +533,7 @@ void CWebServer::GetSettings(AsyncWebServerRequest * pRequest)
 {
 //    debugV("GetSettings");
 
-    auto response = new AsyncJsonResponse();
+    auto response = std::make_unique<AsyncJsonResponse>();
     response->addHeader("Server", "NightDriverStrip");
     auto root = response->getRoot();
     JsonObject jsonObject = root.to<JsonObject>();
@@ -541,7 +542,7 @@ void CWebServer::GetSettings(AsyncWebServerRequest * pRequest)
     g_ptrSystem->GetDeviceConfig().SerializeToJSON(jsonObject, false);
     jsonObject["effectInterval"] = g_ptrSystem->GetEffectManager().GetInterval();
 
-    AddCORSHeaderAndSendResponse(pRequest, response);
+    AddCORSHeaderAndSendResponse(pRequest, response.release());
 }
 
 // Support function that silently sets whatever settings are included in the request passed.

@@ -52,6 +52,7 @@
 #include "ledstripeffect.h"
 #include "soundanalyzer.h"
 #include "systemcontainer.h"
+#include "values.h"
 
 namespace DebugCLI
 {
@@ -653,6 +654,39 @@ static void DoSetPanic(const cli_argv& argv)
     cli_printf("Persistent panic message set to: %s\n", l_rtcPanicRecord.Message);
 }
 
+static void DoDmesg(const cli_argv&)
+{
+    ConsoleManager::Instance().PrintDmesg([](const std::string& line) {
+        cli_printf("%s\n", line.c_str());
+    });
+}
+
+static void DoStatusLog(const cli_argv& argv)
+{
+    if (argv.size() > 1)
+    {
+        std::string_view arg = argv[1];
+        if (arg == "on")
+        {
+            g_Values.ShowStatusLog = true;
+            cli_printf("Periodic status logs enabled.\n");
+        }
+        else if (arg == "off")
+        {
+            g_Values.ShowStatusLog = false;
+            cli_printf("Periodic status logs disabled.\n");
+        }
+        else
+        {
+            cli_printf("Usage: statuslog [on|off]\n");
+        }
+    }
+    else
+    {
+        cli_printf("Periodic status logs: %s\n", g_Values.ShowStatusLog ? "ON" : "OFF");
+    }
+}
+
 static const command core_commands[] = {
     {"bright", "[level] Display/Set brightness 0-255", "Brightness:",
      [](const cli_argv &argv) {
@@ -717,6 +751,7 @@ static const command core_commands[] = {
             cli_printf("Usage: debug emix\n");
         }
      }},
+    {"dmesg", "Display the circular log buffer", "dmesg:", DoDmesg},
     {"effect", "[next|prev|name|index] Show/change current effect", "Effects.", DoEffectCommand}, // Function pointer
     {"heap", "Display heap memory info",
      "Heap usage:", [](const cli_argv &) { heap_caps_print_heap_info(MALLOC_CAP_DEFAULT); }},
@@ -773,6 +808,7 @@ static const command core_commands[] = {
         }
         cli_printf("SimBeat: %s  BPM: %d\n", g_Analyzer.GetSimulateBeat() ? "ON" : "OFF", g_Analyzer.GetSimulateBPM());
      }},
+    {"statuslog", "[on|off] Show/change periodic status logs", "Status logs.", DoStatusLog},
     {"tasks", "Display FreeRTOS task list", "Task List:",
      [](const cli_argv &) {
 #if configUSE_TRACE_FACILITY && configUSE_STATS_FORMATTING_FUNCTIONS

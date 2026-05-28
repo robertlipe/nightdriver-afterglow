@@ -50,6 +50,7 @@
 #include "deviceconfig.h"
 #include "jsonserializer.h"
 #include "nd_network.h"
+#include "logger.h"
 
 class LEDStripEffect;
 
@@ -201,7 +202,7 @@ class CWebServer
     {
         _server.on(strUri, HTTP_GET, [strUri, file](AsyncWebServerRequest *request)
         {
-            Serial.printf("GET for: %s\n", strUri);
+            debugI("GET for: %s", strUri);
             AsyncWebServerResponse *response = request->beginResponse(200, file.type, file.contents, file.length);
             if (file.encoding)
             {

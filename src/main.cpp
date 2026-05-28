@@ -658,40 +658,43 @@ void loop()
 
         EVERY_N_SECONDS(5)
         {
-            String strOutput;
+            if (g_Values.ShowStatusLog)
+            {
+                String strOutput;
 
-            #if ENABLE_WIFI
-                strOutput += str_sprintf("WiFi: %s, MAC: %s, IP: %s ", nd_network::WLtoString(nd_network::GetWiFiStatus()), nd_network::GetMacAddress(":").c_str(), nd_network::GetWiFiLocalIP().c_str());
-            #endif
+                #if ENABLE_WIFI
+                    strOutput += str_sprintf("WiFi: %s, MAC: %s, IP: %s ", nd_network::WLtoString(nd_network::GetWiFiStatus()), nd_network::GetMacAddress(":").c_str(), nd_network::GetWiFiLocalIP().c_str());
+                #endif
 
-            strOutput += str_sprintf("Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize());
-            strOutput += str_sprintf("LED FPS: %lu ", (unsigned long)g_Values.FPS);
+                strOutput += str_sprintf("Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize());
+                strOutput += str_sprintf("LED FPS: %lu ", (unsigned long)g_Values.FPS);
 
-            #if USE_WS281X
-                strOutput += str_sprintf("LED Bright: %3.0lf%%, LED Watts: %lu, ", g_Values.Brite, (unsigned long)g_Values.Watts);
-            #endif
+                #if USE_WS281X
+                    strOutput += str_sprintf("LED Bright: %3.0lf%%, LED Watts: %lu, ", g_Values.Brite, (unsigned long)g_Values.Watts);
+                #endif
 
-            #if USE_HUB75
-                strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%%, ", HUB75GFX::matrix.getRefreshRate(), g_Values.MatrixPowerMilliwatts, g_Values.MatrixScaledBrightness / 2.55);
-            #endif
+                #if USE_HUB75
+                    strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%%, ", HUB75GFX::matrix.getRefreshRate(), g_Values.MatrixPowerMilliwatts, g_Values.MatrixScaledBrightness / 2.55);
+                #endif
 
-            #if ENABLE_AUDIO
-                strOutput += str_sprintf("Audio FPS: %d, MinVU: %6.1f, PeakVU: %6.1f, VURatio: %3.1f ", g_Analyzer.AudioFPS(), g_Analyzer.MinVU(), g_Analyzer.PeakVU(), g_Analyzer.VURatio());
-            #endif
+                #if ENABLE_AUDIO
+                    strOutput += str_sprintf("Audio FPS: %d, MinVU: %6.1f, PeakVU: %6.1f, VURatio: %3.1f ", g_Analyzer.AudioFPS(), g_Analyzer.MinVU(), g_Analyzer.PeakVU(), g_Analyzer.VURatio());
+                #endif
 
-            #if ENABLE_AUDIOSERIAL
-                strOutput += str_sprintf("Serial FPS: %d, ", g_Analyzer.SerialFPS());
-            #endif
+                #if ENABLE_AUDIOSERIAL
+                    strOutput += str_sprintf("Serial FPS: %d, ", g_Analyzer.SerialFPS());
+                #endif
 
-            #if INCOMING_WIFI_ENABLED
-                auto& bufferManager = g_ptrSystem->GetBufferManagers()[0];
-                strOutput += str_sprintf("Buffer: %zu/%zu, ", (size_t)bufferManager.Depth(), (size_t)bufferManager.BufferCount());
-            #endif
+                #if INCOMING_WIFI_ENABLED
+                    auto& bufferManager = g_ptrSystem->GetBufferManagers()[0];
+                    strOutput += str_sprintf("Buffer: %zu/%zu, ", (size_t)bufferManager.Depth(), (size_t)bufferManager.BufferCount());
+                #endif
 
-            const auto& taskManager = g_ptrSystem->GetTaskManager();
-            strOutput += str_sprintf("CPU: %03.0f%%, %03.0f%%, FreeDraw: %4.3lf", taskManager.GetCPUUsagePercent(0), taskManager.GetCPUUsagePercent(1), g_Values.FreeDrawTime);
+                const auto& taskManager = g_ptrSystem->GetTaskManager();
+                strOutput += str_sprintf("CPU: %03.0f%%, %03.0f%%, FreeDraw: %4.3lf", taskManager.GetCPUUsagePercent(0), taskManager.GetCPUUsagePercent(1), g_Values.FreeDrawTime);
 
-            debugI("%s", strOutput.c_str());
+                debugI("%s", strOutput.c_str());
+            }
         }
 
         // Once an update is underway, we loop tightly on ArduinoOTA.handle.  Otherwise, we delay a bit to share the CPU.
