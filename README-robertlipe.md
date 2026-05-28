@@ -20,6 +20,10 @@ This file documents the custom reliability, diagnostic, and performance improvem
 ### 4. Exception Safety & Web Server Memory Leaks (`src/webserver.cpp`)
 - **Fix**: Replaced raw `new AsyncJsonResponse()` allocations with `std::unique_ptr<AsyncJsonResponse>`. When JSON buffers overflowed during large effect or setting spec serialization, the early-return paths were previously leaking the raw response allocations. Now they are automatically cleaned up.
 
+### 5. Software Watchdog / Deadlock Recovery (`src/taskmgr.cpp`)
+- **Issue**: The standard Task Watchdog Timer (TWDT) only registers CPU Idle tasks. When application tasks deadlock or block on a mutex, they yield the CPU, allowing the Idle tasks to run and feed the TWDT. Consequently, the hardware/software watchdogs fail to detect task freezes.
+- **Fix**: Added atomic heartbeat timestamps (`LastLoopHeartbeat`, `LastDrawHeartbeat`) to `g_Values`. Instrumented the main `loop()` and `Draw` thread to continuously update their respective heartbeats. Inside the CPU Idle task (`IdleTask::ProcessIdleTime()`), a supervisor checks the ages of these heartbeats every second. If either thread is frozen or deadlocked for more than 30 seconds (and no OTA update is in progress), it prints a diagnostic error directly to `Serial` and performs a hard reset via `ESP.restart()`.
+
 ---
 
 ## 📊 Diagnostics & Diagnostic Console Commands

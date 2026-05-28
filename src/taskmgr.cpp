@@ -16,6 +16,7 @@
 #include "ledstripeffect.h"
 #include "nd_network.h"
 #include "taskmgr.h"
+#include "values.h"
 
 #include <esp_task_wdt.h>
 
@@ -35,6 +36,28 @@ void IdleTask::ProcessIdleTime()
             _idleRatio = ((float) counter  / delta);
             _lastMeasurement = millis();
             counter = 0;
+
+            // Software watchdog supervisor check
+            if (!g_Values.UpdateStarted)
+            {
+                uint32_t now = millis();
+                uint32_t lastLoop = g_Values.LastLoopHeartbeat.load(std::memory_order_relaxed);
+                uint32_t lastDraw = g_Values.LastDrawHeartbeat.load(std::memory_order_relaxed);
+
+                if (lastLoop != 0 && (now - lastLoop > 30000))
+                {
+                    Serial.printf("!!! WATCHDOG DETECTED LOOP THREAD HANG !!! (Last heartbeat: %lu ms ago). Restarting...\n", now - lastLoop);
+                    delay(1000);
+                    ESP.restart();
+                }
+
+                if (lastDraw != 0 && (now - lastDraw > 30000))
+                {
+                    Serial.printf("!!! WATCHDOG DETECTED DRAW THREAD HANG !!! (Last heartbeat: %lu ms ago). Restarting...\n", now - lastDraw);
+                    delay(1000);
+                    ESP.restart();
+                }
+            }
         }
         else
         {
@@ -45,6 +68,7 @@ void IdleTask::ProcessIdleTime()
         }
     }
 }
+
 
 float IdleTask::GetCPUUsage() const
 {

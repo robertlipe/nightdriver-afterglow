@@ -627,8 +627,10 @@ void setup()
 
 void loop()
 {
+    g_Values.LastLoopHeartbeat.store(millis(), std::memory_order_relaxed);
     while(true)
     {
+        g_Values.LastLoopHeartbeat.store(millis(), std::memory_order_relaxed);
         // Feed any direct serial bytes to the console manager (if not handled by Improv)
         while (Serial.available())
         {

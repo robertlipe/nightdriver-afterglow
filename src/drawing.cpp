@@ -277,12 +277,15 @@ void IRAM_ATTR DrawLoopTaskEntry(void *)
 
     g_ptrSystem->GetEffectManager().StartEffect();
 
+    g_Values.LastDrawHeartbeat.store(millis(), std::memory_order_relaxed);
+
     // Run the draw loop
 
     debugW("Entering main draw loop!");
 
     for (;;)
     {
+        g_Values.LastDrawHeartbeat.store(millis(), std::memory_order_relaxed);
         g_Values.AppTime.NewFrame();
 
         uint16_t localPixelsDrawn   = 0;

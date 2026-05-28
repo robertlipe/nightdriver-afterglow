@@ -31,6 +31,7 @@
 //---------------------------------------------------------------------------
 
 #include "globals.h"
+#include <atomic>
 
 #include "types.h"
 
@@ -49,6 +50,8 @@ struct Values
     int MatrixPowerMilliwatts = 0;                                         // Matrix power draw in mw
     uint8_t MatrixScaledBrightness = 255;                                  // 0-255 scaled brightness to stay in limit
 #endif
+    std::atomic<uint32_t> LastLoopHeartbeat{0};
+    std::atomic<uint32_t> LastDrawHeartbeat{0};
 };
 
 extern Values g_Values;
