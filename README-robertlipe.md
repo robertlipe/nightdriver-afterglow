@@ -2,6 +2,8 @@
 
 This file documents the custom reliability, diagnostic, and performance improvements made to the NightDriverStrip firmware for running on ESP32-C6 and similar hardware.
 
+(This file is extensively AI generated. #sorrynotsorry.)
+
 ---
 
 ## 🛠️ Reliability & Crash Fixes
@@ -69,8 +71,10 @@ This file documents the custom reliability, diagnostic, and performance improvem
 
 ### 2. Reliable DHT11 Timing & Preemption Lock
 - **Interrupt Preemption Fix**: Wrapped the 4ms timing-critical bit-reading sequence in `noInterrupts()` and `interrupts()`. This prevents FreeRTOS tick interrupts (running every 1ms) from preempting the CPU mid-read and triggering timing timeouts.
+- **Dynamic Clock Speed Calibration & Generous Timeouts**: Removed hardcoded CPU cycle timeouts, replacing them with dynamic clock calculations (e.g. using `ESP.getCpuFreqMHz()`) to support any CPU clock speed. Increased timing-critical handshake and bit timeouts to 500µs to eliminate sporadic high-pulse timeouts (especially on the 40th/final bit, index 39) caused by flash cache misses or minor signal rise-time delays.
 - **Bus Contention Fix**: Shortened the active-high start signal drive time from 40µs to 2µs. This prevents host-side active-high drive contention when the DHT11 sensor starts driving the data line low (which it does as early as 20µs).
 - **Background Retries**: Added background retry logic (retrying once every 10 seconds for up to 12 attempts) during startup. This allows the system to boot immediately without blocking, while gracefully waiting for the DHT11 sensor to stabilize and power up.
 - **Thermal Safety Throttle**: Configured automatic brightness throttling (capping `g_Values.Brite` at `10.0f`) if ambient temperatures exceed 120°F to prevent overheating in enclosed cabinets.
+
 
 

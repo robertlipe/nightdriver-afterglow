@@ -24,10 +24,6 @@ static temperature_sensor_handle_t s_temp_sensor = nullptr;
 #endif
 
 #ifdef DHT11_PIN
-#if !defined(CONFIG_IDF_TARGET_ESP32C6)
-#warning "DHT11 timing logic is calibrated for ESP32-C6 (160MHz). Other targets may have timing deviations."
-#endif
-
 static bool s_dhtSensorPresent = false;
 
 bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
@@ -49,6 +45,11 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
     // Disable interrupts for the 4ms critical timing window to prevent FreeRTOS ticks from preempting
     noInterrupts();
 
+    // Dynamically calculate timeout cycles based on the CPU frequency to support any clock speed.
+    const uint32_t cyclesPerUs = ESP.getCpuFreqMHz();
+    const uint32_t handshakeTimeoutCycles = 500 * cyclesPerUs; // 500us timeout
+    const uint32_t bitTimeoutCycles = 500 * cyclesPerUs;       // 500us timeout
+
     // We do NOT use esp_timer_get_time() for elapsed check inside critical section to avoid function call overhead.
     // Instead, we measure the elapsed cycles.
     uint32_t startCycleCount = esp_cpu_get_cycle_count();
@@ -68,15 +69,14 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
     };
 
     // Wait for response handshake (DHT pulls low ~80us, then high ~80us)
-    // At 160MHz CPU frequency, 150us = 150 * 160 = 24000 cycles.
-    int32_t initialHigh = measurePulse(HIGH, 24000);
-    int32_t responseLow = measurePulse(LOW, 24000);
-    int32_t responseHigh = measurePulse(HIGH, 24000);
+    int32_t initialHigh = measurePulse(HIGH, handshakeTimeoutCycles);
+    int32_t responseLow = measurePulse(LOW, handshakeTimeoutCycles);
+    int32_t responseHigh = measurePulse(HIGH, handshakeTimeoutCycles);
 
     if (initialHigh < 0 || responseLow < 0 || responseHigh < 0)
     {
         interrupts(); // Re-enable interrupts before returning
-        debugI("DHT11 handshake failed. Pin: %d, initHigh: %d, respLow: %d, respHigh: %d",
+        debugI("DHT11 handshake failed. Pin: %d, initialHigh: %d, responseLow: %d, responseHigh: %d",
                pin, initialHigh, responseLow, responseHigh);
         return false;
     }
@@ -84,8 +84,8 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
     // 3. Read the 40-bit transmission
     for (int i = 0; i < 40; ++i)
     {
-        // Every bit starts with a 50us low pulse (100us timeout = 16000 cycles)
-        int32_t lowDuration = measurePulse(LOW, 16000);
+        // Every bit starts with a 50us low pulse
+        int32_t lowDuration = measurePulse(LOW, bitTimeoutCycles);
         if (lowDuration < 0)
         {
             interrupts(); // Re-enable interrupts before returning
@@ -94,8 +94,7 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
         }
 
         // The duration of the high pulse determines if it's a 0 (~28us) or a 1 (~70us)
-        // 120us timeout = 19200 cycles
-        int32_t highDuration = measurePulse(HIGH, 19200);
+        int32_t highDuration = measurePulse(HIGH, bitTimeoutCycles);
         if (highDuration < 0)
         {
             interrupts(); // Re-enable interrupts before returning
@@ -117,8 +116,8 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
     
     interrupts(); // Re-enable interrupts
 
-    // If it took longer than 6ms (960000 cycles at 160MHz), discard.
-    if (elapsedCycles > 960000)
+    // If it took longer than 6ms (6000us), discard.
+    if (elapsedCycles > (6000 * cyclesPerUs))
     {
         debugI("DHT11 read took too long: %u cycles", elapsedCycles);
         return false;
