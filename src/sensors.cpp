@@ -14,8 +14,8 @@
 #include "sensors.h"
 #include "values.h"
 
-#include <esp_timer.h>
 #include <esp_cpu.h>
+#include <esp_timer.h>
 #include <soc/soc_caps.h>
 
 #if SOC_TEMP_SENSOR_SUPPORTED

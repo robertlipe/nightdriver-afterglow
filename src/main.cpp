@@ -195,11 +195,11 @@
 #include "logger.h"
 #include "nd_network.h"
 #include "ntptimeclient.h"
+#include "sensors.h"
 #include "socketserver.h"
 #include "soundanalyzer.h"
 #include "systemcontainer.h"
 #include "taskmgr.h"
-#include "sensors.h"
 #if INCOMING_WIFI_ENABLED
 extern "C"
 {

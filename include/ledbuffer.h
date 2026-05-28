@@ -31,8 +31,8 @@
 //---------------------------------------------------------------------------
 
 #include "globals.h"
-#include "interfaces.h"
 #include "gfxbase.h"
+#include "interfaces.h"
 
 #include <memory>
 #include <vector>

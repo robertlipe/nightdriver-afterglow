@@ -49,8 +49,8 @@
 
 #include "deviceconfig.h"
 #include "jsonserializer.h"
-#include "nd_network.h"
 #include "logger.h"
+#include "nd_network.h"
 
 class LEDStripEffect;
 

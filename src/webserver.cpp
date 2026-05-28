@@ -37,8 +37,8 @@
 #include <AsyncJson.h>
 #include <esp_partition.h>
 #include <FS.h>
-#include <utility>
 #include <memory>
+#include <utility>
 
 #include "deviceconfig.h"
 #include "effectmanager.h"

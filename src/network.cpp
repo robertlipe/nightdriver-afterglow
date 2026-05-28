@@ -29,8 +29,8 @@
 //---------------------------------------------------------------------------
 
 #include "globals.h"
-#include <fcntl.h>
 #include <esp_mac.h>
+#include <fcntl.h>
 
 #if ENABLE_WIFI
     #include <algorithm>
