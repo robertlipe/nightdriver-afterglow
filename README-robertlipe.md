@@ -40,3 +40,4 @@ This file documents the custom reliability, diagnostic, and performance improvem
 - **`dmesg`**: Prints the circular log buffer to the active terminal session.
 - **`statuslog [on|off]`**: Disables/enables the periodic 5-second console status print.
 - **`stats` update**: Now outputs the number of active WebSocket clients (`WS  : frames:X effects:Y`) to diagnose socket exhaustion.
+- **`heap` update**: Replaced the direct ESP-IDF `heap_caps_print_heap_info` call (which writes directly to raw serial stdout) with a custom query and format using `cli_printf`. This enables the `heap` command to print correctly over telnet as well as serial.

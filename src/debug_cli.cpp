@@ -687,6 +687,28 @@ static void DoStatusLog(const cli_argv& argv)
     }
 }
 
+static void DoHeap(const cli_argv &)
+{
+    multi_heap_info_t info;
+    heap_caps_get_info(&info, MALLOC_CAP_DEFAULT);
+    cli_printf("Heap Summary (MALLOC_CAP_DEFAULT):\n");
+    cli_printf("  Free space       : %zu bytes (largest block: %zu bytes)\n", info.total_free_bytes, info.largest_free_block);
+    cli_printf("  Allocated space  : %zu bytes\n", info.total_allocated_bytes);
+    cli_printf("  Min ever free    : %zu bytes\n", info.minimum_free_bytes);
+    cli_printf("  Blocks           : %zu allocated, %zu free (%zu total)\n", info.allocated_blocks, info.free_blocks, info.total_blocks);
+
+#if USE_PSRAM
+    if (psramFound())
+    {
+        heap_caps_get_info(&info, MALLOC_CAP_SPIRAM);
+        cli_printf("Heap Summary (MALLOC_CAP_SPIRAM):\n");
+        cli_printf("  Free space       : %zu bytes (largest block: %zu bytes)\n", info.total_free_bytes, info.largest_free_block);
+        cli_printf("  Allocated space  : %zu bytes\n", info.total_allocated_bytes);
+        cli_printf("  Min ever free    : %zu bytes\n", info.minimum_free_bytes);
+    }
+#endif
+}
+
 static const command core_commands[] = {
     {"bright", "[level] Display/Set brightness 0-255", "Brightness:",
      [](const cli_argv &argv) {
@@ -753,8 +775,7 @@ static const command core_commands[] = {
      }},
     {"dmesg", "Display the circular log buffer", "dmesg:", DoDmesg},
     {"effect", "[next|prev|name|index] Show/change current effect", "Effects.", DoEffectCommand}, // Function pointer
-    {"heap", "Display heap memory info",
-     "Heap usage:", [](const cli_argv &) { heap_caps_print_heap_info(MALLOC_CAP_DEFAULT); }},
+    {"heap", "Display heap memory info", "Heap usage:", DoHeap},
     {"help", "Display command line options", "Displaying system help",
      PrintHelp}, // Function pointer logic requires PrintHelp signature match. It does.
     {"log", "[tag] <level> Get/set log level", nullptr,
