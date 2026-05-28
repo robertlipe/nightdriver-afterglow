@@ -100,16 +100,57 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
         return transitionCycle - start;
     };
 
-    // Wait for response handshake (DHT pulls low ~80us, then high ~80us)
-    int32_t initialHigh = measurePulse(HIGH, handshakeTimeoutCycles);
-    int32_t responseLow = measurePulse(LOW, handshakeTimeoutCycles);
-    int32_t responseHigh = measurePulse(HIGH, handshakeTimeoutCycles);
-
-    if (initialHigh < 0 || responseLow < 0 || responseHigh < 0)
+    // Helper lambda for simple state waiting without cycles measurement
+    auto waitForState = [pin](bool targetState, uint32_t timeoutCycles) -> bool
     {
-        interrupts(); // Re-enable interrupts before returning
-        debugD("DHT11 handshake failed. Pin: %d, initialHigh: %d, responseLow: %d, responseHigh: %d",
-               pin, initialHigh, responseLow, responseHigh);
+        uint32_t start = esp_cpu_get_cycle_count();
+        while (digitalRead(pin) != targetState)
+        {
+            if (esp_cpu_get_cycle_count() - start > timeoutCycles)
+            {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    // Wait for DHT to pull LOW (start of response)
+    if (!waitForState(LOW, handshakeTimeoutCycles))
+    {
+        interrupts();
+        debugD("DHT11 handshake failed: Pin did not go LOW");
+        return false;
+    }
+
+    // Wait for DHT to release LOW and go HIGH (start of 80us HIGH response)
+    if (!waitForState(HIGH, handshakeTimeoutCycles))
+    {
+        interrupts();
+        debugD("DHT11 handshake failed: Pin did not go HIGH");
+        return false;
+    }
+
+    // Delay 30us to get past any rise-time oscillations and reach the stable middle of the 80us HIGH phase.
+    uint32_t delayStart = esp_cpu_get_cycle_count();
+    uint32_t delayCycles = 30 * cyclesPerUs;
+    while (esp_cpu_get_cycle_count() - delayStart < delayCycles)
+    {
+        // Busy wait
+    }
+
+    // Verify the line is still HIGH
+    if (digitalRead(pin) != HIGH)
+    {
+        interrupts();
+        debugD("DHT11 handshake failed: Pin went LOW prematurely during 80us HIGH phase");
+        return false;
+    }
+
+    // Wait for the line to go LOW. This transition is the start of the 50us LOW pulse of Bit 0.
+    if (!waitForState(LOW, handshakeTimeoutCycles))
+    {
+        interrupts();
+        debugD("DHT11 handshake failed: Pin did not go LOW to start Bit 0");
         return false;
     }
 
