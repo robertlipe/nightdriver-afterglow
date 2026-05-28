@@ -44,14 +44,20 @@ void IdleTask::ProcessIdleTime()
                 uint32_t lastLoop = g_Values.LastLoopHeartbeat.load(std::memory_order_relaxed);
                 uint32_t lastDraw = g_Values.LastDrawHeartbeat.load(std::memory_order_relaxed);
 
-                if (lastLoop != 0 && (now - lastLoop > 30000))
+                // We use signed 32-bit subtraction (int32_t) to prevent false watchdog triggers.
+                // Since the loop/draw threads run on Core 1 and this supervisor runs on Core 0,
+                // the other core might write a slightly newer millis() heartbeat after 'now' was
+                // sampled here. Under unsigned subtraction, this causes (now - lastLoop) to underflow
+                // to a massive value (~4294967295), triggering a false reboot. Casting the delta to
+                // int32_t correctly yields a negative difference (e.g. -1 ms), which is safely ignored.
+                if (lastLoop != 0 && (int32_t)(now - lastLoop) > 30000)
                 {
                     Serial.printf("!!! WATCHDOG DETECTED LOOP THREAD HANG !!! (Last heartbeat: %lu ms ago). Restarting...\n", now - lastLoop);
                     delay(1000);
                     ESP.restart();
                 }
 
-                if (lastDraw != 0 && (now - lastDraw > 30000))
+                if (lastDraw != 0 && (int32_t)(now - lastDraw) > 30000)
                 {
                     Serial.printf("!!! WATCHDOG DETECTED DRAW THREAD HANG !!! (Last heartbeat: %lu ms ago). Restarting...\n", now - lastDraw);
                     delay(1000);

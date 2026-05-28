@@ -58,14 +58,46 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
     auto measurePulse = [pin](bool state, uint32_t timeoutCycles) -> int32_t
     {
         uint32_t start = esp_cpu_get_cycle_count();
-        while (digitalRead(pin) == state)
+        uint32_t transitionCycle = 0;
+        const uint32_t cyclesPerUs = ESP.getCpuFreqMHz();
+        const uint32_t stableCycles = 3 * cyclesPerUs; // 3 microseconds stability window
+        
+        while (true)
         {
+            if (digitalRead(pin) != state)
+            {
+                if (transitionCycle == 0)
+                {
+                    transitionCycle = esp_cpu_get_cycle_count();
+                }
+                
+                // Verify the transition is stable by ensuring it stays in the new state for 3us.
+                // 3us is safely below any valid DHT11 pulse width (min ~26us) but far above
+                // nanosecond-scale contact bounce or signal rise-time oscillations.
+                uint32_t checkStart = esp_cpu_get_cycle_count();
+                bool stable = true;
+                while (esp_cpu_get_cycle_count() - checkStart < stableCycles)
+                {
+                    if (digitalRead(pin) == state)
+                    {
+                        stable = false;
+                        transitionCycle = 0; // Reset, it was a transient glitch
+                        break;
+                    }
+                }
+                
+                if (stable)
+                {
+                    break;
+                }
+            }
+            
             if ((esp_cpu_get_cycle_count() - start) > timeoutCycles)
             {
                 return -1;
             }
         }
-        return esp_cpu_get_cycle_count() - start;
+        return transitionCycle - start;
     };
 
     // Wait for response handshake (DHT pulls low ~80us, then high ~80us)
@@ -95,15 +127,55 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
 
         // The duration of the high pulse determines if it's a 0 (~28us) or a 1 (~70us)
         int32_t highDuration = measurePulse(HIGH, bitTimeoutCycles);
-        if (highDuration < 0)
-        {
-            interrupts(); // Re-enable interrupts before returning
-            debugI("DHT11 bit %d high timeout", i);
-            return false;
-        }
-
+        
         int byteIndex = i / 8;
         data[byteIndex] <<= 1;
+
+        if (highDuration < 0)
+        {
+            // If we timed out on the high pulse of the very last bit (index 39), we can reconstruct it
+            // because the 40th bit is the LSB of the 8-bit checksum. The expected checksum is uniquely
+            // determined by the sum of the first 4 bytes, so we can verify if 0 or 1 matches.
+            if (i == 39)
+            {
+                interrupts(); // Re-enable interrupts
+                
+                uint8_t expectedSum = data[0] + data[1] + data[2] + data[3];
+                uint8_t checksumWithZero = data[4]; // Already shifted left
+                uint8_t checksumWithOne  = data[4] | 1;
+                
+                if (checksumWithZero == expectedSum)
+                {
+                    data[4] = checksumWithZero;
+                    humidity = static_cast<float>(data[0]);
+                    float tempC = static_cast<float>(data[2]);
+                    tempF = (tempC * 9.0f / 5.0f) + 32.0f;
+                    debugD("DHT11 bit 39 high timeout recovered as 0 via checksum matching.");
+                    return true;
+                }
+                else if (checksumWithOne == expectedSum)
+                {
+                    data[4] = checksumWithOne;
+                    humidity = static_cast<float>(data[0]);
+                    float tempC = static_cast<float>(data[2]);
+                    tempF = (tempC * 9.0f / 5.0f) + 32.0f;
+                    debugD("DHT11 bit 39 high timeout recovered as 1 via checksum matching.");
+                    return true;
+                }
+                else
+                {
+                    debugI("DHT11 bit 39 high timeout recovery failed. Expected sum: %02x, got %02x or %02x",
+                           expectedSum, checksumWithZero, checksumWithOne);
+                    return false;
+                }
+            }
+            else
+            {
+                interrupts(); // Re-enable interrupts before returning
+                debugI("DHT11 bit %d high timeout", i);
+                return false;
+            }
+        }
         
         // Robust comparison: if the HIGH pulse duration is greater than the LOW pulse duration, it's a 1.
         if (highDuration > lowDuration)
