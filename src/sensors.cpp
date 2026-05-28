@@ -108,7 +108,7 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
     if (initialHigh < 0 || responseLow < 0 || responseHigh < 0)
     {
         interrupts(); // Re-enable interrupts before returning
-        debugI("DHT11 handshake failed. Pin: %d, initialHigh: %d, responseLow: %d, responseHigh: %d",
+        debugD("DHT11 handshake failed. Pin: %d, initialHigh: %d, responseLow: %d, responseHigh: %d",
                pin, initialHigh, responseLow, responseHigh);
         return false;
     }
@@ -121,7 +121,7 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
         if (lowDuration < 0)
         {
             interrupts(); // Re-enable interrupts before returning
-            debugI("DHT11 bit %d low timeout", i);
+            debugD("DHT11 bit %d low timeout", i);
             return false;
         }
 
@@ -164,7 +164,7 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
                 }
                 else
                 {
-                    debugI("DHT11 bit 39 high timeout recovery failed. Expected sum: %02x, got %02x or %02x",
+                    debugD("DHT11 bit 39 high timeout recovery failed. Expected sum: %02x, got %02x or %02x",
                            expectedSum, checksumWithZero, checksumWithOne);
                     return false;
                 }
@@ -172,7 +172,7 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
             else
             {
                 interrupts(); // Re-enable interrupts before returning
-                debugI("DHT11 bit %d high timeout", i);
+                debugD("DHT11 bit %d high timeout", i);
                 return false;
             }
         }
@@ -191,7 +191,7 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
     // If it took longer than 6ms (6000us), discard.
     if (elapsedCycles > (6000 * cyclesPerUs))
     {
-        debugI("DHT11 read took too long: %u cycles", elapsedCycles);
+        debugD("DHT11 read took too long: %u cycles", elapsedCycles);
         return false;
     }
 
@@ -199,7 +199,7 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
     uint8_t checksum = data[0] + data[1] + data[2] + data[3];
     if (checksum != data[4])
     {
-        debugI("DHT11 checksum mismatch: calculated %02x, received %02x (data: %02x %02x %02x %02x)",
+        debugD("DHT11 checksum mismatch: calculated %02x, received %02x (data: %02x %02x %02x %02x)",
                checksum, data[4], data[0], data[1], data[2], data[3]);
         return false;
     }
