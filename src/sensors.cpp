@@ -18,9 +18,12 @@
 #include <esp_timer.h>
 #include <soc/soc_caps.h>
 
-#if SOC_TEMP_SENSOR_SUPPORTED
+#if SOC_TEMP_SENSOR_SUPPORTED && (ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0))
+#define HAS_TEMP_SENSOR 1
 #include <driver/temperature_sensor.h>
 static temperature_sensor_handle_t s_temp_sensor = nullptr;
+#else
+#define HAS_TEMP_SENSOR 0
 #endif
 
 #ifdef DHT11_PIN
@@ -256,7 +259,7 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
 
 void SensorManager::begin()
 {
-#if SOC_TEMP_SENSOR_SUPPORTED
+#if HAS_TEMP_SENSOR
     temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(10, 50);
     if (temperature_sensor_install(&temp_sensor_config, &s_temp_sensor) == ESP_OK)
     {
@@ -288,7 +291,7 @@ void SensorManager::begin()
 
 void SensorManager::Update()
 {
-#if SOC_TEMP_SENSOR_SUPPORTED
+#if HAS_TEMP_SENSOR
     if (s_temp_sensor != nullptr)
     {
         float tsens_out = 0;

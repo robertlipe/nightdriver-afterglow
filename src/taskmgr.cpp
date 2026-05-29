@@ -20,6 +20,10 @@
 
 #include <esp_task_wdt.h>
 
+#ifndef CONFIG_FREERTOS_NUMBER_OF_CORES
+#define CONFIG_FREERTOS_NUMBER_OF_CORES 2
+#endif
+
 void IdleTask::ProcessIdleTime()
 {
     _lastMeasurement = millis();
@@ -52,14 +56,14 @@ void IdleTask::ProcessIdleTime()
                 // int32_t correctly yields a negative difference (e.g. -1 ms), which is safely ignored.
                 if (lastLoop != 0 && (int32_t)(now - lastLoop) > 30000)
                 {
-                    Serial.printf("!!! WATCHDOG DETECTED LOOP THREAD HANG !!! (Last heartbeat: %lu ms ago). Restarting...\n", now - lastLoop);
+                    Serial.printf("!!! WATCHDOG DETECTED LOOP THREAD HANG !!! (Last heartbeat: %lu ms ago). Restarting...\n", (unsigned long)(now - lastLoop));
                     delay(1000);
                     ESP.restart();
                 }
 
                 if (lastDraw != 0 && (int32_t)(now - lastDraw) > 30000)
                 {
-                    Serial.printf("!!! WATCHDOG DETECTED DRAW THREAD HANG !!! (Last heartbeat: %lu ms ago). Restarting...\n", now - lastDraw);
+                    Serial.printf("!!! WATCHDOG DETECTED DRAW THREAD HANG !!! (Last heartbeat: %lu ms ago). Restarting...\n", (unsigned long)(now - lastDraw));
                     delay(1000);
                     ESP.restart();
                 }

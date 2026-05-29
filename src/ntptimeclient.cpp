@@ -97,7 +97,7 @@ bool NTPTimeClient::UpdateClockFromWeb(WiFiUDP * pUDP)
     if (!esp_sntp_enabled())
     {
         debugI("Initializing native ESP-IDF SNTP with smooth sync...");
-        esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+        esp_sntp_setoperatingmode(static_cast<esp_sntp_operatingmode_t>(SNTP_OPMODE_POLL));
         esp_sntp_setservername(0, g_ptrSystem->GetDeviceConfig().GetNTPServer().c_str());
         esp_sntp_set_sync_mode(SNTP_SYNC_MODE_SMOOTH);
         esp_sntp_set_time_sync_notification_cb(time_sync_notification_cb);
