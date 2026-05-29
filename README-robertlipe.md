@@ -75,6 +75,11 @@ This file documents the custom reliability, diagnostic, and performance improvem
 - **Bus Contention Fix**: Shortened the active-high start signal drive time from 40µs to 2µs. This prevents host-side active-high drive contention when the DHT11 sensor starts driving the data line low (which it does as early as 20µs).
 - **Background Retries**: Added background retry logic (retrying once every 10 seconds for up to 12 attempts) during startup. This allows the system to boot immediately without blocking, while gracefully waiting for the DHT11 sensor to stabilize and power up.
 - **Thermal Safety Throttle**: Configured automatic brightness throttling (capping `g_Values.Brite` at `10.0f`) if ambient temperatures exceed 120°F to prevent overheating in enclosed cabinets.
+---
 
+## 📞 Telnet Server & Connection Hijacking
 
-
+### 1. Connection Takeover / Hijacking (`src/telnetserver.cpp`)
+- **Feature**: Re-implemented the telnet thread loop (`DebugLoopTaskEntry`) using `select()` to multiplex the listening socket and the active client socket.
+- **UX Improvement**: If a client attempts to connect while a telnet session is already active (e.g. from an orphaned terminal window or client crash), the server immediately accepts the new connection, safely disconnects/closes the old socket, and swaps the output console sink to the new client (hijacking the session). This prevents the "hanging / locked-out" behavior of standard single-user microcontroller socket servers.
+- **Zero CPU Idle Overhead**: The server thread sleeps in a kernel-level wait-state using `select()`, removing the previous 100ms polling/delay loop when no clients were connected.
