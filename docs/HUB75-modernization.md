@@ -19,15 +19,24 @@ Instead of relying on hardware-assisted library layers and ChromaKey overlays in
 *   **Simplification**: Reduces the driver's role to a simple, generic pixel streamer ("here is an array of RGB values, display it").
 *   **Feature Portability**: Caption and telemetry layouts immediately become supported on all display devices, including WS2812 strip-matrices.
 
-### Phase 2: Excise SmartMatrix and Adopt `MatrixPanel-DMA`
-*   **Target Driver**: Migrate `HUB75GFX` to **`ESP32-HUB75-MatrixPanel-DMA`** (mrcodetastic library).
-*   **Immediate S3 Support**: This library features highly optimized LCD_CAM/GDMA driver backends for the ESP32-S3, immediately unlocking modern hardware targets like the **Adafruit MatrixPortal S3**.
-*   **Active Community**: We leverage community-driven maintenance for chip errata and future silicon revisions (like the ESP32-S31).
+### Phase 2: Excise SmartMatrix and Evaluate Modern Alternatives
+We have two main candidate libraries to replace SmartMatrix. While `ESP32-HUB75-MatrixPanel-DMA` has the most immediate hobbyist mindshare, `esphome-libs/esp-hub75` is a highly compelling, pure C++ option that matches our architecture better:
+
+*   **Option A: [ESP32-HUB75-MatrixPanel-DMA](https://github.com/mrfaptastic/ESP32-HUB75-MatrixPanel-DMA) (mrcodetastic)**
+    *   *Pros*: Huge hobbyist community; widely used with Arduino wrappers.
+    *   *Cons*: Heavy Arduino coupling (implements `Adafruit_GFX` internally), no native support for ESP32-P4/C6 because it lacks `PARLIO` support.
+*   **Option B (Preferred): [esphome-libs/esp-hub75](https://github.com/esphome-libs/esp-hub75) (ESPHome / Nabu Casa)**
+    *   *Pros*:
+        *   **Multi-Platform out of the box**: Supports GDMA (S3), I2S (ESP32/S2), and PARLIO (P4/C6).
+        *   **No Arduino Baggage**: It is a pure C++/ESP-IDF component. It acts solely as a high-performance buffer pump, exposing a clean `draw_pixels(x, y, w, h, buffer, format)` API for raw arrays.
+        *   **We already have the Graphics API**: Because NightDriverStrip already pulls in the [Adafruit GFX Library](https://github.com/adafruit/Adafruit-GFX-Library) externally and renders everything into a software framebuffer, we don't need the driver to bundle graphics primitives; we just need a fast, robust RGB[]-to-DMA writer.
+        *   **Massive Indirect Testing**: Backed by Nabu Casa for ESPHome. The massive Home Assistant user base acts as a testing laboratory for a wide variety of cheap panels, and timing/chip initialization fixes (FM6126A, ICN2038S, etc.) are pushed directly to this library.
+
+---
 
 ### Phase 3: Platform Decoupling for Future Silicon
-Neither SmartMatrix nor the mrcodetastic library is portable to non-ESP32 architectures:
+Neither SmartMatrix nor the mrcodetastic library is portable to non-ESP32 architectures, but Option B (`esp-hub75`) already solves the P4/C6 problem within the Espressif family:
 *   **Unified Abstraction**: Keep the `GFXBase` class as the clean boundary separating effect logic from hardware drivers.
 *   **Platform-Specific Backends**:
-    *   **ESP32 Family (S3, classic)**: Use `ESP32-HUB75-MatrixPanel-DMA`.
-    *   **ESP32-P4**: Target the official ESP-IDF `esp_lcd` driver stack (using its parallel RGB engine).
+    *   **Espressif Family (ESP32, S3, C6, P4)**: Use `esp-hub75` as the unified backend (leveraging its native I2S, GDMA, and PARLIO drivers).
     *   **RP2040 / RP2350**: Implement a backend using PIO (Programmable I/O) state machine DMA clocks (e.g., Raspberry Pi's Interstate 75 / 75W).
