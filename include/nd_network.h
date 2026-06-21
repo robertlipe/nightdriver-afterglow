@@ -29,8 +29,7 @@
 //---------------------------------------------------------------------------
 
 #include "globals.h"
-#include "esp_mac.h"
-#include "types.h"
+#include "interfaces.h"
 
 #include <atomic>
 #include <functional>
@@ -159,3 +158,6 @@ void SetupOTA(const String &strHostname);
 void IRAM_ATTR RemoteLoopEntry(void *);
 String urlEncode(const String &str);
 
+// Local additions to match get_mac_address
+inline String get_mac_address() { return nd_network::GetMacAddress(""); }
+inline String get_mac_address_pretty() { return nd_network::GetMacAddress(":"); }

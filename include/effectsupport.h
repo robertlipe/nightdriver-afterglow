@@ -33,9 +33,7 @@
 //---------------------------------------------------------------------------
 
 #include "globals.h"
-#include "colordata.h"
-
-#include <cstdint>
+#include "effectfactories.h"
 
 // Palettes used by a number of effects
 
@@ -43,10 +41,13 @@ extern const CRGBPalette16 BlueColors_p;
 extern const CRGBPalette16 RedColors_p;
 extern const CRGBPalette16 GreenColors_p;
 extern const CRGBPalette16 RGBColors_p;
-// spectrumBasicColors is in colordata.h
+extern const CRGBPalette16 spectrumBasicColors;
 extern const CRGBPalette16 spectrumAltColors;
 extern const CRGBPalette16 USAColors_p;
 extern const CRGBPalette16 rainbowPalette;
+
+// A pointer to the global effect factories.
+extern std::unique_ptr<EffectFactories> g_ptrEffectFactories;
 
 // Defines used by some StarEffect instances
 

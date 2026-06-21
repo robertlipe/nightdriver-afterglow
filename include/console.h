@@ -104,6 +104,8 @@ public:
     void Broadcast(std::string_view data);
     void Broadcast(LogLevel level, const char* tag, const char* message);
 
+    void PrintDmesg(std::function<void(const std::string&)> printFunc);
+
     // Internal use by TelnetServer
     void SetTelnetSink(IConsoleSink* sink);
     void ClearTelnetSink();
@@ -111,10 +113,16 @@ public:
 private:
     ConsoleManager();
 
+    void AddDmesgLine(std::string_view line);
+
     std::shared_ptr<ConsoleSession> _serialSession;
     std::shared_ptr<ConsoleSession> _telnetSession;
     ConsoleByteHandler _byteHandler = nullptr;
     std::recursive_mutex _mutex;
+
+    std::vector<std::string> _dmesgBuffer;
+    size_t _dmesgHead = 0;
+    static constexpr size_t DMESG_BUFFER_SIZE = 256;
 };
 
 //

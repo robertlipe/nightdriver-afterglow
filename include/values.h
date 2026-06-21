@@ -31,6 +31,8 @@
 //---------------------------------------------------------------------------
 
 #include "globals.h"
+#include <atomic>
+#include <optional>
 
 #include "types.h"
 
@@ -44,10 +46,16 @@ struct Values
     uint32_t FPS = 0;                                                       // Our global framerate
     bool UpdateStarted = false;                                             // Has an OTA update started?
     uint8_t Fader = 255;
+    bool ShowStatusLog = true;
+    std::optional<float> AmbientTemp;                                       // Ambient temperature in F
+    std::optional<float> AmbientHumidity;                                   // Ambient relative humidity in %
+    std::optional<float> InternalTemp;                                      // Internal chip temperature in F
 #if USE_HUB75
     int MatrixPowerMilliwatts = 0;                                         // Matrix power draw in mw
     uint8_t MatrixScaledBrightness = 255;                                  // 0-255 scaled brightness to stay in limit
 #endif
+    std::atomic<uint32_t> LastLoopHeartbeat{0};
+    std::atomic<uint32_t> LastDrawHeartbeat{0};
 };
 
 extern Values g_Values;

@@ -195,6 +195,7 @@
 #include "logger.h"
 #include "nd_network.h"
 #include "ntptimeclient.h"
+#include "sensors.h"
 #include "socketserver.h"
 #include "soundanalyzer.h"
 #include "systemcontainer.h"
@@ -277,8 +278,8 @@ void PrintOutputHeader()
         debugI("ESP32 PSRAM Init: %s", psramInit() ? "OK" : "FAIL");
     #endif
 
-    debugI("Version %u: Wifi SSID: \"%s\" - ESP32 Free Memory: %zu, PSRAM:%zu, PSRAM Free: %zu",
-            FLASH_VERSION, cszSSID, (size_t)ESP.getFreeHeap(), (size_t)ESP.getPsramSize(), (size_t)ESP.getFreePsram());
+    debugI("Version %u: Wifi SSID: \"%s\" - ESP32 Free Memory: %lu, PSRAM:%lu, PSRAM Free: %lu",
+            (unsigned int)FLASH_VERSION, cszSSID, (unsigned long)ESP.getFreeHeap(), (unsigned long)ESP.getPsramSize(), (unsigned long)ESP.getFreePsram());
     debugI("ESP32 Clock Freq : %lu MHz", (unsigned long)ESP.getCpuFreqMHz());
 }
 
@@ -294,14 +295,24 @@ void TerminateHandler()
 
     PrintOutputHeader();
 
-    try {
+    try
+    {
         std::rethrow_exception(std::current_exception());
     }
-    catch (std::exception &ex) {
+    catch (const std::exception& ex)
+    {
         debugE("Terminated due to exception: %s", ex.what());
+        DebugCLI::RecordPanicMessage(ex.what());
+    }
+    catch (...)
+    {
+        debugE("Terminated due to unknown exception type");
+        DebugCLI::RecordPanicMessage("Unknown Exception");
     }
 
     Serial.flush();
+    delay(100);
+    esp_restart();
 }
 
 // Buttons are now owned/managed by Screen
@@ -361,6 +372,9 @@ void setup()
     // Display a simple startup header on the serial port
     PrintOutputHeader();
     debugI("Startup!");
+
+    // Initialize sensors
+    SensorManager::begin();
 
     // Initialize Non-Volatile Storage
     esp_err_t err = nvs_flash_init();
@@ -628,8 +642,10 @@ void setup()
 
 void loop()
 {
+    g_Values.LastLoopHeartbeat.store(millis(), std::memory_order_relaxed);
     while(true)
     {
+        g_Values.LastLoopHeartbeat.store(millis(), std::memory_order_relaxed);
         // Feed any direct serial bytes to the console manager (if not handled by Improv)
         while (Serial.available())
         {
@@ -657,42 +673,67 @@ void loop()
             }
         #endif
 
+        EVERY_N_SECONDS(10)
+        {
+            SensorManager::Update();
+        }
+
         EVERY_N_SECONDS(5)
         {
-            String strOutput;
-
-            #if ENABLE_WIFI
-                strOutput += str_sprintf("WiFi: %s, MAC: %s, IP: %s ", nd_network::WLtoString(nd_network::GetWiFiStatus()), nd_network::GetMacAddress(":").c_str(), nd_network::GetWiFiLocalIP().c_str());
+            #if ENABLE_NTP
+                NTPTimeClient::ProcessPendingSyncNotification();
             #endif
 
-            strOutput += str_sprintf("Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize());
-            strOutput += str_sprintf("LED FPS: %lu ", (unsigned long)g_Values.FPS);
+            if (g_Values.ShowStatusLog)
+            {
+                String strOutput;
 
-            #if USE_WS281X
-                strOutput += str_sprintf("LED Bright: %3.0lf%%, LED Watts: %lu, ", g_Values.Brite, (unsigned long)g_Values.Watts);
-            #endif
+                #if ENABLE_WIFI
+                    strOutput += str_sprintf("WiFi: %s, MAC: %s, IP: %s ", nd_network::WLtoString(nd_network::GetWiFiStatus()), nd_network::GetMacAddress(":").c_str(), nd_network::GetWiFiLocalIP().c_str());
+                #endif
 
-            #if USE_HUB75
-                strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%%, ", HUB75GFX::matrix.getRefreshRate(), g_Values.MatrixPowerMilliwatts, g_Values.MatrixScaledBrightness / 2.55);
-            #endif
+                strOutput += str_sprintf("Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize());
+                strOutput += str_sprintf("LED FPS: %lu ", (unsigned long)g_Values.FPS);
 
-            #if ENABLE_AUDIO
-                strOutput += str_sprintf("Audio FPS: %d, MinVU: %6.1f, PeakVU: %6.1f, VURatio: %3.1f ", g_Analyzer.AudioFPS(), g_Analyzer.MinVU(), g_Analyzer.PeakVU(), g_Analyzer.VURatio());
-            #endif
+                #if USE_WS281X
+                    strOutput += str_sprintf("LED Bright: %3.0lf%%, LED Watts: %lu, ", g_Values.Brite, (unsigned long)g_Values.Watts);
+                #endif
 
-            #if ENABLE_AUDIOSERIAL
-                strOutput += str_sprintf("Serial FPS: %d, ", g_Analyzer.SerialFPS());
-            #endif
+                #if USE_HUB75
+                    strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%%, ", HUB75GFX::matrix.getRefreshRate(), g_Values.MatrixPowerMilliwatts, g_Values.MatrixScaledBrightness / 2.55);
+                #endif
 
-            #if INCOMING_WIFI_ENABLED
-                auto& bufferManager = g_ptrSystem->GetBufferManagers()[0];
-                strOutput += str_sprintf("Buffer: %zu/%zu, ", (size_t)bufferManager.Depth(), (size_t)bufferManager.BufferCount());
-            #endif
+                #if ENABLE_AUDIO
+                    strOutput += str_sprintf("Audio FPS: %d, MinVU: %6.1f, PeakVU: %6.1f, VURatio: %3.1f ", g_Analyzer.AudioFPS(), g_Analyzer.MinVU(), g_Analyzer.PeakVU(), g_Analyzer.VURatio());
+                #endif
 
-            const auto& taskManager = g_ptrSystem->GetTaskManager();
-            strOutput += str_sprintf("CPU: %03.0f%%, %03.0f%%, FreeDraw: %4.3lf", taskManager.GetCPUUsagePercent(0), taskManager.GetCPUUsagePercent(1), g_Values.FreeDrawTime);
+                #if ENABLE_AUDIOSERIAL
+                    strOutput += str_sprintf("Serial FPS: %d, ", g_Analyzer.SerialFPS());
+                #endif
 
-            debugI("%s", strOutput.c_str());
+                #if INCOMING_WIFI_ENABLED
+                    auto& bufferManager = g_ptrSystem->GetBufferManagers()[0];
+                    strOutput += str_sprintf("Buffer: %zu/%zu, ", (size_t)bufferManager.Depth(), (size_t)bufferManager.BufferCount());
+                #endif
+
+                if (g_Values.InternalTemp.has_value())
+                {
+                    strOutput += str_sprintf("CoreTemp: %.1fF ", g_Values.InternalTemp.value());
+                }
+                if (g_Values.AmbientTemp.has_value())
+                {
+                    strOutput += str_sprintf("Temp: %.1fF ", g_Values.AmbientTemp.value());
+                }
+                if (g_Values.AmbientHumidity.has_value())
+                {
+                    strOutput += str_sprintf("Hum: %.1f%% ", g_Values.AmbientHumidity.value());
+                }
+
+                const auto& taskManager = g_ptrSystem->GetTaskManager();
+                strOutput += str_sprintf("CPU: %03.0f%%, %03.0f%%, FreeDraw: %4.3lf", taskManager.GetCPUUsagePercent(0), taskManager.GetCPUUsagePercent(1), g_Values.FreeDrawTime);
+
+                debugI("%s", strOutput.c_str());
+            }
         }
 
         // Once an update is underway, we loop tightly on ArduinoOTA.handle.  Otherwise, we delay a bit to share the CPU.

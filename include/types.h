@@ -40,6 +40,8 @@
 #include <sys/time.h>
 #include <type_traits>
 
+#include "esp_log.h"
+
 #ifndef MICROS_PER_SECOND
     #define MICROS_PER_SECOND 1000000
 #endif

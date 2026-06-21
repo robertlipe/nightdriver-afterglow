@@ -159,6 +159,8 @@ void ConsoleManager::FeedTelnetByte(uint8_t byte)
 
 void ConsoleManager::Broadcast(std::string_view data)
 {
+    AddDmesgLine(data);
+
     std::shared_ptr<ConsoleSession> serial, telnet;
     {
         std::lock_guard<std::recursive_mutex> lock(_mutex);
@@ -177,6 +179,39 @@ void ConsoleManager::Broadcast(std::string_view data)
 
 void ConsoleManager::Broadcast(LogLevel level, const char* tag, const char* message)
 {
+    char lv;
+    switch (level)
+    {
+        case LogLevel::Fatal:   lv = 'F'; break;
+        case LogLevel::Error:   lv = 'E'; break;
+        case LogLevel::Warn:    lv = 'W'; break;
+        case LogLevel::Info:    lv = 'I'; break;
+        case LogLevel::Debug:   lv = 'D'; break;
+        case LogLevel::Verbose: lv = 'V'; break;
+        case LogLevel::Trace:   lv = 'T'; break;
+        default:                lv = '?'; break;
+    }
+
+    char stack_buf[256];
+    int len = snprintf(stack_buf, sizeof(stack_buf), "[%c][%s] %s", lv, tag, message);
+    if (len >= 0)
+    {
+        if ((size_t)len < sizeof(stack_buf))
+        {
+            AddDmesgLine(std::string_view(stack_buf, len));
+        }
+        else
+        {
+            char* heap_buf = (char*)malloc(len + 1);
+            if (heap_buf)
+            {
+                snprintf(heap_buf, len + 1, "[%c][%s] %s", lv, tag, message);
+                AddDmesgLine(std::string_view(heap_buf, len));
+                free(heap_buf);
+            }
+        }
+    }
+
     std::shared_ptr<ConsoleSession> serial, telnet;
     {
         std::lock_guard<std::recursive_mutex> lock(_mutex);
@@ -188,6 +223,82 @@ void ConsoleManager::Broadcast(LogLevel level, const char* tag, const char* mess
     }
     if (telnet) {
         telnet->Write(level, tag, message);
+    }
+}
+
+void ConsoleManager::AddDmesgLine(std::string_view line)
+{
+    size_t start = 0;
+    while (start < line.size())
+    {
+        size_t end = line.find('\n', start);
+        std::string_view sub;
+        if (end == std::string_view::npos)
+        {
+            sub = line.substr(start);
+            start = line.size();
+        }
+        else
+        {
+            sub = line.substr(start, end - start);
+            start = end + 1;
+        }
+
+        while (!sub.empty() && (sub.back() == '\n' || sub.back() == '\r'))
+        {
+            sub.remove_suffix(1);
+        }
+        while (!sub.empty() && (sub.front() == '\n' || sub.front() == '\r'))
+        {
+            sub.remove_prefix(1);
+        }
+
+        if (sub.empty())
+        {
+            continue;
+        }
+
+        // Filter out the periodic 5-second status message to prevent dmesg flooding
+        if (sub.find("Mem: ") != std::string_view::npos && sub.find("LED FPS: ") != std::string_view::npos)
+        {
+            continue;
+        }
+
+        std::lock_guard<std::recursive_mutex> lock(_mutex);
+        if (_dmesgBuffer.size() < DMESG_BUFFER_SIZE)
+        {
+            _dmesgBuffer.push_back(std::string(sub));
+        }
+        else
+        {
+            _dmesgBuffer[_dmesgHead].assign(sub.data(), sub.size());
+            _dmesgHead = (_dmesgHead + 1) % DMESG_BUFFER_SIZE;
+        }
+    }
+}
+
+void ConsoleManager::PrintDmesg(std::function<void(const std::string&)> printFunc)
+{
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
+    if (_dmesgBuffer.empty())
+    {
+        return;
+    }
+
+    if (_dmesgBuffer.size() < DMESG_BUFFER_SIZE)
+    {
+        for (const auto& line : _dmesgBuffer)
+        {
+            printFunc(line);
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < DMESG_BUFFER_SIZE; ++i)
+        {
+            size_t idx = (_dmesgHead + i) % DMESG_BUFFER_SIZE;
+            printFunc(_dmesgBuffer[idx]);
+        }
     }
 }
 

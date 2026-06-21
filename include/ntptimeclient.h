@@ -50,6 +50,7 @@ class NTPTimeClient
 
     static bool HasClockBeenSet();
     static bool UpdateClockFromWeb(WiFiUDP * pUDP);
+    static void ProcessPendingSyncNotification();
 };
 
 #endif // ENABLE_NTP

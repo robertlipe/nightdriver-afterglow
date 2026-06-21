@@ -16,8 +16,13 @@
 #include "ledstripeffect.h"
 #include "nd_network.h"
 #include "taskmgr.h"
+#include "values.h"
 
 #include <esp_task_wdt.h>
+
+#ifndef CONFIG_FREERTOS_NUMBER_OF_CORES
+#define CONFIG_FREERTOS_NUMBER_OF_CORES 2
+#endif
 
 void IdleTask::ProcessIdleTime()
 {
@@ -35,6 +40,34 @@ void IdleTask::ProcessIdleTime()
             _idleRatio = ((float) counter  / delta);
             _lastMeasurement = millis();
             counter = 0;
+
+            // Software watchdog supervisor check
+            if (!g_Values.UpdateStarted)
+            {
+                uint32_t now = millis();
+                uint32_t lastLoop = g_Values.LastLoopHeartbeat.load(std::memory_order_relaxed);
+                uint32_t lastDraw = g_Values.LastDrawHeartbeat.load(std::memory_order_relaxed);
+
+                // We use signed 32-bit subtraction (int32_t) to prevent false watchdog triggers.
+                // Since the loop/draw threads run on Core 1 and this supervisor runs on Core 0,
+                // the other core might write a slightly newer millis() heartbeat after 'now' was
+                // sampled here. Under unsigned subtraction, this causes (now - lastLoop) to underflow
+                // to a massive value (~4294967295), triggering a false reboot. Casting the delta to
+                // int32_t correctly yields a negative difference (e.g. -1 ms), which is safely ignored.
+                if (lastLoop != 0 && (int32_t)(now - lastLoop) > 30000)
+                {
+                    Serial.printf("!!! WATCHDOG DETECTED LOOP THREAD HANG !!! (Last heartbeat: %lu ms ago). Restarting...\n", (unsigned long)(now - lastLoop));
+                    delay(1000);
+                    ESP.restart();
+                }
+
+                if (lastDraw != 0 && (int32_t)(now - lastDraw) > 30000)
+                {
+                    Serial.printf("!!! WATCHDOG DETECTED DRAW THREAD HANG !!! (Last heartbeat: %lu ms ago). Restarting...\n", (unsigned long)(now - lastDraw));
+                    delay(1000);
+                    ESP.restart();
+                }
+            }
         }
         else
         {
@@ -45,6 +78,7 @@ void IdleTask::ProcessIdleTime()
         }
     }
 }
+
 
 float IdleTask::GetCPUUsage() const
 {
@@ -64,21 +98,25 @@ void TaskManager::begin()
     // measure how much time is "wasted" at that lower priority and deem it to have been free CPU
 
     xTaskCreatePinnedToCore(IdleTask::IdleTaskEntry, "Idle0", IDLE_STACK_SIZE, &_taskIdle0, tskIDLE_PRIORITY + 1, &_hIdle0, 0);
+#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
     xTaskCreatePinnedToCore(IdleTask::IdleTaskEntry, "Idle1", IDLE_STACK_SIZE, &_taskIdle1, tskIDLE_PRIORITY + 1, &_hIdle1, 1);
+#endif
 
     // We need to turn off the watchdogs because our idle measurement tasks burn all of the idle time just
     // to see how much there is (it's how they measure free CPU).  Thus, we starve the system's normal idle tasks
     // and have to feed the watchdog on our own.
 
+    for (int i = 0; i < CONFIG_FREERTOS_NUMBER_OF_CORES; ++i) {
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-    esp_task_wdt_delete(xTaskGetIdleTaskHandleForCore(0));
-    esp_task_wdt_delete(xTaskGetIdleTaskHandleForCore(1));
+        esp_task_wdt_delete(xTaskGetIdleTaskHandleForCore(i));
 #else
-    esp_task_wdt_delete(xTaskGetIdleTaskHandleForCPU(0));
-    esp_task_wdt_delete(xTaskGetIdleTaskHandleForCPU(1));
+        esp_task_wdt_delete(xTaskGetIdleTaskHandleForCPU(i));
 #endif
+    }
     esp_task_wdt_add(_hIdle0);
+#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
     esp_task_wdt_add(_hIdle1);
+#endif
 }
 
 void TaskManager::CheckHeap()

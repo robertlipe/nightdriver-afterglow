@@ -323,6 +323,7 @@ void AudioSerialTaskEntry(void *);
 class SoundAnalyzerBase : public ISoundAnalyzer
 {
   public:
+
     // I'm old enough I can only hear up to about 12000Hz, but feel free to adjust.  Remember from
     // school that you need to sample at double the frequency you want to process, so 24000 samples is 12000Hz
 

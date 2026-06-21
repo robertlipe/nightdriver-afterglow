@@ -29,7 +29,10 @@
 //---------------------------------------------------------------------------
 
 #include "globals.h"
+#include <esp_mac.h>
 #include <esp_ota_ops.h>
+
+
 #include <fcntl.h>
 
 #if ENABLE_WIFI
@@ -286,16 +289,14 @@ namespace nd_network
     #if ENABLE_NTP
         void UpdateNTPTime()
         {
-            static unsigned long lastUpdate = 0;
             if (WiFi.isConnected())
             {
-                // If we've already retrieved the time successfully, we'll only actually update every NTP_DELAY_SECONDS seconds
-                if (!NTPTimeClient::HasClockBeenSet() || (millis() - lastUpdate) > ((NTP_DELAY_SECONDS) * 1000))
+                if (!NTPTimeClient::HasClockBeenSet())
                 {
-                    if (NTPTimeClient::UpdateClockFromWeb(&l_Udp))
-                        lastUpdate = millis();
+                    NTPTimeClient::UpdateClockFromWeb(&l_Udp);
                 }
             }
+            NTPTimeClient::ProcessPendingSyncNotification();
         }
     #endif
 
@@ -431,7 +432,21 @@ namespace nd_network
     void NetworkHandlingLoopEntry(void *)
     {
         static unsigned long lastConnected = millis();
+#if 0
+uint64_t mac = ESP.getEfuseMac();
+char name[32];
+snprintf(name, sizeof(name), "nightdriver-%02X%02X%02X",
+         (uint8_t)(mac >> 16),
+         (uint8_t)(mac >> 8),
+         (uint8_t)(mac));
+MDNS.begin(name);
+// dns-sd -B _http._tcp
+// dns-sd -L <instance-name> _http._tcp local
+#endif
         if (!MDNS.begin("esp32")) Serial.println("Error starting mDNS");
+
+        MDNS.addService("http", "tcp", 80);
+        MDNS.addServiceTxt("http", "tcp", "name", "NightDriver");
 
         TickType_t notifyWait = 0;
         for (;;)
@@ -518,6 +533,11 @@ namespace nd_network
         #if INCOMING_WIFI_ENABLED
         DebugCLI::cli_printf("Socket Buffer _cbReceived: %zu", g_ptrSystem->GetSocketServer()._cbReceived);
         #endif
+
+        #if WEB_SOCKETS_ANY_ENABLED
+        auto& ws = g_ptrSystem->GetWebSocketServer();
+        DebugCLI::cli_printf("WS  : frames:%zu effects:%zu", ws.ColorDataClientCount(), ws.EffectChangeClientCount());
+        #endif
     }
 
     void InitNetworkCLI()
@@ -566,17 +586,61 @@ namespace nd_network
 // Global Support Helpers
 
 #if ENABLE_ESPNOW
+// ESPNOW Support
+//
+// We accept ESPNOW commands to change effects and so on.  This is a simple structure that we'll receive over ESPNOW.
+enum class ESPNowCommand : uint8_t
+{
+    ESPNOW_NEXTEFFECT = 1,
+    ESPNOW_PREVEFFECT,
+    ESPNOW_SETEFFECT,
+    ESPNOW_INVALID = 255    // Followed by a uint32_t argument
+};
+
+// Message class
+//
+// Encapsulates an ESPNOW message, which is a command and an optional argument
+struct Message
+{
+    uint8_t       cbSize;
+    ESPNowCommand command;
+    uint32_t      arg1;
+} __attribute__((packed));
+
 void onReceiveESPNOW(const uint8_t *macAddr, const uint8_t *data, int dataLen)
 {
-    struct Message { uint8_t cbSize; uint8_t command; uint32_t arg1; } __attribute__((packed));
     Message message;
     if (dataLen < sizeof(message)) return;
     memcpy(&message, data, sizeof(message));
-    switch (message.command)
+    
+    debugI("ESPNOW Message received.");
+
+    if (message.cbSize != sizeof(message))
     {
-        case 1: g_ptrSystem->GetEffectManager().NextEffect(); break;
-        case 2: g_ptrSystem->GetEffectManager().PreviousEffect(); break;
-        case 3: g_ptrSystem->GetEffectManager().SetCurrentEffectIndex(message.arg1); break;
+        debugE("ESPNOW Message received with wrong structure size: %u but should be %zu", message.cbSize, sizeof(message));
+        return;
+    }
+
+    switch(message.command)
+    {
+        case ESPNowCommand::ESPNOW_NEXTEFFECT:
+            debugI("ESPNOW Next effect");
+            g_ptrSystem->GetEffectManager().NextEffect();
+            break;
+
+        case ESPNowCommand::ESPNOW_PREVEFFECT:
+            debugI("ESPNOW Previous effect");
+            g_ptrSystem->GetEffectManager().PreviousEffect();
+            break;
+
+        case ESPNowCommand::ESPNOW_SETEFFECT:
+            debugI("ESPNOW Setting effect index to %u", message.arg1);
+            g_ptrSystem->GetEffectManager().SetCurrentEffectIndex(message.arg1);
+            break;
+
+        default:
+            debugE("ESPNOW Message received with unknown command: %d", (int) message.command);
+            break;
     }
 }
 #endif
@@ -685,7 +749,6 @@ bool ProcessIncomingData(std::unique_ptr<uint8_t[]> &payloadData, size_t payload
         return false;
     #else
         uint16_t command16 = payloadData[1] << 8 | payloadData[0];
-
         debugV("payloadLength: %zu, command16: %d", payloadLength, command16);
 
         switch (command16)
