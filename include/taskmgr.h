@@ -141,6 +141,7 @@ public:
     static void CheckHeap();
 
     void begin();
+    virtual String GetStackUsageSummary() const;
 
 };
 
@@ -209,6 +210,7 @@ public:
 
     void NotifyJSONWriterThread();
     void NotifyNetworkThread();
+    String GetStackUsageSummary() const override;
 
     // Effect threads run with NET priority and on the NET core by default. It seems a sensible choice
     //   because effect threads tend to pull things from the Internet that they want to show
