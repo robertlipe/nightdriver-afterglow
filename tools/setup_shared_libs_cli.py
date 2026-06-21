@@ -4,6 +4,36 @@ import re
 import shutil
 import subprocess
 
+# Find PlatformIO executable in various standard locations
+def find_platformio_bin():
+    # 1. Try relative to sys.executable
+    py_dir = os.path.dirname(sys.executable)
+    for name in ["platformio", "platformio.exe", "pio", "pio.exe"]:
+        path = os.path.join(py_dir, name)
+        if os.path.exists(path):
+            return path
+
+    # 2. Try standard user home platformio virtual environment paths
+    home = os.path.expanduser("~")
+    possible_dirs = [
+        os.path.join(home, ".platformio", "penv", "bin"),
+        os.path.join(home, ".platformio", "penv", "Scripts"),
+    ]
+    for p_dir in possible_dirs:
+        for name in ["platformio", "platformio.exe", "pio", "pio.exe"]:
+            path = os.path.join(p_dir, name)
+            if os.path.exists(path):
+                return path
+
+    # 3. Try to locate via system PATH
+    for name in ["platformio", "pio"]:
+        resolved = shutil.which(name)
+        if resolved:
+            return resolved
+
+    # 4. Fallback to raw command
+    return "platformio"
+
 # Simple platformio.ini parser
 class SimplePIOConfig:
     def __init__(self, filepath):
@@ -127,10 +157,12 @@ for lib in shared_libs:
         else:
             print(f"[Shared-Libs] Installing shared dependency: {lib}...", file=sys.stderr)
 
+        pio_bin = find_platformio_bin()
+
         try:
             # Use PlatformIO's package manager to install it
             subprocess.run([
-                "platformio", "pkg", "install",
+                pio_bin, "pkg", "install",
                 "--library", lib,
                 "--storage-dir", TARGET_DIR
             ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
