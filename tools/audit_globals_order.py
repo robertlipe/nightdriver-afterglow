@@ -32,7 +32,7 @@ def audit_directory(dir_path):
                 for line_no, line in enumerate(f, 1):
                     if '#pragma once' in line:
                         pragma_once_count += 1
-                    
+
                     if re_globals.match(line):
                         if globals_line == -1:
                             globals_line = line_no
