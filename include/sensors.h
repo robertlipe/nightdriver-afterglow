@@ -22,7 +22,6 @@
 //    along with Nightdriver.  It is normally found in copying.txt
 //    If not, see <https://www.gnu.org/licenses/>.
 //
-#pragma once
 
 #include "globals.h"
 
