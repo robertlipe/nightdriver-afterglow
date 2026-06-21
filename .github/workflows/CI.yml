@@ -53,6 +53,9 @@ jobs:
         grep -v "^#define cszSSID" include/secrets.example.h > include/secrets.h
         echo '#define cszSSID ""' >> include/secrets.h
 
+    - name: Run library setup
+      run: python3 tools/setup_shared_libs_cli.py
+
     - name: "Build environment: ${{ matrix.envname }}"
       run: pio run -e ${{ matrix.envname }}
 
