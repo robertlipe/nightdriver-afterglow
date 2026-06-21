@@ -2,11 +2,24 @@
 //
 // File:        sensors.cpp
 //
-// NightDriverStrip - (c) 2026 Plummer's Software LLC.  All Rights Reserved.
+// NightDriverStrip - (c) 2026 Robert Lipe All Rights Reserved.
 //
 // Description:
 //
 //    Implements SensorManager to read DHT11 and internal ESP32 chip temperatures.
+//    NightDriver is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    NightDriver is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Nightdriver.  It is normally found in copying.txt
+//    If not, see <https://www.gnu.org/licenses/>.
 //
 //---------------------------------------------------------------------------
 
@@ -64,7 +77,7 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
         uint32_t transitionCycle = 0;
         const uint32_t cyclesPerUs = ESP.getCpuFreqMHz();
         const uint32_t stableCycles = 3 * cyclesPerUs; // 3 microseconds stability window
-        
+
         while (true)
         {
             if (digitalRead(pin) != state)
@@ -73,7 +86,7 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
                 {
                     transitionCycle = esp_cpu_get_cycle_count();
                 }
-                
+
                 // Verify the transition is stable by ensuring it stays in the new state for 3us.
                 // 3us is safely below any valid DHT11 pulse width (min ~26us) but far above
                 // nanosecond-scale contact bounce or signal rise-time oscillations.
@@ -88,13 +101,13 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
                         break;
                     }
                 }
-                
+
                 if (stable)
                 {
                     break;
                 }
             }
-            
+
             if ((esp_cpu_get_cycle_count() - start) > timeoutCycles)
             {
                 return -1;
@@ -171,7 +184,7 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
 
         // The duration of the high pulse determines if it's a 0 (~28us) or a 1 (~70us)
         int32_t highDuration = measurePulse(HIGH, bitTimeoutCycles);
-        
+
         int byteIndex = i / 8;
         data[byteIndex] <<= 1;
 
@@ -183,11 +196,11 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
             if (i == 39)
             {
                 interrupts(); // Re-enable interrupts
-                
+
                 uint8_t expectedSum = data[0] + data[1] + data[2] + data[3];
                 uint8_t checksumWithZero = data[4]; // Already shifted left
                 uint8_t checksumWithOne  = data[4] | 1;
-                
+
                 if (checksumWithZero == expectedSum)
                 {
                     data[4] = checksumWithZero;
@@ -220,7 +233,7 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
                 return false;
             }
         }
-        
+
         // Robust comparison: if the HIGH pulse duration is greater than the LOW pulse duration, it's a 1.
         if (highDuration > lowDuration)
         {
@@ -229,7 +242,7 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
     }
 
     uint32_t elapsedCycles = esp_cpu_get_cycle_count() - startCycleCount;
-    
+
     interrupts(); // Re-enable interrupts
 
     // If it took longer than 6ms (6000us), discard.
@@ -312,7 +325,7 @@ void SensorManager::Update()
             g_Values.AmbientHumidity = hum;
 
             // Thermal Protection Check: if temp > 120F, throttle brightness
-            if (temp > 120.0f) 
+            if (temp > 120.0f)
             {
                 Serial.printf("!!! THERMAL WARNING: Cabinet temperature %.1f F !!! Throttling brightness.\n", temp);
                 g_Values.Brite = std::min(g_Values.Brite, 10.0f);
@@ -332,7 +345,7 @@ void SensorManager::Update()
                 s_dhtSensorPresent = true;
                 g_Values.AmbientTemp = temp;
                 g_Values.AmbientHumidity = hum;
-                debugI("DHT11 sensor detected on GPIO %d after background retry %d. Temp: %.1f F, Humidity: %.1f%%", 
+                debugI("DHT11 sensor detected on GPIO %d after background retry %d. Temp: %.1f F, Humidity: %.1f%%",
                        DHT11_PIN, s_retryCount, temp, hum);
             }
         }

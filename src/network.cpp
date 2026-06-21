@@ -612,7 +612,7 @@ void onReceiveESPNOW(const uint8_t *macAddr, const uint8_t *data, int dataLen)
     Message message;
     if (dataLen < sizeof(message)) return;
     memcpy(&message, data, sizeof(message));
-    
+
     debugI("ESPNOW Message received.");
 
     if (message.cbSize != sizeof(message))
