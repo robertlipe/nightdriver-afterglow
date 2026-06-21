@@ -32,7 +32,6 @@
 #include "globals.h"
 
 #include <algorithm>
-#include <ArduinoOTA.h>
 #include <cmath>
 #include <mutex>
 

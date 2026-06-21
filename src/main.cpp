@@ -158,7 +158,9 @@
 
 #include <algorithm>
 #include <Arduino.h>
+#if ENABLE_OTA
 #include <ArduinoOTA.h>
+#endif
 #if ENABLE_ESPNOW
 #include <esp_now.h>
 #endif

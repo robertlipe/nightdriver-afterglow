@@ -40,7 +40,9 @@
 #include <esp_arduino_version.h>
 // Retire this test once Arduino3 fully lands.
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-   #include <Network.h> // For wl_status_t, etc.
+   #if ENABLE_WIFI
+      #include <Network.h> // For wl_status_t, etc.
+   #endif
 #endif
 
 // NOTE: Do not include "socketserver.h" here. It pulls in "ledbuffer.h" -> "gfxbase.h",

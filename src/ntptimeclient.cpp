@@ -33,7 +33,9 @@
 #include <ctime>
 #include <mutex>
 #include <sys/time.h>
+#if ENABLE_NTP
 #include <WiFiUdp.h>
+#endif
 #include "nd_network.h"
 
 #include "deviceconfig.h"
