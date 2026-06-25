@@ -46,7 +46,7 @@
 
 #include <esp_sntp.h>
 
-static DRAM_ATTR bool l_bClockSet = false;
+static DRAM_ATTR std::atomic<bool> l_bClockSet{false};
 static DRAM_ATTR std::atomic<bool> l_bPendingNotification{false};
 static DRAM_ATTR timeval l_pendingTv;
 static DRAM_ATTR int64_t l_pendingAdjustmentUs = 0;
@@ -54,7 +54,7 @@ static DRAM_ATTR bool l_pendingLog = false;
 
 bool NTPTimeClient::HasClockBeenSet()
 {
-    return l_bClockSet;
+    return l_bClockSet.load(std::memory_order_acquire);
 }
 
 static void time_sync_notification_cb(struct timeval *tv)
@@ -67,7 +67,7 @@ static void time_sync_notification_cb(struct timeval *tv)
         int64_t diffUs = 0;
         bool shouldLog = false;
 
-        if (!l_bClockSet)
+        if (!l_bClockSet.load(std::memory_order_relaxed))
         {
             shouldLog = true;
         }
@@ -85,7 +85,7 @@ static void time_sync_notification_cb(struct timeval *tv)
             }
         }
 
-        l_bClockSet = true;
+        l_bClockSet.store(true, std::memory_order_release);
         l_pendingTv = *tv;
         l_pendingAdjustmentUs = diffUs;
         l_pendingLog = shouldLog;
