@@ -48,21 +48,49 @@
 
 #include <esp_sntp.h>
 
-static DRAM_ATTR bool l_bClockSet = false;
+static DRAM_ATTR std::atomic<bool> l_bClockSet{false};
 static DRAM_ATTR std::atomic<bool> l_bPendingNotification{false};
 static DRAM_ATTR timeval l_pendingTv;
+static DRAM_ATTR int64_t l_pendingAdjustmentUs = 0;
+static DRAM_ATTR bool l_pendingLog = false;
 
 bool NTPTimeClient::HasClockBeenSet()
 {
-    return l_bClockSet;
+    return l_bClockSet.load(std::memory_order_acquire);
 }
 
 static void time_sync_notification_cb(struct timeval *tv)
 {
-    l_bClockSet = true;
     if (tv)
     {
+        struct timeval now;
+        gettimeofday(&now, nullptr);
+
+        int64_t diffUs = 0;
+        bool shouldLog = false;
+
+        if (!l_bClockSet.load(std::memory_order_relaxed))
+        {
+            shouldLog = true;
+        }
+        else
+        {
+            diffUs = ((int64_t)tv->tv_sec - now.tv_sec) * 1000000LL + ((int64_t)tv->tv_usec - now.tv_usec);
+
+            if (sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED)
+            {
+                shouldLog = true;
+            }
+            else if (std::abs(diffUs) >= 2000000LL) // 2 seconds or more
+            {
+                shouldLog = true;
+            }
+        }
+
+        l_bClockSet.store(true, std::memory_order_release);
         l_pendingTv = *tv;
+        l_pendingAdjustmentUs = diffUs;
+        l_pendingLog = shouldLog;
         l_bPendingNotification.store(true, std::memory_order_release);
     }
 }
@@ -73,15 +101,31 @@ void NTPTimeClient::ProcessPendingSyncNotification()
     {
         l_bPendingNotification.store(false, std::memory_order_relaxed);
 
-        timeval tv = l_pendingTv;
-        struct tm timeinfo;
-        localtime_r(&tv.tv_sec, &timeinfo);
-        char time_str[64];
-        strftime(time_str, sizeof(time_str), "%d %b %Y %H:%M:%S", &timeinfo);
-        debugI("NTP clock: response received, updated time to: %lld.%06lld, Local: %s",
-               (long long)tv.tv_sec,
-               (long long)tv.tv_usec,
-               time_str);
+        if (l_pendingLog)
+        {
+            timeval tv = l_pendingTv;
+            struct tm timeinfo;
+            localtime_r(&tv.tv_sec, &timeinfo);
+            char time_str[64];
+            strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S %Z", &timeinfo);
+
+            if (l_pendingAdjustmentUs != 0)
+            {
+                float adjSec = static_cast<float>(l_pendingAdjustmentUs) / 1000000.0f;
+                debugI("NTP clock: response received, updated time to: %lld.%06lld (adjustment: %.3fs), Local: %s",
+                       (long long)tv.tv_sec,
+                       (long long)tv.tv_usec,
+                       adjSec,
+                       time_str);
+            }
+            else
+            {
+                debugI("NTP clock: response received, updated time to: %lld.%06lld, Local: %s",
+                       (long long)tv.tv_sec,
+                       (long long)tv.tv_usec,
+                       time_str);
+            }
+        }
     }
 }
 
