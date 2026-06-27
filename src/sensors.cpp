@@ -7,7 +7,11 @@
 
 #include "driver/temperature_sensor.h" // Pure ESP-IDF internal chip sensor driver
 #include "sensors.h"
+#if MATRIX_S3
 #define BOARD_ADAFRUIT_MATRIX_S3 1
+#elif WAVESHARE_ESP32_S3_RGB_MATRIX
+#define BOARD_WAVESHARE_S3 1
+#endif
 
 // static const char *TAG = "HW_HUB";
 
