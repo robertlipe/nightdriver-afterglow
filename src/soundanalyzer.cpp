@@ -612,6 +612,7 @@ size_t SoundAnalyzerBase::SampleADC_Modern()
 #if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
     constexpr size_t bytesToRead = MAX_SAMPLES * sizeof(uint16_t);
     // Use 100ms timeout instead of 0 to wait for a full buffer
+    if (!_adc_handle ) throw std::runtime_error("Failed to allocate adc handle");
     esp_err_t err = adc_continuous_read(_adc_handle, (uint8_t*)ptrSampleBuffer.get(), bytesToRead, &ret_num, 100);
 
     // Process only if we got a full buffer
