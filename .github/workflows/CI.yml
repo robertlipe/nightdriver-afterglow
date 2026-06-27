@@ -40,8 +40,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: |
-          ~/.platformio/packages
-          ~/.platformio/.cache
+          ~/.platformio
           .pio/shared_libdeps
           .pio/libdeps
         key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
@@ -84,16 +83,17 @@ jobs:
       uses: actions/cache/restore@v4
       with:
         path: |
-          ~/.platformio/packages
-          ~/.platformio/.cache
+          ~/.platformio
           .pio/shared_libdeps
           .pio/libdeps
         key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
 
     - name: Install PlatformIO
       run: |
-        curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py -o get-platformio.py
-        python get-platformio.py
+        if [ ! -x /home/runner/.platformio/penv/bin/pio ]; then
+          curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py -o get-platformio.py
+          python get-platformio.py
+        fi
         echo "/home/runner/.platformio/penv/bin" >> $GITHUB_PATH
 
     - name: Copy secrets and clear SSID
