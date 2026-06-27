@@ -44,7 +44,9 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
+#include <memory>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -147,6 +149,10 @@ void DebugLoopTaskEntry(void* pvParameters)
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(NetworkPort::Telnet);
 
+    // Reuse address/port to avoid bind errors on rapid restart
+    int optVal = 1;
+    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &optVal, sizeof(optVal));
+
     if (bind(listen_fd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
         debugE("Failed to bind telnet socket");
         close(listen_fd);
@@ -155,153 +161,213 @@ void DebugLoopTaskEntry(void* pvParameters)
     }
 
     nd_network::SetSocketBlockingEnabled(listen_fd, false);
-    listen(listen_fd, 1);
+    listen(listen_fd, 5);
+
+    int client_fd = -1;
+    std::unique_ptr<TelnetSink> active_sink;
+
+    // State machine for Telnet protocol and CR handling.
+    // Survives across recv() boundaries.
+    enum class RecvState : uint8_t
+    {
+        Normal,     // Normal data byte
+        IAC,        // Saw 0xFF, waiting for verb
+        IACVerb,    // Saw IAC + verb, waiting for option byte
+        IACsb,      // Inside subnegotiation, waiting for IAC SE
+        IACInSB,    // Saw IAC inside subnegotiation
+        AfterCR,    // Saw \r, waiting to see if next is \0 or \n (RFC 854)
+    };
+    RecvState state = RecvState::Normal;
+    uint8_t buf[128];
 
     while (true)
     {
-        struct sockaddr_in cli_addr;
-        socklen_t cli_len = sizeof(cli_addr);
-        int client_fd = accept(listen_fd, (struct sockaddr *)&cli_addr, &cli_len);
+        fd_set read_fds;
+        FD_ZERO(&read_fds);
+        FD_SET(listen_fd, &read_fds);
+        int max_fd = listen_fd;
 
-        if (client_fd < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                delay(100);
+        if (client_fd != -1)
+        {
+            FD_SET(client_fd, &read_fds);
+            if (client_fd > max_fd)
+            {
+                max_fd = client_fd;
+            }
+        }
+
+        // Wait indefinitely for activity on either listen_fd or client_fd
+        int activity = select(max_fd + 1, &read_fds, nullptr, nullptr, nullptr);
+
+        if (activity < 0)
+        {
+            if (errno == EINTR)
+            {
                 continue;
             }
+            Serial.printf("[TelnetServer] select error: %s\n", strerror(errno));
             delay(100);
             continue;
         }
 
-        debugI("Telnet client connected from %s", inet_ntoa(cli_addr.sin_addr));
-
-        // Negotiate character-at-a-time mode and server-side echo before
-        // registering the sink, so the client is in the right mode before
-        // we start sending any output.
-        NegotiateTelnetOptions(client_fd);
-
-        TelnetSink sink(client_fd);
-        ConsoleManager::Instance().SetTelnetSink(&sink);
-
-        // State machine for Telnet protocol and CR handling.
-        // Survives across recv() boundaries.
-        enum class RecvState : uint8_t
+        // 1. Check for a new client connection (Hijack connection)
+        if (FD_ISSET(listen_fd, &read_fds))
         {
-            Normal,     // Normal data byte
-            IAC,        // Saw 0xFF, waiting for verb
-            IACVerb,    // Saw IAC + verb, waiting for option byte
-            IACsb,      // Inside subnegotiation, waiting for IAC SE
-            IACInSB,    // Saw IAC inside subnegotiation
-            AfterCR,    // Saw \r, waiting to see if next is \0 or \n (RFC 854)
-        };
-        RecvState state = RecvState::Normal;
+            struct sockaddr_in cli_addr;
+            socklen_t cli_len = sizeof(cli_addr);
+            int new_client_fd = accept(listen_fd, (struct sockaddr *)&cli_addr, &cli_len);
 
-        uint8_t buf[128];
-        while (true)
+            if (new_client_fd >= 0)
+            {
+                debugI("Telnet client connected from %s", inet_ntoa(cli_addr.sin_addr));
+
+                // If a connection is already active, close it to let the new one take over (Hijack)
+                if (client_fd != -1)
+                {
+                    debugI("Disconnecting previous active Telnet client (hijacked by new connection)");
+                    ConsoleManager::Instance().ClearTelnetSink();
+                    active_sink.reset();
+                    close(client_fd);
+                }
+
+                client_fd = new_client_fd;
+
+                // Enable TCP keepalive so ghost connections are aggressively pruned
+                int keepAlive = 1;
+                int keepIdle = 30;     // Wait 30s of silence before probing
+                int keepInterval = 5;  // Send probes every 5s
+                int keepCount = 3;     // Drop connection after 3 failed probes (45s total to drop)
+
+                setsockopt(client_fd, SOL_SOCKET, SO_KEEPALIVE, &keepAlive, sizeof(int));
+                setsockopt(client_fd, IPPROTO_TCP, TCP_KEEPIDLE, &keepIdle, sizeof(int));
+                setsockopt(client_fd, IPPROTO_TCP, TCP_KEEPINTVL, &keepInterval, sizeof(int));
+                setsockopt(client_fd, IPPROTO_TCP, TCP_KEEPCNT, &keepCount, sizeof(int));
+
+                // Negotiate character-at-a-time mode and server-side echo before
+                // registering the sink, so the client is in the right mode before
+                // we start sending any output.
+                NegotiateTelnetOptions(client_fd);
+
+                active_sink = std::make_unique<TelnetSink>(client_fd);
+                ConsoleManager::Instance().SetTelnetSink(active_sink.get());
+                state = RecvState::Normal;
+            }
+        }
+
+        // 2. Check for data from the active client
+        if (client_fd != -1 && FD_ISSET(client_fd, &read_fds))
         {
             int n = recv(client_fd, buf, sizeof(buf), 0);
             if (n == 0)
             {
                 // Clean shutdown from client side
-                break;
+                ConsoleManager::Instance().ClearTelnetSink();
+                active_sink.reset();
+                close(client_fd);
+                client_fd = -1;
+                debugI("Telnet client disconnected");
             }
-            if (n < 0)
+            else if (n < 0)
             {
                 if (errno == EINTR)
-                    continue;   // Signal interrupted syscall, retry
-                // Use Serial directly to avoid any risk of recursion through
-                // the Telnet sink that may itself be in a broken state.
-                Serial.printf("[TelnetServer] recv error: %s\n", strerror(errno));
-                break;
-            }
-
-            for (int i = 0; i < n; ++i)
-            {
-                const uint8_t byte = buf[i];
-
-                switch (state)
                 {
-                case RecvState::Normal:
-                    if (byte == TELNET_IAC)
-                    {
-                        state = RecvState::IAC;
-                    }
-                    else if (byte == '\r')
-                    {
-                        // RFC 854: bare CR must be followed by \0 or \n.
-                        // Defer until we see the next byte.
-                        state = RecvState::AfterCR;
-                    }
-                    else
-                    {
-                        ConsoleManager::Instance().FeedTelnetByte(byte);
-                    }
-                    break;
+                    continue; // Interrupted, retry on next select loop
+                }
+                Serial.printf("[TelnetServer] recv error: %s\n", strerror(errno));
 
-                case RecvState::AfterCR:
-                    // RFC 854: CR-NUL means a bare CR; CR-LF means end-of-line.
-                    // Either way we deliver a single '\r' to the CLI handler.
-                    // Any other byte after CR is non-standard; deliver both.
-                    state = RecvState::Normal;
-                    if (byte == '\0' || byte == '\n')
-                    {
-                        // Canonical end-of-line: deliver the CR
-                        ConsoleManager::Instance().FeedTelnetByte('\r');
-                    }
-                    else
-                    {
-                        // Non-standard: deliver CR then the unexpected byte
-                        ConsoleManager::Instance().FeedTelnetByte('\r');
-                        ConsoleManager::Instance().FeedTelnetByte(byte);
-                    }
-                    break;
+                ConsoleManager::Instance().ClearTelnetSink();
+                active_sink.reset();
+                close(client_fd);
+                client_fd = -1;
+                debugI("Telnet client disconnected due to error");
+            }
+            else
+            {
+                for (int i = 0; i < n; ++i)
+                {
+                    const uint8_t byte = buf[i];
 
-                case RecvState::IAC:
-                    if (byte == TELNET_IAC)
+                    switch (state)
                     {
-                        // Escaped 0xFF in data stream — deliver it literally
-                        ConsoleManager::Instance().FeedTelnetByte(0xFF);
+                    case RecvState::Normal:
+                        if (byte == TELNET_IAC)
+                        {
+                            state = RecvState::IAC;
+                        }
+                        else if (byte == '\r')
+                        {
+                            // RFC 854: bare CR must be followed by \0 or \n.
+                            // Defer until we see the next byte.
+                            state = RecvState::AfterCR;
+                        }
+                        else
+                        {
+                            ConsoleManager::Instance().FeedTelnetByte(byte);
+                        }
+                        break;
+
+                    case RecvState::AfterCR:
+                        // RFC 854: CR-NUL means a bare CR; CR-LF means end-of-line.
+                        // Either way we deliver a single '\r' to the CLI handler.
+                        // Any other byte after CR is non-standard; deliver both.
                         state = RecvState::Normal;
-                    }
-                    else if (byte == TELNET_SB)
-                    {
-                        state = RecvState::IACsb;
-                    }
-                    else if (byte == TELNET_WILL || byte == TELNET_WONT ||
-                             byte == TELNET_DO   || byte == TELNET_DONT)
-                    {
-                        state = RecvState::IACVerb;
-                    }
-                    else
-                    {
-                        // Single-byte IAC command (NOP, DM, GA, etc.) — ignore
+                        if (byte == '\0' || byte == '\n')
+                        {
+                            // Canonical end-of-line: deliver the CR
+                            ConsoleManager::Instance().FeedTelnetByte('\r');
+                        }
+                        else
+                        {
+                            // Non-standard: deliver CR then the unexpected byte
+                            ConsoleManager::Instance().FeedTelnetByte('\r');
+                            ConsoleManager::Instance().FeedTelnetByte(byte);
+                        }
+                        break;
+
+                    case RecvState::IAC:
+                        if (byte == TELNET_IAC)
+                        {
+                            // Escaped 0xFF in data stream — deliver it literally
+                            ConsoleManager::Instance().FeedTelnetByte(0xFF);
+                            state = RecvState::Normal;
+                        }
+                        else if (byte == TELNET_SB)
+                        {
+                            state = RecvState::IACsb;
+                        }
+                        else if (byte == TELNET_WILL || byte == TELNET_WONT ||
+                                 byte == TELNET_DO   || byte == TELNET_DONT)
+                        {
+                            state = RecvState::IACVerb;
+                        }
+                        else
+                        {
+                            // Single-byte IAC command (NOP, DM, GA, etc.) — ignore
+                            state = RecvState::Normal;
+                        }
+                        break;
+
+                    case RecvState::IACVerb:
+                        // Option byte following the verb — silently absorb.
+                        // We don't need to respond to client DO/DONT for options
+                        // we haven't offered; our WILL ECHO / WILL SGA / DO SGA
+                        // were already sent on connect.
                         state = RecvState::Normal;
+                        break;
+
+                    case RecvState::IACsb:
+                        // Inside subnegotiation — absorb until IAC SE
+                        if (byte == TELNET_IAC)
+                            state = RecvState::IACInSB;
+                        break;
+
+                    case RecvState::IACInSB:
+                        state = (byte == TELNET_SE) ? RecvState::Normal : RecvState::IACsb;
+                        break;
                     }
-                    break;
-
-                case RecvState::IACVerb:
-                    // Option byte following the verb — silently absorb.
-                    // We don't need to respond to client DO/DONT for options
-                    // we haven't offered; our WILL ECHO / WILL SGA / DO SGA
-                    // were already sent on connect.
-                    state = RecvState::Normal;
-                    break;
-
-                case RecvState::IACsb:
-                    // Inside subnegotiation — absorb until IAC SE
-                    if (byte == TELNET_IAC)
-                        state = RecvState::IACInSB;
-                    break;
-
-                case RecvState::IACInSB:
-                    state = (byte == TELNET_SE) ? RecvState::Normal : RecvState::IACsb;
-                    break;
                 }
             }
         }
-
-        ConsoleManager::Instance().ClearTelnetSink();
-        close(client_fd);
-        debugI("Telnet client disconnected");
     }
 }
 

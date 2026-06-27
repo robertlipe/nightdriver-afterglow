@@ -22,44 +22,40 @@
 //    along with Nightdriver.  It is normally found in copying.txt
 //    If not, see <https://www.gnu.org/licenses/>.
 //
-//
 // Description:
 //
-//   Provides a timestamped buffer of colordata.  The LEDBufferManager keeps
-//   N of these buffers in a circular queue, and each has a timestamp on it
-//   indicating when it becomes valid.
+//    Storage and management of buffers of LED color data.
 //
-// History:     Oct-9-2018         Davepl      Created from other projects
+// History:     Oct-26-2018         Davepl      Created
 //
 //---------------------------------------------------------------------------
 
 #include "globals.h"
+#include "gfxbase.h"
+#include "interfaces.h"
 
 #include <memory>
-#include <pixeltypes.h>
 #include <vector>
 
-#include "gfxbase.h"
+// LEDBuffer
+//
+// Provides a timestamped buffer of colordata.  The LEDBufferManager keeps
+// N of these buffers in a circular queue, and each has a timestamp on it
+// indicating when it becomes valid.
 
 class LEDBuffer
 {
-  public:
-
-     std::shared_ptr<GFXBase> _pStrand;
-
   private:
 
-    std::unique_ptr<CRGB []> _leds;
-    uint32_t                 _pixelCount;
-    uint64_t                 _timeStampMicroseconds;
-    uint64_t                 _timeStampSeconds;
+    std::shared_ptr<GFXBase>    _pStrand;
+    std::unique_ptr<CRGB[]>     _leds;
+    uint32_t                    _pixelCount;
+    uint64_t                    _timeStampMicroseconds;
+    uint64_t                    _timeStampSeconds;
 
   public:
 
-    explicit LEDBuffer(std::shared_ptr<GFXBase> pStrand);
-
-    ~LEDBuffer()
-    = default;
+    LEDBuffer(std::shared_ptr<GFXBase> pStrand);
 
     uint64_t Seconds()      const;
     uint64_t MicroSeconds() const;
@@ -86,18 +82,19 @@ class LEDBuffer
 
 class LEDBufferManager
 {
-    std::unique_ptr<std::vector<std::shared_ptr<LEDBuffer>>> _ppBuffers;          // The circular array of buffer ptrs
-    std::shared_ptr<LEDBuffer> _pLastBufferAdded;   // Keeps track of the MRU buffer
-    size_t                                               _iNextBuffer;        // Head pointer index
-    size_t                                               _iLastBuffer;        // Tail pointer index
-    uint32_t                                             _cBuffers;           // Number of buffers
+  private:
+
+    std::unique_ptr<std::vector<std::shared_ptr<LEDBuffer>>>    _ppBuffers;
+    std::shared_ptr<LEDBuffer>                                  _pLastBufferAdded;
+    uint32_t                                                    _iNextBuffer;
+    uint32_t                                                    _iLastBuffer;
+    uint32_t                                                    _cBuffers;
 
   public:
 
     LEDBufferManager(uint32_t cBuffers, const std::shared_ptr<GFXBase>& pGFX);
 
     double AgeOfOldestBuffer() const;
-
     double AgeOfNewestBuffer() const;
 
     // BufferCount

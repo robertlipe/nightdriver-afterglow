@@ -35,7 +35,9 @@
 #include "webserver.h"
 
 #include <AsyncJson.h>
+#include <esp_partition.h>
 #include <FS.h>
+#include <memory>
 #include <utility>
 
 #include "deviceconfig.h"
@@ -164,6 +166,33 @@ void CWebServer::begin()
     _server.on("/getStatistics",         HTTP_GET,  [this](AsyncWebServerRequest* pRequest)
                                                     { this->GetStatistics(pRequest); });
 
+    _server.on("/coredump", HTTP_GET, [](AsyncWebServerRequest *request)
+    {
+        const esp_partition_t* part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_COREDUMP, NULL);
+        if (part != NULL)
+        {
+            AsyncWebServerResponse *response = request->beginResponse("application/octet-stream", part->size, [part](uint8_t *buffer, size_t maxLen, size_t index) -> size_t
+            {
+                size_t len = std::min(maxLen, (size_t)(part->size - index));
+                if (len > 0)
+                {
+                    esp_err_t err = esp_partition_read(part, index, buffer, len);
+                    if (err != ESP_OK)
+                    {
+                        return 0;
+                    }
+                }
+                return len;
+            });
+            response->addHeader("Content-Disposition", "attachment; filename=\"coredump.bin\"");
+            AddCORSHeaderAndSendResponse(request, response);
+        }
+        else
+        {
+            request->send(404, "text/plain", "Coredump partition not found");
+        }
+    });
+
     // Static handler requests
 
     _server.on("/effects",               HTTP_GET,  GetEffectListText);
@@ -252,7 +281,7 @@ void CWebServer::GetEffectListText(AsyncWebServerRequest * pRequest)
 {
     debugV("GetEffectListText");
 
-    auto response = new AsyncJsonResponse();
+    auto response = std::make_unique<AsyncJsonResponse>();
     auto& j = response->getRoot();
     auto& effectManager = g_ptrSystem->GetEffectManager();
 
@@ -277,14 +306,14 @@ void CWebServer::GetEffectListText(AsyncWebServerRequest * pRequest)
         }
     }
 
-    AddCORSHeaderAndSendResponse(pRequest, response);
+    AddCORSHeaderAndSendResponse(pRequest, response.release());
 }
 
 void CWebServer::GetStatistics(AsyncWebServerRequest * pRequest, StatisticsType statsType) const
 {
-    debugV("GetStatistics");
+//    debugV("GetStatistics");
 
-    auto response = new AsyncJsonResponse();
+    auto response = std::make_unique<AsyncJsonResponse>();
     auto& j = response->getRoot();
 
     if ((statsType & StatisticsType::Static) != StatisticsType::None)
@@ -323,7 +352,7 @@ void CWebServer::GetStatistics(AsyncWebServerRequest * pRequest, StatisticsType 
         j["CPU_USED_CORE1"]        = taskManager.GetCPUUsagePercent(1);
     }
 
-    AddCORSHeaderAndSendResponse(pRequest, response);
+    AddCORSHeaderAndSendResponse(pRequest, response.release());
 }
 
 void CWebServer::SetCurrentEffectIndex(AsyncWebServerRequest * pRequest)
@@ -425,7 +454,7 @@ void CWebServer::PreviousEffect(AsyncWebServerRequest * pRequest)
 
 void CWebServer::SendSettingSpecsResponse(AsyncWebServerRequest * pRequest, const std::vector<std::reference_wrapper<SettingSpec>> & settingSpecs)
 {
-    auto response = new AsyncJsonResponse();
+    auto response = std::make_unique<AsyncJsonResponse>();
     auto jsonArray = response->getRoot().to<JsonArray>();
 
     for (const auto& specWrapper : settingSpecs)
@@ -472,7 +501,7 @@ void CWebServer::SendSettingSpecsResponse(AsyncWebServerRequest * pRequest, cons
         }
     }
 
-    AddCORSHeaderAndSendResponse(pRequest, response);
+    AddCORSHeaderAndSendResponse(pRequest, response.release());
 }
 
 const std::vector<std::reference_wrapper<SettingSpec>> & CWebServer::LoadDeviceSettingSpecs()
@@ -502,9 +531,9 @@ void CWebServer::GetSettingSpecs(AsyncWebServerRequest * pRequest)
 // Responds with current config, excluding any sensitive values
 void CWebServer::GetSettings(AsyncWebServerRequest * pRequest)
 {
-    debugV("GetSettings");
+//    debugV("GetSettings");
 
-    auto response = new AsyncJsonResponse();
+    auto response = std::make_unique<AsyncJsonResponse>();
     response->addHeader("Server", "NightDriverStrip");
     auto root = response->getRoot();
     JsonObject jsonObject = root.to<JsonObject>();
@@ -513,7 +542,7 @@ void CWebServer::GetSettings(AsyncWebServerRequest * pRequest)
     g_ptrSystem->GetDeviceConfig().SerializeToJSON(jsonObject, false);
     jsonObject["effectInterval"] = g_ptrSystem->GetEffectManager().GetInterval();
 
-    AddCORSHeaderAndSendResponse(pRequest, response);
+    AddCORSHeaderAndSendResponse(pRequest, response.release());
 }
 
 // Support function that silently sets whatever settings are included in the request passed.

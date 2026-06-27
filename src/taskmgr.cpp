@@ -16,8 +16,33 @@
 #include "ledstripeffect.h"
 #include "nd_network.h"
 #include "taskmgr.h"
+#include "values.h"
 
 #include <esp_task_wdt.h>
+
+namespace
+{
+    void AppendTaskStackUsage(String& output, const char* label, TaskHandle_t handle, size_t stackSizeBytes)
+    {
+        if (handle == nullptr)
+            return;
+
+        const auto freeWords = uxTaskGetStackHighWaterMark(handle);
+        const size_t freeBytes = static_cast<size_t>(freeWords) * sizeof(StackType_t);
+        const size_t clampedFreeBytes = std::min(freeBytes, stackSizeBytes);
+        const size_t usedBytes = stackSizeBytes - clampedFreeBytes;
+
+        if (!output.isEmpty())
+            output += ' ';
+
+        output += str_sprintf("%s:%zu/%zu", label, usedBytes, stackSizeBytes);
+    }
+}
+
+
+#ifndef CONFIG_FREERTOS_NUMBER_OF_CORES
+#define CONFIG_FREERTOS_NUMBER_OF_CORES 2
+#endif
 
 void IdleTask::ProcessIdleTime()
 {
@@ -35,6 +60,34 @@ void IdleTask::ProcessIdleTime()
             _idleRatio = ((float) counter  / delta);
             _lastMeasurement = millis();
             counter = 0;
+
+            // Software watchdog supervisor check
+            if (!g_Values.UpdateStarted)
+            {
+                uint32_t now = millis();
+                uint32_t lastLoop = g_Values.LastLoopHeartbeat.load(std::memory_order_relaxed);
+                uint32_t lastDraw = g_Values.LastDrawHeartbeat.load(std::memory_order_relaxed);
+
+                // We use signed 32-bit subtraction (int32_t) to prevent false watchdog triggers.
+                // Since the loop/draw threads run on Core 1 and this supervisor runs on Core 0,
+                // the other core might write a slightly newer millis() heartbeat after 'now' was
+                // sampled here. Under unsigned subtraction, this causes (now - lastLoop) to underflow
+                // to a massive value (~4294967295), triggering a false reboot. Casting the delta to
+                // int32_t correctly yields a negative difference (e.g. -1 ms), which is safely ignored.
+                if (lastLoop != 0 && (int32_t)(now - lastLoop) > 30000)
+                {
+                    Serial.printf("!!! WATCHDOG DETECTED LOOP THREAD HANG !!! (Last heartbeat: %lu ms ago). Restarting...\n", (unsigned long)(now - lastLoop));
+                    delay(1000);
+                    ESP.restart();
+                }
+
+                if (lastDraw != 0 && (int32_t)(now - lastDraw) > 30000)
+                {
+                    Serial.printf("!!! WATCHDOG DETECTED DRAW THREAD HANG !!! (Last heartbeat: %lu ms ago). Restarting...\n", (unsigned long)(now - lastDraw));
+                    delay(1000);
+                    ESP.restart();
+                }
+            }
         }
         else
         {
@@ -45,6 +98,7 @@ void IdleTask::ProcessIdleTime()
         }
     }
 }
+
 
 float IdleTask::GetCPUUsage() const
 {
@@ -64,21 +118,25 @@ void TaskManager::begin()
     // measure how much time is "wasted" at that lower priority and deem it to have been free CPU
 
     xTaskCreatePinnedToCore(IdleTask::IdleTaskEntry, "Idle0", IDLE_STACK_SIZE, &_taskIdle0, tskIDLE_PRIORITY + 1, &_hIdle0, 0);
+#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
     xTaskCreatePinnedToCore(IdleTask::IdleTaskEntry, "Idle1", IDLE_STACK_SIZE, &_taskIdle1, tskIDLE_PRIORITY + 1, &_hIdle1, 1);
+#endif
 
     // We need to turn off the watchdogs because our idle measurement tasks burn all of the idle time just
     // to see how much there is (it's how they measure free CPU).  Thus, we starve the system's normal idle tasks
     // and have to feed the watchdog on our own.
 
+    for (int i = 0; i < CONFIG_FREERTOS_NUMBER_OF_CORES; ++i) {
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-    esp_task_wdt_delete(xTaskGetIdleTaskHandleForCore(0));
-    esp_task_wdt_delete(xTaskGetIdleTaskHandleForCore(1));
+        esp_task_wdt_delete(xTaskGetIdleTaskHandleForCore(i));
 #else
-    esp_task_wdt_delete(xTaskGetIdleTaskHandleForCPU(0));
-    esp_task_wdt_delete(xTaskGetIdleTaskHandleForCPU(1));
+        esp_task_wdt_delete(xTaskGetIdleTaskHandleForCPU(i));
 #endif
+    }
     esp_task_wdt_add(_hIdle0);
+#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
     esp_task_wdt_add(_hIdle1);
+#endif
 }
 
 void TaskManager::CheckHeap()
@@ -89,6 +147,15 @@ void TaskManager::CheckHeap()
     }
 }
 
+String TaskManager::GetStackUsageSummary() const
+{
+    String output;
+
+    AppendTaskStackUsage(output, "Idle0", _hIdle0, IDLE_STACK_SIZE);
+    AppendTaskStackUsage(output, "Idle1", _hIdle1, IDLE_STACK_SIZE);
+
+    return output;
+}
 // NightDriverTaskManager
 //
 // A superclass of the base TaskManager that knows how to start and track the tasks specific to this project
@@ -232,6 +299,30 @@ void NightDriverTaskManager::NotifyNetworkThread()
     debugW(">> Notifying Network Thread");
     // Wake up the network task if it's sleeping, or request another read cycle if it isn't
     xTaskNotifyGive(_taskNetwork);
+}
+
+String NightDriverTaskManager::GetStackUsageSummary() const
+{
+    String output = TaskManager::GetStackUsageSummary();
+
+    AppendTaskStackUsage(output, "Draw", _taskDraw, DRAWING_STACK_SIZE);
+    AppendTaskStackUsage(output, "Audio", _taskAudio, AUDIO_STACK_SIZE);
+    AppendTaskStackUsage(output, "Net", _taskNetwork, NET_STACK_SIZE);
+    AppendTaskStackUsage(output, "Sock", _taskSocket, SOCKET_STACK_SIZE);
+    AppendTaskStackUsage(output, "Dbg", _taskDebug, DEBUG_STACK_SIZE);
+    AppendTaskStackUsage(output, "Json", _taskJSONWriter, JSON_STACK_SIZE);
+    AppendTaskStackUsage(output, "Remote", _taskRemote, REMOTE_STACK_SIZE);
+    AppendTaskStackUsage(output, "Screen", _taskScreen, SCREEN_STACK_SIZE);
+    AppendTaskStackUsage(output, "Serial", _taskSerial, DEFAULT_STACK_SIZE);
+    AppendTaskStackUsage(output, "Color", _taskColorData, DEFAULT_STACK_SIZE);
+
+    for (const auto& effectTask : _vEffectTasks)
+    {
+        const char* taskName = pcTaskGetName(effectTask);
+        AppendTaskStackUsage(output, taskName ? taskName : "Effect", effectTask, DEFAULT_STACK_SIZE);
+    }
+
+    return output;
 }
 
 // Effect threads run with NET priority and on the NET core by default. It seems a sensible choice

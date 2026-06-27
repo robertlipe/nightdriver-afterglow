@@ -8,10 +8,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.11'
 
@@ -35,10 +35,10 @@ jobs:
         envname: ${{ fromJson(needs.collect-environments.outputs.envs) }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.11'
 
@@ -53,6 +53,9 @@ jobs:
         grep -v "^#define cszSSID" include/secrets.example.h > include/secrets.h
         echo '#define cszSSID ""' >> include/secrets.h
 
+    - name: Run library setup
+      run: python3 tools/setup_shared_libs_cli.py
+
     - name: "Build environment: ${{ matrix.envname }}"
       run: pio run -e ${{ matrix.envname }}
 
@@ -65,3 +68,4 @@ jobs:
     with:
       release-name: ${{ github.ref_name }} commit ${{ github.sha }}
     secrets: inherit
+    

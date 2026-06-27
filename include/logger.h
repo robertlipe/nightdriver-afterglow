@@ -1,3 +1,5 @@
+#pragma once
+
 //+--------------------------------------------------------------------------
 //
 // File:        logger.h
@@ -25,8 +27,6 @@
 //    Core logging infrastructure: LogSink chain, Logger, and debugX macros.
 //
 //---------------------------------------------------------------------------
-
-#pragma once
 
 #include "globals.h"
 #include <Arduino.h>

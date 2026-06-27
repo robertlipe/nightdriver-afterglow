@@ -29,8 +29,7 @@
 //---------------------------------------------------------------------------
 
 #include "globals.h"
-#include "esp_mac.h"
-#include "types.h"
+#include "interfaces.h"
 
 #include <atomic>
 #include <functional>
@@ -41,7 +40,9 @@
 #include <esp_arduino_version.h>
 // Retire this test once Arduino3 fully lands.
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-   #include <Network.h> // For wl_status_t, etc.
+   #if ENABLE_WIFI
+      #include <Network.h> // For wl_status_t, etc.
+   #endif
 #endif
 
 // NOTE: Do not include "socketserver.h" here. It pulls in "ledbuffer.h" -> "gfxbase.h",
@@ -159,3 +160,6 @@ void SetupOTA(const String &strHostname);
 void IRAM_ATTR RemoteLoopEntry(void *);
 String urlEncode(const String &str);
 
+// Local additions to match get_mac_address
+inline String get_mac_address() { return nd_network::GetMacAddress(""); }
+inline String get_mac_address_pretty() { return nd_network::GetMacAddress(":"); }

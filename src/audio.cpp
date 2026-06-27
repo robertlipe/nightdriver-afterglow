@@ -170,7 +170,7 @@ public:
             release();
             return false;
         }
-        SetSocketBlockingEnabled(_server_fd, false);
+        nd_network::SetSocketBlockingEnabled(_server_fd, false);
 
         memset(&_address, 0, sizeof(_address));
         _address.sin_family = AF_INET;
@@ -245,8 +245,6 @@ void IRAM_ATTR AudioSerialTaskEntry(void *)
 {
     //  SoftwareSerial Serial64(SERIAL_PINRX, SERIAL_PINTX);
     debugI(">>> Sampler Task Started");
-
-    SoundAnalyzer Analyzer;
 
 #if ENABLE_VICE_SERVER
     VICESocketServer socketServer(NetworkPort::VICESocketServer);

@@ -51,6 +51,19 @@ public:
         _colorDataSocket("/ws/frames"),
         _effectChangeSocket("/ws/effects")
     {
+        auto eventHandler = [](AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len) {
+            if (type == WS_EVT_CONNECT) {
+                debugI("WS Client #%u connected to %s from %s", client->id(), server->url(), client->remoteIP().toString().c_str());
+            } else if (type == WS_EVT_DISCONNECT) {
+                debugI("WS Client #%u disconnected from %s", client->id(), server->url());
+            } else if (type == WS_EVT_ERROR) {
+                debugE("WS Client #%u error on %s: %s", client->id(), server->url(), arg ? (const char*)arg : "Unknown");
+            }
+        };
+
+        _colorDataSocket.onEvent(eventHandler);
+        _effectChangeSocket.onEvent(eventHandler);
+
         #if COLORDATA_WEB_SOCKET_ENABLED
         webServer.AddWebSocket(_colorDataSocket);
         #endif
@@ -69,6 +82,16 @@ public:
     bool HaveColorDataClients()
     {
         return _colorDataSocket.count() > 0;
+    }
+
+    size_t ColorDataClientCount() const
+    {
+        return _colorDataSocket.count();
+    }
+
+    size_t EffectChangeClientCount() const
+    {
+        return _effectChangeSocket.count();
     }
 
     // Send the color data for an array of leds of indicated length.

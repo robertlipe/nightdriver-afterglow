@@ -30,10 +30,12 @@
 
 #include "globals.h"
 
+#if ENABLE_WIFI
 #include <HTTPClient.h>
+#include <UrlEncode.h>
+#endif
 #include <memory>
 #include <optional>
-#include <UrlEncode.h>
 
 #include "deviceconfig.h"
 #include "effectmanager.h"

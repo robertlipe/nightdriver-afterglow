@@ -197,16 +197,29 @@ extern std::mutex g_buffer_mutex;
 // Some "Reliability Rules"
 // Drawing must be on Core 1 if using SmartMatrix unless you specify SMARTMATRIX_OPTIONS_ESP32_CALC_TASK_CORE_1
 
-#define DRAWING_CORE            1
-#define NET_CORE                1
-#define AUDIO_CORE              0
-#define AUDIOSERIAL_CORE        1
-#define SCREEN_CORE             1
-#define DEBUG_CORE              1
-#define SOCKET_CORE             1
-#define REMOTE_CORE             1
-#define JSONWRITER_CORE         0
-#define COLORDATA_CORE          1
+#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
+    #define DRAWING_CORE            1
+    #define NET_CORE                1
+    #define AUDIO_CORE              0
+    #define AUDIOSERIAL_CORE        1
+    #define SCREEN_CORE             1
+    #define DEBUG_CORE              1
+    #define SOCKET_CORE             1
+    #define REMOTE_CORE             1
+    #define JSONWRITER_CORE         0
+    #define COLORDATA_CORE          1
+#else
+    #define DRAWING_CORE            0
+    #define NET_CORE                0
+    #define AUDIO_CORE              0
+    #define AUDIOSERIAL_CORE        0
+    #define SCREEN_CORE             0
+    #define DEBUG_CORE              0
+    #define SOCKET_CORE             0
+    #define REMOTE_CORE             0
+    #define JSONWRITER_CORE         0
+    #define COLORDATA_CORE          0
+#endif
 
 #define FASTLED_INTERNAL            1   // Suppresses the compilation banner from FastLED
 #define __STDC_FORMAT_MACROS

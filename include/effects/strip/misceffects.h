@@ -174,7 +174,7 @@ class RainbowFillEffect : public EffectWithId<RainbowFillEffect>
 
   public:
 
-    RainbowFillEffect(float speedDivisor = 12.0f, int deltaHue = 14, bool mirrored = false)
+    RainbowFillEffect(float speedDivisor = 6.0f, int deltaHue = 14, bool mirrored = false)
   : EffectWithId<RainbowFillEffect>("RainbowFill Rainbow"),
         _speedDivisor(speedDivisor),
         _deltaHue(deltaHue),

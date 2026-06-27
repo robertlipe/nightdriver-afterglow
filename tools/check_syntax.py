@@ -8,7 +8,7 @@
 #
 # Description:
 #
-#    Authoritative syntax checker for NightDriver. Uses PlatformIO's 
+#    Authoritative syntax checker for NightDriver. Uses PlatformIO's
 #    compilation database to verify project files without full linking.
 #
 # ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ def main():
         sys.exit(1)
 
     print(f"--- Preparing compilation database for environment: {env} ---")
-    
+
     # 2. Regenerate compile_commands.json for the specified environment
     # This ensures we have the authoritative flags and compiler path.
     res = run_command(["pio", "run", "-t", "compiledb", "-e", env])
@@ -65,12 +65,12 @@ def main():
 
     for entry in commands:
         file_path = entry["file"]
-        
+
         # We only care about our own files in src/ or include/
         rel_path = os.path.relpath(file_path, os.getcwd())
         if not (rel_path.startswith("src/") or rel_path.startswith("include/")):
             continue
-        
+
         # Skip library dependencies
         if "libdeps" in file_path:
             continue
@@ -80,10 +80,10 @@ def main():
             print(f"Checking {rel_path}...")
 
         cmd_str = entry["command"]
-        
+
         # Correctly tokenize the command
         cmd_args = shlex.split(cmd_str)
-        
+
         # Modify for syntax-only audit
         if "-c" in cmd_args:
             idx = cmd_args.index("-c")
@@ -96,13 +96,13 @@ def main():
             idx = cmd_args.index("-o")
             cmd_args.pop(idx) # -o
             cmd_args.pop(idx) # output file
-            
+
         # - Add extra verification flags
         cmd_args.insert(1, "-Wformat=2")
-        
+
         # Run the audit
         res = subprocess.run(cmd_args, capture_output=True, text=True, cwd=entry["directory"])
-        
+
         if res.returncode != 0:
             print(f"\n❌ Syntax error in {rel_path}:")
             # Filter and print output

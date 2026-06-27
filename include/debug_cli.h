@@ -37,6 +37,15 @@ class ConsoleSession;
 
 namespace DebugCLI
 {
+    // Persistence structure for crash info across software reboots.
+    // Placed in RTC RAM so it survives panics/restarts but not power cycles.
+    #define RTC_PANIC_MAGIC 0x4E445021 // 'NDP!'
+
+    struct RTC_PanicRecord
+    {
+        uint32_t Magic;
+        char Message[128];
+    };
 
     using cli_argv = std::vector<std::string_view>;
 
@@ -79,5 +88,8 @@ namespace DebugCLI
 
     // Initialization (registers core commands and sets byte handler).
     void InitDebugCLI();
+
+    // Flight recorder: saves a message to RTC memory for retrieval after reboot.
+    void RecordPanicMessage(const char* message);
 
 } // namespace DebugCLI
