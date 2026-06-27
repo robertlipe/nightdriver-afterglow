@@ -47,7 +47,7 @@
 #include <UrlEncode.h>
 
 #include "effects.h"
-#include "array_utils.h"
+
 #include "systemcontainer.h"
 #include "TJpg_Decoder.h"
 #include "types.h"
@@ -98,7 +98,7 @@ extern const uint8_t thunderstorm_end[]             asm("_binary_assets_bmp_thun
 extern const uint8_t thunderstorm_night_start[]     asm("_binary_assets_bmp_thunderstormnight_jpg_start");
 extern const uint8_t thunderstorm_night_end[]       asm("_binary_assets_bmp_thunderstormnight_jpg_end");
 
-static constexpr auto pszDaysOfWeek = to_array( { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" } );
+static constexpr auto pszDaysOfWeek = std::to_array<const char*>( { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" } );
 
 static const std::map<const String, EmbeddedFile, std::less<const String>, psram_allocator<std::pair<const String, EmbeddedFile>>>& GetWeatherIcons()
 {

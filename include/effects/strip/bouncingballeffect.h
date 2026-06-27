@@ -33,13 +33,12 @@
 #include "effects.h"
 #include "values.h"
 #include "random_utils.h"
-#include "array_utils.h"
 
 // BouncingBallEffect
 //
 // Draws a set of N bouncing balls using a simple little kinematics formula.  Clears the section first.
 
-static constexpr auto ballColors = to_array(
+static constexpr auto ballColors = std::to_array<CRGB>(
 {
     CRGB::Green,
     CRGB::Red,

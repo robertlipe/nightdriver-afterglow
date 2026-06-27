@@ -39,7 +39,7 @@
 
 #include <deque>
 
-#include "array_utils.h"
+
 #include "effects.h"
 #include "nd_network.h"
 #include "ntptimeclient.h"
@@ -174,7 +174,7 @@ class RainbowFillEffect : public EffectWithId<RainbowFillEffect>
 
   public:
 
-    RainbowFillEffect(float speedDivisor = 6.0f, int deltaHue = 14, bool mirrored = false)
+    RainbowFillEffect(float speedDivisor = 12.0f, int deltaHue = 14, bool mirrored = false)
   : EffectWithId<RainbowFillEffect>("RainbowFill Rainbow"),
         _speedDivisor(speedDivisor),
         _deltaHue(deltaHue),
@@ -410,7 +410,7 @@ class StatusEffect : public EffectWithId<StatusEffect>
 };
 
 #if CLASSIC_GE_C9
-static constexpr auto TwinkleColors =  to_array(
+static constexpr auto TwinkleColors =  std::to_array<CRGB>(
 {
     CRGB(238, 51, 39),      // Red
     CRGB(0, 172, 87),       // Green
@@ -418,7 +418,7 @@ static constexpr auto TwinkleColors =  to_array(
     CRGB(0, 131, 203)       // Blue
 });
 #else
-static constexpr auto TwinkleColors =  to_array(
+static constexpr auto TwinkleColors =  std::to_array<CRGB>(
 {
     CRGB::Red,
     CRGB::Green,
