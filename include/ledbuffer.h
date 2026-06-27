@@ -35,6 +35,7 @@
 #include "interfaces.h"
 
 #include <memory>
+#include <span>
 #include <vector>
 
 // LEDBuffer
@@ -69,7 +70,7 @@ class LEDBuffer
     //
     // Parse and deposit a WiFi packet into a buffer
 
-    bool UpdateFromWire(std::unique_ptr<uint8_t []> & payloadData, size_t payloadLength);
+    bool UpdateFromWire(std::span<const uint8_t> payloadData);
 
     void DrawBuffer();
 };

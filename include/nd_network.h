@@ -34,6 +34,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -152,7 +153,7 @@ using nd_network::NetworkHandlingLoopEntry;
 
 #if ENABLE_WIFI
     using nd_network::NetworkReader;
-    bool ProcessIncomingData(std::unique_ptr<uint8_t[]> &payloadData, size_t payloadLength);
+    bool ProcessIncomingData(std::span<const uint8_t> payloadData);
 #endif
 
 // Helper prototypes used by network.cpp

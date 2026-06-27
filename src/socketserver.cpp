@@ -64,13 +64,13 @@ SocketServer::SocketServer(int port, int numLeds) :
     _server_fd(-1),
     _cbReceived(0)
 {
-    _abOutputBuffer.reset( psram_allocator<uint8_t>().allocate(MAXIMUM_PACKET_SIZE+1) );        // +1 for uzlib one byte overreach bug
+    _abOutputBuffer.resize(MAXIMUM_PACKET_SIZE+1);        // +1 for uzlib one byte overreach bug
+    _pBuffer.resize(MAXIMUM_PACKET_SIZE);
     memset(&_address, 0, sizeof(_address));
 }
 
 void SocketServer::release()
 {
-    _pBuffer.reset();
     if (_server_fd >= 0)
     {
         close(_server_fd);
@@ -80,7 +80,6 @@ void SocketServer::release()
 
 bool SocketServer::begin()
 {
-    _pBuffer.reset( psram_allocator<uint8_t>().allocate(MAXIMUM_PACKET_SIZE) );
     _cbReceived = 0;
 
     // Creating socket file descriptor
@@ -128,7 +127,7 @@ bool SocketServer::begin()
 void SocketServer::ResetReadBuffer()
 {
     _cbReceived = 0;
-    memset(_pBuffer.get(), 0, MAXIMUM_PACKET_SIZE);
+    std::fill(_pBuffer.begin(), _pBuffer.end(), 0);
 }
 
 // ReadUntilNBytesReceived
@@ -158,10 +157,10 @@ bool SocketServer::ReadUntilNBytesReceived(size_t socket, size_t cbNeeded)
 
         // Read data from the socket until we have _bcNeeded bytes in the buffer
 
-        int cbRead = 0;
+        ssize_t cbRead = 0;
         do
         {
-            cbRead = read(socket, (uint8_t *) _pBuffer.get() + _cbReceived, cbNeeded - _cbReceived);
+            cbRead = recv(socket, _pBuffer.data() + _cbReceived, cbNeeded - _cbReceived, 0);
         } while (cbRead < 0 && errno == EINTR);
 
         // Restore the old state
@@ -183,23 +182,25 @@ bool SocketServer::ReadUntilNBytesReceived(size_t socket, size_t cbNeeded)
 //
 // Use unzlib to decompress a memory buffer
 
-bool SocketServer::DecompressBuffer(const uint8_t * pBuffer, size_t cBuffer, uint8_t * pOutput, size_t expectedOutputSize)
+bool SocketServer::DecompressBuffer(std::span<const uint8_t> compressed, std::span<uint8_t> output)
 {
-    debugV("Compressed Data: %02X %02X %02X %02X...", pBuffer[0], pBuffer[1], pBuffer[2], pBuffer[3]);
+    // The uzlib library has a bug where it can read one byte past the end of the input buffer, so we need to copy
+    // the input to a temporary buffer that is one byte larger than the actual size, and pad the end with a zero.
+    // It's a small price to pay for a tiny embedded decompressor.
+
+    std::unique_ptr<uint8_t[]> pTemp = std::make_unique<uint8_t[]>(compressed.size() + 1);
+    memcpy(pTemp.get(), compressed.data(), compressed.size());
+    pTemp[compressed.size()] = 0;
 
     struct uzlib_uncomp d = { 0 };
     uzlib_uncompress_init(&d, nullptr, 0);
 
-    d.source         = pBuffer;
-    d.source_limit   = pBuffer + cBuffer;
+    d.source         = pTemp.get();
+    d.source_limit   = pTemp.get() + compressed.size() + 1;
     d.source_read_cb = nullptr;
-    d.dest_start     = pOutput;
-    d.dest           = pOutput;
-
-    // There's an "off by one" bug/feature in uzlib that reaches one byte past the end.  Took forever
-    // to find it...
-
-    d.dest_limit     = pOutput + expectedOutputSize + 1;
+    d.dest           = output.data();
+    d.dest_start     = output.data();
+    d.dest_limit     = output.data() + output.size();
 
     int res = uzlib_zlib_parse_header(&d);
     if (res < 0)
@@ -211,13 +212,13 @@ bool SocketServer::DecompressBuffer(const uint8_t * pBuffer, size_t cBuffer, uin
     res = uzlib_uncompress_chksum(&d);                                          // Expand the data
 
     if (res != TINF_DONE) {
-        debugE("Error during decompression after producing %d bytes: %d\n", d.dest - pOutput, res);
+        debugE("Error during decompression after producing %zd bytes: %d\n", d.dest - output.data(), res);
         return false;
     }
 
-    if (d.dest - pOutput != expectedOutputSize)
+    if (size_t(d.dest - output.data()) != output.size())
     {
-        debugE("Expected it to to decompress to %d but got %d instead\n", expectedOutputSize, d.dest - pOutput);
+        debugE("Expected it to to decompress to %zd but got %zd instead\n", output.size(), d.dest - output.data());
         return false;
     }
 
@@ -282,7 +283,7 @@ bool SocketServer::ProcessIncomingConnectionsLoop()
         return false;
     }
 
-    if (_pBuffer == nullptr)
+    if (_pBuffer.empty())
     {
         debugE("Buffer not allocated!");
         close(new_socket);
@@ -338,19 +339,19 @@ bool SocketServer::ProcessIncomingConnectionsLoop()
 
             #if USE_PSRAM
                 std::unique_ptr<uint8_t []> _abTempBuffer = std::make_unique<uint8_t []>(MAXIMUM_PACKET_SIZE+1);    // Plus one for uzlib buffer overreach bug
-                memcpy(_abTempBuffer.get(), _pBuffer.get(), MAXIMUM_PACKET_SIZE);
+                memcpy(_abTempBuffer.get(), _pBuffer.data(), MAXIMUM_PACKET_SIZE);
                 auto pSourceBuffer = &_abTempBuffer[COMPRESSED_HEADER_SIZE];
             #else
-                auto pSourceBuffer = &_pBuffer[COMPRESSED_HEADER_SIZE];
+                auto pSourceBuffer = _pBuffer.data() + COMPRESSED_HEADER_SIZE;
             #endif
 
-            if (!DecompressBuffer(pSourceBuffer, compressedSize, _abOutputBuffer.get(), expandedSize))
+            if (!DecompressBuffer(std::span<const uint8_t>(pSourceBuffer, compressedSize), std::span<uint8_t>(_abOutputBuffer).first(expandedSize)))
             {
                 debugE("Error decompressing data\n");
                 break;
             }
 
-            if (false == ProcessIncomingData(_abOutputBuffer, expandedSize))
+            if (false == ProcessIncomingData(std::span<const uint8_t>(_abOutputBuffer).first(expandedSize)))
             {
                 debugE("Error processing data\n");
                 break;
@@ -362,16 +363,16 @@ bool SocketServer::ProcessIncomingConnectionsLoop()
         else
         {
             // Read the rest of the data
-            uint16_t command16   = WORDFromMemory(&_pBuffer.get()[0]);
+            uint16_t command16   = WORDFromMemory(&_pBuffer[0]);
 
             if (command16 == WIFI_COMMAND_PEAKDATA)
             {
                 #if ENABLE_AUDIO
                 {
-                    uint16_t numbands  = WORDFromMemory(&_pBuffer.get()[2]);
-                    uint32_t length32  = DWORDFromMemory(&_pBuffer.get()[4]);
-                    uint64_t seconds   = ULONGFromMemory(&_pBuffer.get()[8]);
-                    uint64_t micros    = ULONGFromMemory(&_pBuffer.get()[16]);
+                    uint16_t numbands  = WORDFromMemory(&_pBuffer[2]);
+                    uint32_t length32  = DWORDFromMemory(&_pBuffer[4]);
+                    uint64_t seconds   = ULONGFromMemory(&_pBuffer[8]);
+                    uint64_t micros    = ULONGFromMemory(&_pBuffer[16]);
 
                     size_t totalExpected = STANDARD_DATA_HEADER_SIZE + length32;
 
@@ -395,7 +396,7 @@ bool SocketServer::ProcessIncomingConnectionsLoop()
                         break;
                     }
 
-                    if (false == ProcessIncomingData(_pBuffer, totalExpected))
+                    if (false == ProcessIncomingData(std::span<const uint8_t>(_pBuffer).first(totalExpected)))
                         break;
 
                     // Consume the data by resetting the buffer
@@ -403,7 +404,7 @@ bool SocketServer::ProcessIncomingConnectionsLoop()
                 }
                 #else
                     // Audio disabled: consume any declared payload to keep stream in sync, then ignore it
-                    uint32_t length32  = DWORDFromMemory(&_pBuffer.get()[4]);
+                    uint32_t length32  = DWORDFromMemory(&_pBuffer[4]);
                     size_t totalExpected = STANDARD_DATA_HEADER_SIZE + length32;
                     if (!ReadUntilNBytesReceived(new_socket, totalExpected))
                     {
@@ -419,10 +420,10 @@ bool SocketServer::ProcessIncomingConnectionsLoop()
             {
                 // We know it's pixel data, so we do some validation before calling Process.
 
-                uint16_t channel16 = WORDFromMemory(&_pBuffer.get()[2]);
-                uint32_t length32  = DWORDFromMemory(&_pBuffer.get()[4]);
-                uint64_t seconds   = ULONGFromMemory(&_pBuffer.get()[8]);
-                uint64_t micros    = ULONGFromMemory(&_pBuffer.get()[16]);
+                uint16_t channel16 = WORDFromMemory(&_pBuffer[2]);
+                uint32_t length32  = DWORDFromMemory(&_pBuffer[4]);
+                uint64_t seconds   = ULONGFromMemory(&_pBuffer[8]);
+                uint64_t micros    = ULONGFromMemory(&_pBuffer[16]);
 
                 debugV("Uncompressed Header: channel16=%u, length=%lu, seconds=%llu, micro=%llu", channel16, (unsigned long)length32, seconds, micros);
 
@@ -442,7 +443,7 @@ bool SocketServer::ProcessIncomingConnectionsLoop()
 
                 // Add it to the buffer ring
 
-                if (false == ProcessIncomingData(_pBuffer, totalExpected))
+                if (false == ProcessIncomingData(std::span<const uint8_t>(_pBuffer).first(totalExpected)))
                 {
                     debugE("Error in processing pixel data from wifi\n");
                     break;

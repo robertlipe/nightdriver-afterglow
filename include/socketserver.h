@@ -32,9 +32,10 @@
 
 #include "globals.h"
 
-#include <memory>
 #include <netinet/in.h>
+#include <span>
 #include <sys/socket.h>
+#include <vector>
 
 #define STANDARD_DATA_HEADER_SIZE   24                                             // Size of the header for expanded data
 #define COMPRESSED_HEADER_SIZE      16                                             // Size of the header for compressed data
@@ -46,7 +47,7 @@
 #define MAXIMUM_PACKET_SIZE (STANDARD_DATA_HEADER_SIZE + LED_DATA_SIZE * NUM_LEDS) // Header plus 24 bits per actual LED
 #define COMPRESSED_HEADER (0x44415645)                                             // ASCII "DAVE" as header
 
-bool ProcessIncomingData(std::unique_ptr<uint8_t []> & payloadData, size_t payloadLength);
+bool ProcessIncomingData(std::span<const uint8_t> payloadData);
 
 #if INCOMING_WIFI_ENABLED
 
@@ -91,8 +92,8 @@ private:
     int                         _numLeds;
     int                         _server_fd;
     struct sockaddr_in          _address;
-    std::unique_ptr<uint8_t []> _pBuffer;
-    std::unique_ptr<uint8_t []> _abOutputBuffer;
+    std::vector<uint8_t, psram_allocator<uint8_t>> _pBuffer;
+    std::vector<uint8_t, psram_allocator<uint8_t>> _abOutputBuffer;
 
 public:
 
@@ -120,7 +121,7 @@ public:
     //
     // Use unzlib to decompress a memory buffer
 
-    static bool DecompressBuffer(const uint8_t * pBuffer, size_t cBuffer, uint8_t * pOutput, size_t expectedOutputSize);
+    static bool DecompressBuffer(std::span<const uint8_t> compressed, std::span<uint8_t> output);
 };
 
 #endif

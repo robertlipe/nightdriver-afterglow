@@ -256,7 +256,7 @@ protected:
                 {
                     log_write("Received RPC command, trying to parse and process...");
                     this->set_error_(improv::ERROR_NONE);
-                    auto command = improv::parse_improv_data(&raw[9], data_len, false);
+                    auto command = improv::parse_improv_data(std::span<const uint8_t>(&raw[9], data_len), false);
                     return this->parse_improv_payload_(command);
                 }
                 else

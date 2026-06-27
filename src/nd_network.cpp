@@ -687,13 +687,13 @@ void ConfirmUpdate()
 // Code that actually handles whatever comes in on the socket.  Must be known good data
 // as this code does not validate!  This is where the commands and pixel data are received
 // from the server.
-bool ProcessIncomingData(std::unique_ptr<uint8_t[]> &payloadData, size_t payloadLength)
+bool ProcessIncomingData(std::span<const uint8_t> payloadData)
 {
     #if !INCOMING_WIFI_ENABLED
         return false;
     #else
         uint16_t command16 = payloadData[1] << 8 | payloadData[0];
-        debugV("payloadLength: %zu, command16: %d", payloadLength, command16);
+        debugV("payloadLength: %zu, command16: %d", payloadData.size(), command16);
 
         switch (command16)
         {
@@ -711,9 +711,9 @@ bool ProcessIncomingData(std::unique_ptr<uint8_t[]> &payloadData, size_t payload
                            (unsigned int)numbands, (unsigned long)length32, seconds, micros);
 
                     // Data is transmitted as NUM_BANDS floats following the standard header
-                    const uint8_t* dataStart = payloadData.get() + STANDARD_DATA_HEADER_SIZE;
-                    const size_t availableFloats = (payloadLength > STANDARD_DATA_HEADER_SIZE)
-                                                    ? (payloadLength - STANDARD_DATA_HEADER_SIZE) / sizeof(float)
+                    const uint8_t* dataStart = payloadData.data() + STANDARD_DATA_HEADER_SIZE;
+                    const size_t availableFloats = (payloadData.size() > STANDARD_DATA_HEADER_SIZE)
+                                                    ? (payloadData.size() - STANDARD_DATA_HEADER_SIZE) / sizeof(float)
                                                     : 0;
                     const size_t copyCount = std::min<size_t>(NUM_BANDS, std::min<size_t>(numbands, availableFloats));
 
@@ -764,7 +764,7 @@ bool ProcessIncomingData(std::unique_ptr<uint8_t[]> &payloadData, size_t payload
                             if (micros != 0 && pNewestBuffer->MicroSeconds() == micros && pNewestBuffer->Seconds() == seconds)
                             {
                                 debugV("Updating existing buffer");
-                                if (!pNewestBuffer->UpdateFromWire(payloadData, payloadLength))
+                                if (!pNewestBuffer->UpdateFromWire(payloadData))
                                     return false;
                                 bDone = true;
                             }
@@ -773,7 +773,7 @@ bool ProcessIncomingData(std::unique_ptr<uint8_t[]> &payloadData, size_t payload
                         {
                             debugV("No match so adding new buffer");
                             auto pNewBuffer = bufferManager.GetNewBuffer();
-                            if (!pNewBuffer->UpdateFromWire(payloadData, payloadLength))
+                            if (!pNewBuffer->UpdateFromWire(payloadData))
                                 return false;
                         }
                     }

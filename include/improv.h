@@ -42,6 +42,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -103,8 +104,7 @@ namespace improv
         std::string password;
     };
 
-    ImprovCommand parse_improv_data(const std::vector<uint8_t> &data, bool check_checksum = true);
-    ImprovCommand parse_improv_data(const uint8_t *data, size_t length, bool check_checksum = true);
+    ImprovCommand parse_improv_data(std::span<const uint8_t> data, bool check_checksum = true);
 
     std::vector<uint8_t> build_rpc_response(Command command, const std::vector<String> &datum, bool add_checksum = true);
 

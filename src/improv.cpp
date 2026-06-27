@@ -32,6 +32,7 @@
 
 #include "globals.h"
 
+#include <algorithm>
 #include <numeric>
 #include <string>
 #include <vector>
@@ -41,18 +42,13 @@
 namespace improv
 {
 
-    ImprovCommand parse_improv_data(const std::vector<uint8_t> &data, bool check_checksum)
-    {
-        return parse_improv_data(data.data(), data.size(), check_checksum);
-    }
-
-    ImprovCommand parse_improv_data(const uint8_t *data, size_t length, bool check_checksum)
+    ImprovCommand parse_improv_data(std::span<const uint8_t> data, bool check_checksum)
     {
         ImprovCommand improv_command;
         Command command = (Command)data[0];
         uint8_t data_length = data[1];
 
-        if (data_length != length - 2 - check_checksum)
+        if (data_length != data.size() - 2 - check_checksum)
         {
             improv_command.command = UNKNOWN;
             return improv_command;
@@ -60,9 +56,9 @@ namespace improv
 
         if (check_checksum)
         {
-            uint8_t checksum = data[length - 1];
+            uint8_t checksum = data.back();
 
-            uint32_t calculated_checksum = std::accumulate(data, data + (length - 1), 0u);
+            uint32_t calculated_checksum = std::accumulate(data.begin(), data.end() - 1, 0u);
 
             if ((uint8_t)calculated_checksum != checksum)
             {
@@ -74,15 +70,13 @@ namespace improv
         if (command == WIFI_SETTINGS)
         {
             uint8_t ssid_length = data[2];
-            uint8_t ssid_start = 3;
-            size_t ssid_end = ssid_start + ssid_length;
+            auto ssid_span = data.subspan(3, ssid_length);
 
-            uint8_t pass_length = data[ssid_end];
-            size_t pass_start = ssid_end + 1;
-            size_t pass_end = pass_start + pass_length;
+            uint8_t pass_length = data[3 + ssid_length];
+            auto pass_span = data.subspan(3 + ssid_length + 1, pass_length);
 
-            std::string ssid(data + ssid_start, data + ssid_end);
-            std::string password(data + pass_start, data + pass_end);
+            std::string ssid(ssid_span.begin(), ssid_span.end());
+            std::string password(pass_span.begin(), pass_span.end());
             return {.command = command, .ssid = ssid, .password = password};
         }
 

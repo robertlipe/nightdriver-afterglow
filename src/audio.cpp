@@ -220,11 +220,11 @@ public:
         return new_socket;
     }
 
-    bool SendPacketToVICE(int socket, void *pData, size_t cbSize)
+    bool SendPacketToVICE(int socket, std::span<const uint8_t> data)
     {
         // Send data to the emulator's virtual serial port
 
-        if (cbSize != write(socket, pData, cbSize))
+        if (data.size() != write(socket, data.data(), data.size()))
         {
             debugW("Could not write to socket\n");
             return false;
@@ -290,7 +290,7 @@ void IRAM_ATTR AudioSerialTaskEntry(void *)
         data.tail = 00;
         if (Serial2.availableForWrite())
         {
-            Serial2.write((uint8_t *)&data, sizeof(data));
+            Serial2.write((const uint8_t *)&data, sizeof(data));
             // Serial2.flush(true);
             static int lastFrame = millis();
             g_Analyzer._serialFPS = FPS(lastFrame, millis());
@@ -319,7 +319,7 @@ void IRAM_ATTR AudioSerialTaskEntry(void *)
 
         if (socket >= 0)
         {
-            if (!socketServer.SendPacketToVICE(socket, (uint8_t *)&data, sizeof(data)))
+            if (!socketServer.SendPacketToVICE(socket, std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&data), sizeof(data))))
             {
                 // If anything goes wrong, we close the socket so it can accept new incoming attempts
                 debugI("Error on socket, so closing");

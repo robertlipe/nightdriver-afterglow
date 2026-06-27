@@ -66,9 +66,9 @@ bool LEDBuffer::IsBufferOlderThan(const timeval & tv) const
 //
 // Parse and deposit a WiFi packet into a buffer
 
-bool LEDBuffer::UpdateFromWire(std::unique_ptr<uint8_t []> & payloadData, size_t payloadLength)
+bool LEDBuffer::UpdateFromWire(std::span<const uint8_t> payloadData)
 {
-    if (payloadLength < 24)                 // Our header size
+    if (payloadData.size() < 24)                 // Our header size
     {
         debugW("Not enough data received to process");
         return false;
@@ -86,9 +86,9 @@ bool LEDBuffer::UpdateFromWire(std::unique_ptr<uint8_t []> & payloadData, size_t
     _timeStampMicroseconds = micros;
     _pixelCount            = length32;
 
-    if (payloadLength < length32 * sizeof(CRGB) + cbHeader)
+    if (payloadData.size() < length32 * sizeof(CRGB) + cbHeader)
     {
-        debugW("command16: %hu   length32: %lu,  payloadLength: %zu\n", command16, (unsigned long)length32, payloadLength);
+        debugW("command16: %hu   length32: %lu,  payloadLength: %zu\n", command16, (unsigned long)length32, payloadData.size());
         debugW("Data size mismatch");
         return false;
     }
@@ -97,9 +97,9 @@ bool LEDBuffer::UpdateFromWire(std::unique_ptr<uint8_t []> & payloadData, size_t
         debugW("More data than we have LEDs\n");
         return false;
     }
-    debugV("PayloadLength: %zu, command16: %hu, Length32: %lu", payloadLength, command16, (unsigned long)length32);
+    debugV("PayloadLength: %zu, command16: %hu, Length32: %lu", payloadData.size(), command16, (unsigned long)length32);
 
-    CRGB * pRGB = reinterpret_cast<CRGB *>(&payloadData[cbHeader]);
+    const CRGB * pRGB = reinterpret_cast<const CRGB *>(&payloadData[cbHeader]);
 
     memcpy(_leds.get(), pRGB, length32 * sizeof(CRGB));
     debugV("seconds, micros: %llu.%llu", seconds, micros);
