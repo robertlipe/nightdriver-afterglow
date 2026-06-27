@@ -158,6 +158,9 @@
 
 #include <algorithm>
 #include <Arduino.h>
+#if ENABLE_WIFI
+#include <WiFi.h>
+#endif
 #if ENABLE_OTA
 #include <ArduinoOTA.h>
 #endif
@@ -712,7 +715,7 @@ void loop()
                 #endif
 
                 #if USE_HUB75
-                    strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%%, ", HUB75GFX::matrix.getRefreshRate(), g_Values.MatrixPowerMilliwatts, g_Values.MatrixScaledBrightness / 2.55);
+                    strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%%, ", 0, g_Values.MatrixPowerMilliwatts, g_Values.MatrixScaledBrightness / 2.55);
                 #endif
 
                 #if ENABLE_AUDIO
