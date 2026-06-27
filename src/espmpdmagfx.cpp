@@ -93,6 +93,10 @@ void ESPMPDMAGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devi
 
     // Allocate draw buffer in PSRAM
     drawBuffer = make_unique_psram<CRGB[]>(MATRIX_WIDTH * MATRIX_HEIGHT);
+    if (!drawBuffer) {
+        debugE("Failed to allocate drawBuffer in PSRAM!");
+        return;
+    }
 
     // ... (Device initialization code)
     auto tmp_matrix = make_shared_psram<ESPMPDMAGFX>(MATRIX_WIDTH, MATRIX_HEIGHT);

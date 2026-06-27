@@ -108,8 +108,8 @@ void HUB75GFX::MoveInwardX(int startY, int endY)
     {
         auto pLinemem = leds + y * MATRIX_WIDTH;
         auto pLinemem2 = pLinemem + (MATRIX_WIDTH / 2);
-        memmove(pLinemem + 1, pLinemem, sizeof(CRGB) * (MATRIX_WIDTH / 2));
-        memmove(pLinemem2, pLinemem2 + 1, sizeof(CRGB) * (MATRIX_WIDTH / 2));
+        memmove(pLinemem + 1, pLinemem, sizeof(CRGB) * (MATRIX_WIDTH / 2 - 1));
+        memmove(pLinemem2, pLinemem2 + 1, sizeof(CRGB) * (MATRIX_WIDTH / 2 - 1));
     }
 }
 
@@ -119,8 +119,8 @@ void HUB75GFX::MoveOutwardsX(int startY, int endY)
     {
         auto pLinemem = leds + y * MATRIX_WIDTH;
         auto pLinemem2 = pLinemem + (MATRIX_WIDTH / 2);
-        memmove(pLinemem, pLinemem + 1, sizeof(CRGB) * (MATRIX_WIDTH / 2));
-        memmove(pLinemem2 + 1, pLinemem2, sizeof(CRGB) * (MATRIX_WIDTH / 2));
+        memmove(pLinemem, pLinemem + 1, sizeof(CRGB) * (MATRIX_WIDTH / 2 - 1));
+        memmove(pLinemem2 + 1, pLinemem2, sizeof(CRGB) * (MATRIX_WIDTH / 2 - 1));
     }
 }
 
