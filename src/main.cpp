@@ -175,9 +175,9 @@
 #include <mutex>
 #include <nvs.h>
 #include <nvs_flash.h>
-#include <SPIFFS.h>
 #include <vector>
 #include <WString.h>
+#include "userfs.h"
 
 #if defined(TOGGLE_BUTTON_0) || defined(TOGGLE_BUTTON_1)
 #include "Bounce2.h"
@@ -355,9 +355,9 @@ void setup()
     // and Serial.flush() are applied on every log line.
     Logger::InstallLogHook();
 
-    // Initialize SPIFFS for file access to non-volatile storage
-    if (!SPIFFS.begin(true))
-        Serial.println("WARNING: SPIFFS could not be initialized!");
+    // Initialize UserFS for file access to non-volatile storage
+    if (!UserFS.begin(true))
+        Serial.println("WARNING: UserFS could not be initialized!");
 
     // Enabling PSRAM allows us to use the extra 4MB of RAM on the ESP32-WROVER chip, but it caused
     // problems with the S3 rebooting when WiFi connected, so for now, I've limited the default

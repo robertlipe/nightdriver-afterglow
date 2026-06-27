@@ -268,7 +268,7 @@ void SystemContainer::SetupConfig()
         _ptrTaskManager->StartJSONWriterThread();
     }
 
-    // Create and load device config from SPIFFS if possible
+    // Create and load device config from UserFS if possible
     if (!_ptrDeviceConfig)
         _ptrDeviceConfig = make_unique_psram<DeviceConfig>();
 }

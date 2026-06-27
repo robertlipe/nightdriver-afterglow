@@ -36,7 +36,7 @@
 
 #include <AsyncJson.h>
 #include <esp_partition.h>
-#include <FS.h>
+
 #include <memory>
 #include <utility>
 
@@ -148,11 +148,11 @@ void CWebServer::begin()
 
     debugI("Connecting Web Endpoints");
 
-    // SPIFFS file requests
+    // UserFS file requests
 
-    _server.on("/effectsConfig",         HTTP_GET,  [](AsyncWebServerRequest* pRequest) { pRequest->send(SPIFFS, EFFECTS_CONFIG_FILE,   "text/json"); });
+    _server.on("/effectsConfig",         HTTP_GET,  [](AsyncWebServerRequest* pRequest) { pRequest->send(UserFS, EFFECTS_CONFIG_FILE,   "text/json"); });
     #if ENABLE_IMPROV_LOGGING
-        _server.on(IMPROV_LOG_FILE,      HTTP_GET,  [](AsyncWebServerRequest* pRequest) { pRequest->send(SPIFFS, IMPROV_LOG_FILE,       "text/plain"); });
+        _server.on(IMPROV_LOG_FILE,      HTTP_GET,  [](AsyncWebServerRequest* pRequest) { pRequest->send(UserFS, IMPROV_LOG_FILE,       "text/plain"); });
     #endif
 
     // Instance handler requests

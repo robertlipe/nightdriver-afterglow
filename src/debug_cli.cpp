@@ -38,12 +38,12 @@
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <FS.h>
+
 #include <optional>
-#include <SPIFFS.h>
 #include <string>
 #include <string_view>
 #include <vector>
+#include "userfs.h"
 
 #include "console.h"
 #include "debug_cli.h"
@@ -470,7 +470,7 @@ static void DoEffectCommand(const cli_argv &argv)
 
 static void DoDirectoryListing(const cli_argv &argv)
 {
-    fs::FS *fileSystem = &SPIFFS;
+    fs::FS *fileSystem = &UserFS.fs();
 
     fs::File root = fileSystem->open("/");
 
@@ -508,7 +508,7 @@ static void DoCat(const cli_argv &argv)
     if (fname[0] != '/')
         fname = "/" + fname;
 
-    fs::FS *fileSystem = &SPIFFS;
+    fs::FS *fileSystem = &UserFS.fs();
     if (!fileSystem->exists(fname.c_str()))
     {
         cli_printf("File not found: %s\n", fname.c_str());

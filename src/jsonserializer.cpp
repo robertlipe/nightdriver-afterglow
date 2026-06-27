@@ -29,10 +29,10 @@
 
 #include "globals.h"
 
-#include <FS.h>
+
 #include <functional>
 #include <memory>
-#include <SPIFFS.h>
+#include "userfs.h"
 
 #include "jsonserializer.h"
 #include "systemcontainer.h"
@@ -169,7 +169,7 @@ bool LoadJSONFile(const String & fileName, JsonDocument& jsonDoc)
 {
     bool jsonReadSuccessful = false;
 
-    File file = SPIFFS.open(fileName);
+    File file = UserFS.open(fileName);
 
     if (file)
     {
@@ -210,9 +210,9 @@ bool SaveToJSONFile(const String & fileName, IJSONSerializable& object)
         return false;
     }
 
-    SPIFFS.remove(fileName);
+    UserFS.remove(fileName);
 
-    File file = SPIFFS.open(fileName, FILE_WRITE);
+    File file = UserFS.open(fileName, FILE_WRITE);
 
     if (!file)
     {
@@ -229,7 +229,7 @@ bool SaveToJSONFile(const String & fileName, IJSONSerializable& object)
     if (bytesWritten == 0)
     {
         debugE("Unable to write JSON to file %s!", fileName.c_str());
-        SPIFFS.remove(fileName);
+        UserFS.remove(fileName);
         return false;
     }
 
@@ -238,7 +238,7 @@ bool SaveToJSONFile(const String & fileName, IJSONSerializable& object)
 
 bool RemoveJSONFile(const String & fileName)
 {
-    return SPIFFS.remove(fileName);
+    return UserFS.remove(fileName);
 }
 
 size_t JSONWriter::RegisterWriter(const std::function<void()>& writer)
@@ -276,7 +276,7 @@ void JSONWriter::FlushWrites(bool halt)
 
 // JSONWriterTaskEntry
 //
-// Invoke functions that write serialized JSON objects to SPIFFS at request, with some delay
+// Invoke functions that write serialized JSON objects to UserFS at request, with some delay
 void IRAM_ATTR JSONWriterTaskEntry(void *)
 {
     for(;;)
