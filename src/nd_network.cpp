@@ -867,6 +867,10 @@ void onReceiveESPNOW(const esp_now_recv_info_t *recvInfo, const uint8_t *data, i
 void onReceiveESPNOW(const uint8_t *macAddr, const uint8_t *data, int dataLen)
 #endif
 {
+    if (dataLen < sizeof(Message)) {
+        debugE("ESPNOW Message received is too short: %d bytes", dataLen);
+        return;
+    }
     Message message;
 
     memcpy(&message, data, sizeof(message));
