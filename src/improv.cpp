@@ -45,6 +45,12 @@ namespace improv
     ImprovCommand parse_improv_data(std::span<const uint8_t> data, bool check_checksum)
     {
         ImprovCommand improv_command;
+        if (data.size() < 2 + check_checksum)
+        {
+            improv_command.command = UNKNOWN;
+            return improv_command;
+        }
+
         Command command = (Command)data[0];
         uint8_t data_length = data[1];
 
@@ -69,10 +75,25 @@ namespace improv
 
         if (command == WIFI_SETTINGS)
         {
+            if (data.size() < 3)
+            {
+                improv_command.command = UNKNOWN;
+                return improv_command;
+            }
             uint8_t ssid_length = data[2];
+            if (data.size() < 3 + ssid_length + 1)
+            {
+                improv_command.command = UNKNOWN;
+                return improv_command;
+            }
             auto ssid_span = data.subspan(3, ssid_length);
 
             uint8_t pass_length = data[3 + ssid_length];
+            if (data.size() < 3 + ssid_length + 1 + pass_length + check_checksum)
+            {
+                improv_command.command = UNKNOWN;
+                return improv_command;
+            }
             auto pass_span = data.subspan(3 + ssid_length + 1, pass_length);
 
             std::string ssid(ssid_span.begin(), ssid_span.end());

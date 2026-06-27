@@ -692,6 +692,10 @@ bool ProcessIncomingData(std::span<const uint8_t> payloadData)
     #if !INCOMING_WIFI_ENABLED
         return false;
     #else
+        if (payloadData.size() < STANDARD_DATA_HEADER_SIZE)
+        {
+            return false;
+        }
         uint16_t command16 = payloadData[1] << 8 | payloadData[0];
         debugV("payloadLength: %zu, command16: %d", payloadData.size(), command16);
 
