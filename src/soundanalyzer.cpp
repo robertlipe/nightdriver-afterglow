@@ -608,11 +608,11 @@ size_t SoundAnalyzerBase::SampleI2S_Legacy()
 
 size_t SoundAnalyzerBase::SampleADC_Modern()
 {
-    size_t ret_num = 0;
+    uint32_t ret_num = 0;
 #if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
     constexpr size_t bytesToRead = MAX_SAMPLES * sizeof(uint16_t);
     // Use 100ms timeout instead of 0 to wait for a full buffer
-    esp_err_t err = adc_continuous_read(_adc_handle, (uint8_t*)ptrSampleBuffer.get(), bytesToRead, (uint32_t*)&ret_num, 100);
+    esp_err_t err = adc_continuous_read(_adc_handle, (uint8_t*)ptrSampleBuffer.get(), bytesToRead, &ret_num, 100);
 
     // Process only if we got a full buffer
     if (ret_num == bytesToRead)

@@ -217,7 +217,7 @@ public:
     float GetCaptionTransparency() const
     {
         unsigned long now = millis();
-        if (strCaption == nullptr || strCaption.isEmpty())
+        if (strCaption.isEmpty())
             return 0.0f;
 
         if (now > (captionStartTime + totalCaptionDuration))

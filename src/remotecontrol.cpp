@@ -45,8 +45,8 @@
 #include <driver/rmt.h>
 #endif
 #include <freertos/FreeRTOS.h>
-#include <freertos/ringbuf.h>
 #include <freertos/queue.h>
+#include <freertos/ringbuf.h>
 
 #include "deviceconfig.h"
 #include "effectmanager.h"
@@ -238,7 +238,7 @@ public:
     RemoteControlImpl(int pin) : _pin(pin) {}
 
     ~RemoteControlImpl() {
-        if (_begun) {
+        if (_channel && _rx_queue) {
             rmt_disable(_channel);
             rmt_del_channel(_channel);
             vQueueDelete(_rx_queue);
@@ -273,14 +273,13 @@ public:
         receive_config.signal_range_min_ns = 1250;
         receive_config.signal_range_max_ns = 12000000;
 
-        if (rmt_receive(_channel, _raw_symbols, sizeof(_raw_symbols), &receive_config) != ESP_OK) return false;
+        rmt_receive(_channel, _raw_symbols, sizeof(_raw_symbols), &receive_config);
 
-        _begun = true;
         return true;
     }
 
     bool decode(uint32_t &code, bool &isRepeat) {
-        if (!_begun) return false;
+        if (!_channel || !_rx_queue) return false;
 
         rmt_rx_done_event_data_t rx_data;
         if (xQueueReceive(_rx_queue, &rx_data, 0) == pdTRUE) {
@@ -301,7 +300,6 @@ private:
     rmt_channel_handle_t _channel = NULL;
     QueueHandle_t _rx_queue = NULL;
     rmt_symbol_word_t _raw_symbols[64];
-    bool _begun = false;
 
     bool match(uint32_t measured, uint32_t target) {
         return (measured >= (target - NEC_DECODE_MARGIN)) &&
@@ -355,7 +353,7 @@ public:
     RemoteControlImpl(int pin) : _pin(pin), _channel(RMT_CHANNEL_0) {}
 
     ~RemoteControlImpl() {
-        if (_begun) {
+        if (_channel) {
             rmt_rx_stop(_channel);
             rmt_driver_uninstall(_channel);
         }
@@ -371,14 +369,13 @@ public:
         if (rmt_config(&config) != ESP_OK) return false;
         if (rmt_driver_install(_channel, 1024, 0) != ESP_OK) return false;
         if (rmt_get_ringbuf_handle(_channel, &_ringbuf) != ESP_OK) return false;
-        if (rmt_rx_start(_channel, true) != ESP_OK) return false;
+        if (rmt_driver_install(_channel, 1000, 0) != ESP_OK) return false;
 
-        _begun = true;
         return true;
     }
 
     bool decode(uint32_t &code, bool &isRepeat) {
-        if (!_begun) return false;
+        if (!_ringbuf) return false;
 
         size_t size = 0;
         rmt_item32_t* items = (rmt_item32_t*)xRingbufferReceive(_ringbuf, &size, 0);
@@ -394,7 +391,7 @@ private:
     int _pin;
     rmt_channel_t _channel;
     RingbufHandle_t _ringbuf = NULL;
-    bool _begun = false;
+    RingbufHandle_t _ringbuf = NULL;
 
     bool match(uint32_t measured, uint32_t target) {
         return (measured >= (target - NEC_DECODE_MARGIN)) &&

@@ -29,6 +29,7 @@
 #include "globals.h"
 
 #if USE_MPDMA_HUB75
+#include <stdexcept>
 #include <algorithm>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 #include "deviceconfig.h"
@@ -85,6 +86,7 @@ void ESPMPDMAGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devi
 #endif
 
     driver = std::make_unique<MatrixPanel_I2S_DMA>(config);
+    if (!driver) throw std::runtime_error("Failed to allocate matrix driver!");
     if (!driver->begin()) debugE("MatrixPanel_I2S_DMA::begin() FAILED!");
 
     // Allocate draw buffer in PSRAM
