@@ -158,6 +158,9 @@
 
 #include <algorithm>
 #include <Arduino.h>
+#if ENABLE_WIFI
+#include <WiFi.h>
+#endif
 #if ENABLE_OTA
 #include <ArduinoOTA.h>
 #endif
@@ -172,9 +175,9 @@
 #include <mutex>
 #include <nvs.h>
 #include <nvs_flash.h>
-#include <SPIFFS.h>
 #include <vector>
 #include <WString.h>
+#include "userfs.h"
 
 #if defined(TOGGLE_BUTTON_0) || defined(TOGGLE_BUTTON_1)
 #include "Bounce2.h"
@@ -186,6 +189,12 @@
 #include "gfxbase.h"
 #if USE_HUB75
 #include "hub75gfx.h"
+#endif
+#if USE_ESP_HUB75
+#include "esphub75gfx.h"
+#endif
+#if USE_MPDMA_HUB75
+#include "espmpdmagfx.h"
 #endif
 #if ENABLE_WIFI
 #include "improvserial.h"
@@ -346,9 +355,9 @@ void setup()
     // and Serial.flush() are applied on every log line.
     Logger::InstallLogHook();
 
-    // Initialize SPIFFS for file access to non-volatile storage
-    if (!SPIFFS.begin(true))
-        Serial.println("WARNING: SPIFFS could not be initialized!");
+    // Initialize UserFS for file access to non-volatile storage
+    if (!UserFS.begin(true))
+        Serial.println("WARNING: UserFS could not be initialized!");
 
     // Enabling PSRAM allows us to use the extra 4MB of RAM on the ESP32-WROVER chip, but it caused
     // problems with the S3 rebooting when WiFi connected, so for now, I've limited the default
@@ -694,6 +703,10 @@ void loop()
                     strOutput += str_sprintf("WiFi: %s, MAC: %s, IP: %s ", nd_network::WLtoString(nd_network::GetWiFiStatus()), nd_network::GetMacAddress(":").c_str(), nd_network::GetWiFiLocalIP().c_str());
                 #endif
 
+                #if USE_HUB75
+                    strOutput += str_sprintf("Power: %d mW, Brite: %3.0lf%%, ", g_Values.MatrixPowerMilliwatts, g_Values.MatrixScaledBrightness / 2.55);
+                #endif
+
                 strOutput += str_sprintf("Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize());
                 strOutput += str_sprintf("LED FPS: %lu ", (unsigned long)g_Values.FPS);
 
@@ -702,7 +715,7 @@ void loop()
                 #endif
 
                 #if USE_HUB75
-                    strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%%, ", HUB75GFX::matrix.getRefreshRate(), g_Values.MatrixPowerMilliwatts, g_Values.MatrixScaledBrightness / 2.55);
+                    strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%%, ", 0, g_Values.MatrixPowerMilliwatts, g_Values.MatrixScaledBrightness / 2.55);
                 #endif
 
                 #if ENABLE_AUDIO
@@ -712,6 +725,11 @@ void loop()
                 #if ENABLE_AUDIOSERIAL
                     strOutput += str_sprintf("Serial FPS: %d, ", g_Analyzer.SerialFPS());
                 #endif
+
+		debugI("%s", strOutput.c_str());
+
+		if (ESP.getFreeHeap() < 15000)
+		    debugW("Danger: Memory perilously low (< 15K). Expect bad things to happen!");
 
                 #if INCOMING_WIFI_ENABLED
                     auto& bufferManager = g_ptrSystem->GetBufferManagers()[0];
@@ -733,6 +751,10 @@ void loop()
 
                 const auto& taskManager = g_ptrSystem->GetTaskManager();
                 strOutput += str_sprintf("CPU: %03.0f%%, %03.0f%%, FreeDraw: %4.3lf", taskManager.GetCPUUsagePercent(0), taskManager.GetCPUUsagePercent(1), g_Values.FreeDrawTime);
+                const auto stackUsage = taskManager.GetStackUsageSummary();
+                if (stackUsage.length() > 0) {
+                    strOutput += str_sprintf(" Stack: %s", stackUsage.c_str());
+                }
 
                 debugI("%s", strOutput.c_str());
             }

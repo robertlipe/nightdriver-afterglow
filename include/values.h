@@ -46,6 +46,7 @@ struct Values
     uint32_t FPS = 0;                                                       // Our global framerate
     bool UpdateStarted = false;                                             // Has an OTA update started?
     uint8_t Fader = 255;
+
     bool ShowStatusLog = true;
     std::optional<float> AmbientTemp;                                       // Ambient temperature in F
     std::optional<float> AmbientHumidity;                                   // Ambient relative humidity in %

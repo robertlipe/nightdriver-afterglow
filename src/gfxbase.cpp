@@ -42,6 +42,10 @@
 #include "gfxbase.h"
 #include "systemcontainer.h"
 
+#if ENABLE_AUDIO
+#include "soundanalyzer.h"
+#endif
+
 // 32 Entries in the 5-bit gamma table
 const uint8_t GFXBase::gamma5[32] =
 {
@@ -1455,4 +1459,88 @@ const GFXBase::PolarMapArray& GFXBase::getPolarMap()
     }
 
     return *rMap_ptr;
+}
+
+void GFXBase::DrawCaptionOverlay()
+{
+    if (strCaption.isEmpty() || GetCaptionTransparency() <= 0.0f)
+    {
+#if SHOW_FPS_ON_MATRIX
+        if (_height >= 8)
+        {
+            setFont(NULL);
+            setTextSize(1);
+            setTextWrap(false);
+            setTextColor(to16bit(255, 255, 255), to16bit(0, 0, 0));
+            setCursor(2, _height - 8);
+            String output = "LED: " + String(g_Values.FPS);
+#if ENABLE_AUDIO
+            extern class SoundAnalyzerBase g_Analyzer;
+            output += " AUD: " + String(g_Analyzer.AudioFPS());
+#endif
+            print(output);
+        }
+#endif
+        return;
+    }
+
+    if (_height < 8)
+        return;
+
+    // Reset graphics state that might have been changed by an effect (e.g. PatternPongClock uses setFont)
+    // Adafruit_GFX has a quirk where default font positions by top-left, but custom fonts position by baseline!
+    // We MUST reset to default font to ensure our Y calculation is predictable.
+    setFont(NULL);
+    setTextSize(1);
+
+    // Prevent Adafruit_GFX from wrapping sliding text off the bottom of the screen
+    setTextWrap(false);
+
+    float transparency = GetCaptionTransparency();
+    uint8_t textVal = (uint8_t)(transparency * 255.0f);
+    uint16_t titleColor = to16bit(textVal, textVal, textVal);
+    uint16_t shadowColor = to16bit(0, 0, 0);
+
+    const size_t kCharWidth = 6;
+    const size_t kCharHeight = 8;
+    // Adafruit_GFX default font has 1 pixel of trailing horizontal space and 1 pixel of trailing vertical space.
+    // Subtracting the trailing space corrects the visual centering to match the old SmartMatrix font.
+    int w = strCaption.length() * kCharWidth - 1;
+
+    // Shift down by 1 pixel so the baseline matches the old SmartMatrix visual placement.
+    int y = (int)_height - 1 - (int)kCharHeight;
+    unsigned long elapsed = millis() - captionStartTime;
+
+    int x;
+    if (w > (int)_width)
+    {
+        // Scroll if too wide to fit
+        float progress = (float)elapsed / totalCaptionDuration;
+        x = (int)_width - (int)(progress * (w + _width));
+    }
+    else
+    {
+        // Center if it fits
+        x = ((int)_width - w) / 2;
+    }
+
+    // Draw shadow first (4-way offset)
+    setTextColor(shadowColor);
+
+    setCursor(x - 1, y);
+    print(strCaption);
+
+    setCursor(x + 1, y);
+    print(strCaption);
+
+    setCursor(x, y - 1);
+    print(strCaption);
+
+    setCursor(x, y + 1);
+    print(strCaption);
+
+    // Draw main text
+    setTextColor(titleColor);
+    setCursor(x, y);
+    print(strCaption);
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "effectmanager.h"
+#include "colordata.h"
 
 // Derived from https://wokwi.com/projects/289218075224441356
 // N Glowing balls in orbit around each other around a rotating plane.

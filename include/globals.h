@@ -110,7 +110,7 @@ extern std::mutex g_buffer_mutex;
 
 #define FLASH_VERSION          40   // Update ONLY this to increment the version number
 
-#ifndef USE_HUB75                   // We support strips by default unless specifically defined out
+#if !defined(USE_HUB75) && !defined(USE_ESP_HUB75) && !defined(USE_MPDMA_HUB75) // We support strips by default unless specifically defined out
     #ifndef USE_WS281X
         #define USE_WS281X 1
     #endif
@@ -147,6 +147,12 @@ extern std::mutex g_buffer_mutex;
 
 #if M5STICKC || M5STICKCPLUS || M5STICKCPLUS2 || M5STACKCORE2 || M5TAB
     #define USE_M5 1
+#endif
+
+#if defined(USE_ESP_HUB75) || defined(USE_MPDMA_HUB75)
+    #ifndef USE_HUB75
+        #define USE_HUB75 1
+    #endif
 #endif
 
 #if USE_HUB75
@@ -719,7 +725,9 @@ extern const int g_aRingSizeTable[];
         #endif
     #endif
 #else
-    #define INPUT_PIN 0
+    #ifndef INPUT_PIN
+        #define INPUT_PIN 0
+    #endif
 #endif
 
 #ifndef IR_REMOTE_PIN

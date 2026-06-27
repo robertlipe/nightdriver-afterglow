@@ -33,25 +33,23 @@
 //---------------------------------------------------------------------------
 
 #include "globals.h"
+#include <improv.h>
+#include <numeric>
+#include "hexdump.h"
+#include "nd_network.h"
+#include "userfs.h"
 
 #if ENABLE_WIFI
 #include <IPAddress.h>
 #include <WiFi.h>
 #endif
 
-#include <improv.h>
-#include <numeric>
-#include <SPIFFS.h>
-
-#include "hexdump.h"
-#include "nd_network.h"
-
 #define IMPROV_LOG_FILE             "/improv.log"
 
-// Define as 1 to enable Improv logging to SPIFFS, and add a URI to the on-board
+// Define as 1 to enable Improv logging to UserFS, and add a URI to the on-board
 // webserver to be able to retrieve it. The URL to retrieve the log will be
 // http://<device_IP><IMPROV_LOG_FILE>, the latter being as defined just above.
-// Note that any log file that has been written to SPIFFS will be deleted as soon
+// Note that any log file that has been written to UserFS will be deleted as soon
 // as the board is booted with ENABLE_IMPROV_LOGGING set to 0!
 #ifndef ENABLE_IMPROV_LOGGING
     #define ENABLE_IMPROV_LOGGING   0
@@ -89,7 +87,7 @@ public:
         this->device_name_ = name;
 
         #if !(ENABLE_IMPROV_LOGGING)
-            SPIFFS.remove(IMPROV_LOG_FILE);
+            UserFS.remove(IMPROV_LOG_FILE);
         #endif
 
         log_write("Finished Improv setup");
@@ -173,7 +171,7 @@ protected:
             constexpr int bufferSize = 256;
             char lineBuffer[bufferSize];
 
-            auto file = SPIFFS.open(IMPROV_LOG_FILE, FILE_APPEND);
+            auto file = UserFS.open(IMPROV_LOG_FILE, FILE_APPEND);
             va_list args;
 
             va_start(args, format);
@@ -188,7 +186,7 @@ protected:
 
         void log_write(std::vector<uint8_t>& data)
         {
-            auto file = SPIFFS.open(IMPROV_LOG_FILE, FILE_APPEND);
+            auto file = UserFS.open(IMPROV_LOG_FILE, FILE_APPEND);
 
             HexDump(file, data.data(), data.size());
 

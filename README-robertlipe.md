@@ -83,3 +83,28 @@ This file documents the custom reliability, diagnostic, and performance improvem
 - **Feature**: Re-implemented the telnet thread loop (`DebugLoopTaskEntry`) using `select()` to multiplex the listening socket and the active client socket.
 - **UX Improvement**: If a client attempts to connect while a telnet session is already active (e.g. from an orphaned terminal window or client crash), the server immediately accepts the new connection, safely disconnects/closes the old socket, and swaps the output console sink to the new client (hijacking the session). This prevents the "hanging / locked-out" behavior of standard single-user microcontroller socket servers.
 - **Zero CPU Idle Overhead**: The server thread sleeps in a kernel-level wait-state using `select()`, removing the previous 100ms polling/delay loop when no clients were connected.
+
+---
+
+## 🚀 Arduino 3 / ESP-IDF 5 Core Upgrade & Filesystem Migration
+
+*(Integrated post-April 25th)*
+
+### 1. New Hardware Support: Adafruit MatrixPortal S3 & WaveShare RGB-Matrix
+- **Feature**: Added robust support for modern, high-power ESP32-S3 matrix driver boards including the Adafruit MatrixPortal S3 and the WaveShare ESP32-S3 RGB-Matrix (N32R16). These targets are fully configured for massive DMA transfers and hardware PSRAM initialization.
+- **RMT driver_ng Update**: Replaced deprecated/duplicate `rmt_driver_install` calls with `rmt_rx_start` inside `src/remotecontrol.cpp` to satisfy ESP-IDF 5's rewritten RMT driver constraints.
+- ** IDF5 Audio Update**: Correct feedback on audio gain and spectrum responsiveness in ESP-IDF port.
+
+### 2. The Great LittleFS Migration (`include/userfs.h`)
+- **Issue**: SPIFFS is officially deprecated in ESP-IDF 5 and notoriously slow/fragile on large partitions.
+- **Fix**: Completely ripped and replaced SPIFFS with LittleFS across the entire codebase. 
+- **Abstraction Layer**: Introduced the `UserFilesystem` (`UserFS`) wrapper. This seamlessly manages `LittleFS` vs `SPIFFS` dependencies at compile-time (preventing LDF bloat). 
+- **OTA Caveat**: While `UserFS` will intelligently reformat old SPIFFS partitions on boot (`formatOnFail = true`), **changing the partition table via OTA is a guaranteed brick**. If a device's partition boundaries change between versions, you will be climbing a ladder with a USB cable. Proceed with caution. If there is data on the device you wish to preserve (effect settings) you should use nightdriverclient.py's backup and restore options to do so BEFORE flashging this to the devic
+### 3. Strict Typing & API Deprecation Fixes
+- **Modern C++ Reality Check**: Now targets C++26. jThe codebase was already targeting C++20 (or `2a`), but jumping off GCC 8 means we are now using a compiler where C++26 is actually standardized and supported natively, rather than just being an experimental guess at future language features. This unlocks stability and clarity in library features (std::fmt, std::to_array) or language features like `constexpr if` and `class template array deduction`.
+
+### 4. Build System Simplification & Performance boost (`platformio.ini`)
+- **Restructure Build**: Toss unneeded symbols. Toss definitions that just repeat defaults. Stronger use of inheritance. Target environments now pivot around features that are layered atop of inherited flags.
+- **Performance Boost** Now instaead of fetching and installing over 250 packages, packages are collected and installed ONE time up front and then reused on subsequent buidls. If you have to manage this yourself, run python3 `tools/setup_shared_libs_cli.py`.
+- **PSRAM Initialization Fix**: In ESP-IDF 5, `-DBOARD_HAS_PSRAM` is no longer sufficient. Explicitly configured `board_build.arduino.memory_type = qio_qspi` for the Adafruit MatrixPortal S3, and injected missing `build_flags` into `env:mesmerizer` to ensure 4MB WROVER PSRAM correctly initializes (preventing catastrophic `ESP_ERR_NO_MEM` crashes during WiFi startup).
+- **Target Cleanup**: Deactivated broken edge-case legacy environments (e.g. `ttgo`) and unified filesystem flags to default to LittleFS globally.

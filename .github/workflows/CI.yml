@@ -24,10 +24,47 @@ jobs:
     outputs:
       envs: ${{ steps.envs.outputs.envs }}
 
+  seed-dependencies:
+    runs-on: ubuntu-latest
+    needs: [collect-environments]
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.11'
+
+    - name: Cache PlatformIO packages
+      id: pio-cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.platformio
+          .pio/shared_libdeps
+          .pio/libdeps
+        key: pio-v2-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+    - name: Install PlatformIO
+      if: steps.pio-cache.outputs.cache-hit != 'true'
+      run: |
+        curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py -o get-platformio.py
+        python get-platformio.py
+        echo "/home/runner/.platformio/penv/bin" >> $GITHUB_PATH
+
+    - name: Run library setup
+      if: steps.pio-cache.outputs.cache-hit != 'true'
+      run: python3 tools/setup_shared_libs_cli.py
+
+    - name: Seed Core Packages
+      if: steps.pio-cache.outputs.cache-hit != 'true'
+      # Fetch ESP32 and ESP32-S3 packages
+      run: pio pkg install -e mesmerizer -e demo_amoled -e platecover
+
   build-environment:
     runs-on: ubuntu-latest
 
-    needs: [collect-environments]
+    needs: [collect-environments, seed-dependencies]
 
     strategy:
       fail-fast: false
@@ -42,19 +79,27 @@ jobs:
       with:
         python-version: '3.11'
 
+    - name: Restore PlatformIO Cache
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          ~/.platformio
+          .pio/shared_libdeps
+          .pio/libdeps
+        key: pio-v2-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
     - name: Install PlatformIO
       run: |
-        curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py -o get-platformio.py
-        python get-platformio.py
+        if [ ! -x /home/runner/.platformio/penv/bin/pio ]; then
+          curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py -o get-platformio.py
+          python get-platformio.py
+        fi
         echo "/home/runner/.platformio/penv/bin" >> $GITHUB_PATH
 
     - name: Copy secrets and clear SSID
       run: |
         grep -v "^#define cszSSID" include/secrets.example.h > include/secrets.h
         echo '#define cszSSID ""' >> include/secrets.h
-
-    - name: Run library setup
-      run: python3 tools/setup_shared_libs_cli.py
 
     - name: "Build environment: ${{ matrix.envname }}"
       run: pio run -e ${{ matrix.envname }}

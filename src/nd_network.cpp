@@ -50,7 +50,13 @@
 #include "deviceconfig.h"
 #include "effectmanager.h"
 #include "ledbuffer.h"
+#include "ledviewer.h"              // For the LEDViewer task and object
 #include "nd_network.h"
+#include "soundanalyzer.h"
+
+extern DRAM_ATTR std::mutex g_buffer_mutex;
+
+// RemoteLoopEntry
 
 #if ENABLE_REMOTE
     #include "remotecontrol.h"
@@ -585,66 +591,6 @@ MDNS.begin(name);
 
 // Global Support Helpers
 
-#if ENABLE_ESPNOW
-// ESPNOW Support
-//
-// We accept ESPNOW commands to change effects and so on.  This is a simple structure that we'll receive over ESPNOW.
-enum class ESPNowCommand : uint8_t
-{
-    ESPNOW_NEXTEFFECT = 1,
-    ESPNOW_PREVEFFECT,
-    ESPNOW_SETEFFECT,
-    ESPNOW_INVALID = 255    // Followed by a uint32_t argument
-};
-
-// Message class
-//
-// Encapsulates an ESPNOW message, which is a command and an optional argument
-struct Message
-{
-    uint8_t       cbSize;
-    ESPNowCommand command;
-    uint32_t      arg1;
-} __attribute__((packed));
-
-void onReceiveESPNOW(const uint8_t *macAddr, const uint8_t *data, int dataLen)
-{
-    Message message;
-    if (dataLen < sizeof(message)) return;
-    memcpy(&message, data, sizeof(message));
-    
-    debugI("ESPNOW Message received.");
-
-    if (message.cbSize != sizeof(message))
-    {
-        debugE("ESPNOW Message received with wrong structure size: %u but should be %zu", message.cbSize, sizeof(message));
-        return;
-    }
-
-    switch(message.command)
-    {
-        case ESPNowCommand::ESPNOW_NEXTEFFECT:
-            debugI("ESPNOW Next effect");
-            g_ptrSystem->GetEffectManager().NextEffect();
-            break;
-
-        case ESPNowCommand::ESPNOW_PREVEFFECT:
-            debugI("ESPNOW Previous effect");
-            g_ptrSystem->GetEffectManager().PreviousEffect();
-            break;
-
-        case ESPNowCommand::ESPNOW_SETEFFECT:
-            debugI("ESPNOW Setting effect index to %u", message.arg1);
-            g_ptrSystem->GetEffectManager().SetCurrentEffectIndex(message.arg1);
-            break;
-
-        default:
-            debugE("ESPNOW Message received with unknown command: %d", (int) message.command);
-            break;
-    }
-}
-#endif
-
 #if ENABLE_REMOTE
 // RemoteLoopEntry
 //
@@ -706,10 +652,8 @@ void SetupOTA(const String &strHostname)
             auto p = (progress / (total / 100));
             debugI("OTA Progress: %u%%\r", p);
 
-            #if USE_HUB75
-                auto pMatrix = std::static_pointer_cast<HUB75GFX>(g_ptrSystem->GetEffectManager().GetBaseGraphics()[0]);
-                pMatrix->SetCaption(str_sprintf("Update:%d%%", p), CAPTION_TIME);
-            #endif
+            auto pMatrix = g_ptrSystem->GetEffectManager().GetBaseGraphics()[0];
+            pMatrix->SetCaption(str_sprintf("Update:%d%%", p), CAPTION_TIME);
         }
         else
         {
@@ -867,6 +811,107 @@ void IRAM_ATTR SocketServerTaskEntry(void *)
     }
 }
 #endif
+
+#if ENABLE_ESPNOW
+
+// ESPNOW Support
+//
+// We accept ESPNOW commands to change effects and so on.  This is a simple structure that we'll receive over ESPNOW.
+enum class ESPNowCommand : uint8_t
+{
+    ESPNOW_NEXTEFFECT = 1,
+    ESPNOW_PREVEFFECT,
+    ESPNOW_SETEFFECT,
+    ESPNOW_INVALID = 255    // Followed by a uint32_t argument
+};
+
+// Message class
+//
+// Encapsulates an ESPNOW message, which is a command and an optional argument
+class Message
+{
+public:
+    constexpr Message(ESPNowCommand cmd, uint32_t argument)
+        : cbSize(sizeof(Message)), command(cmd), arg1(argument)
+    {
+    }
+
+    constexpr Message()
+        : cbSize(sizeof(Message)), command(ESPNowCommand::ESPNOW_INVALID), arg1(0)
+    {
+    }
+
+    const uint8_t* data() const
+    {
+        return reinterpret_cast<const uint8_t*>(this);
+    }
+
+    constexpr size_t byte_size() const
+    {
+        return sizeof(Message);
+    }
+
+    uint8_t       cbSize;
+    ESPNowCommand command;
+    uint32_t      arg1;
+} __attribute__((packed));
+
+// onReceiveESPNOW
+//
+// Callback function for ESPNOW that is called when a data packet is received
+
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+#include <esp_now.h>
+void onReceiveESPNOW(const esp_now_recv_info_t *recvInfo, const uint8_t *data, int dataLen)
+#else
+void onReceiveESPNOW(const uint8_t *macAddr, const uint8_t *data, int dataLen)
+#endif
+{
+    if (dataLen < sizeof(Message)) {
+        debugE("ESPNOW Message received is too short: %d bytes", dataLen);
+        return;
+    }
+    Message message;
+
+    memcpy(&message, data, sizeof(message));
+    debugI("ESPNOW Message received.");
+
+    if (message.cbSize != sizeof(message))
+    {
+        debugE("ESPNOW Message received with wrong structure size: %u but should be %zu", message.cbSize, sizeof(message));
+        return;
+    }
+
+    auto &effectManager = g_ptrSystem->GetEffectManager();
+    switch(message.command)
+    {
+        case ESPNowCommand::ESPNOW_NEXTEFFECT:
+            debugI("ESPNOW Next effect");
+            effectManager.NextEffect();
+            break;
+
+        case ESPNowCommand::ESPNOW_PREVEFFECT:
+            debugI("ESPNOW Previous effect");
+            effectManager.PreviousEffect();
+            break;
+
+        case ESPNowCommand::ESPNOW_SETEFFECT:
+            debugI("ESPNOW Setting effect index to %u", message.arg1);
+            effectManager.SetCurrentEffectIndex(message.arg1);
+            break;
+
+        default:
+            debugE("ESPNOW Message received with unknown command: %d", (byte) message.command);
+            break;
+    }
+}
+
+#endif
+
+// processRemoteDebugCmd
+//
+// Callback function that the debug library (which exposes a little console over telnet and serial) calls
+// in order to allow us to add custom commands.  I've added a clock reset and stats command, for example.
 
 #if COLORDATA_SERVER_ENABLED
 // ColorDataTaskEntry

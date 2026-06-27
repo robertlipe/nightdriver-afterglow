@@ -1,3 +1,5 @@
+#pragma once
+
 //+--------------------------------------------------------------------------
 //
 // File:        SoundAnalyzer.h
@@ -31,8 +33,6 @@
 //              Aug-09-2025         Davepl      Substantively rewritten to use C++20 features
 //
 //---------------------------------------------------------------------------
-
-#pragma once
 
 #include "globals.h"
 

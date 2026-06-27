@@ -241,8 +241,8 @@ void PrepareOnboardPixel()
 {
     #ifdef ONBOARD_PIXEL_POWER
         FastLED.addLeds<WS2812B, ONBOARD_PIXEL_DATA, ONBOARD_PIXEL_ORDER>(&l_SinglePixel, 1);
-        // This isn't normally how WS2812's really work. 
-        // Stranger, that symbol doesn't appear in all of Googledom. Just 
+        // This isn't normally how WS2812's really work.
+        // Stranger, that symbol doesn't appear in all of Googledom. Just
         // define PIXEL_POWER = PIXEL_DATA and FastLED will reset it.
         pinMode(ONBOARD_PIXEL_POWER, OUTPUT);
         digitalWrite(ONBOARD_PIXEL_POWER, HIGH);
@@ -254,7 +254,7 @@ void ShowOnboardPixel()
     // Some boards have an onboard WS2812 LEDs. Mirror first px to this.
     #ifdef ONBOARD_PIXEL_POWER
         l_SinglePixel = FastLED[0].leds()[0];
-        #ifdef ONBOARD_PIXEL_SCALE_BRIGHTNESS // Brightness Scale 0-255. 
+        #ifdef ONBOARD_PIXEL_SCALE_BRIGHTNESS // Brightness Scale 0-255.
             l_SinglePixel = l_SinglePixel.scale8(ONBOARD_PIXEL_SCALE_BRIGHTNESS);
         #endif
     #endif
@@ -318,7 +318,13 @@ void IRAM_ATTR DrawLoopTaskEntry(void *)
             g_ptrSystem->GetEffectManager().ReportNewFrameAvailable();
         }
 
+        if (graphics && g_ptrSystem->GetEffectManager().GetCurrentEffect().ShouldShowTitle())
+        {
+            graphics->DrawCaptionOverlay();
+        }
+
         graphics->PostProcessFrame(localPixelsDrawn, wifiPixelsDrawn);
+
 
         // Delay at least 2ms and not more than 1s until next frame is due
 

@@ -30,10 +30,10 @@
 #include "globals.h"
 
 #include <algorithm>
-#include <FS.h>
+
 #include <limits>
 #include <set>
-#include <SPIFFS.h>
+#include "userfs.h"
 
 #include "deviceconfig.h"
 #include "effectfactories.h"
@@ -61,7 +61,7 @@ static DRAM_ATTR size_t l_CurrentEffectWriterIndex = SIZE_MAX;
 // EffectManager initialization functions
 //
 
-#if USE_HUB75
+#if USE_HUB75 || USE_ESP_HUB75
 
     void InitSplashEffectManager()
     {
@@ -134,9 +134,10 @@ void EffectManager::StartEffect()
 
     std::shared_ptr<LEDStripEffect> & effect = _tempEffect ? _tempEffect : _vEffects[_iCurrentEffect];
 
-    #if USE_HUB75
-        auto pMatrix = std::static_pointer_cast<HUB75GFX>(_gfx[0]);
-        pMatrix->SetCaption(effect->FriendlyName(), CAPTION_TIME);
+    #if USE_HUB75 || USE_ESP_HUB75
+        if (!_gfx.empty()) {
+            _gfx[0]->SetCaption(effect->FriendlyName(), CAPTION_TIME);
+        }
     #endif
 
     effect->Start();
@@ -399,7 +400,7 @@ void EffectManager::SaveCurrentEffectIndex()
 // Reads the current effect index from its own file. Returns true if the index was successfully read.
 bool EffectManager::ReadCurrentEffectIndex(size_t& index)
 {
-    File file = SPIFFS.open(CURRENT_EFFECT_CONFIG_FILE);
+    File file = UserFS.open(CURRENT_EFFECT_CONFIG_FILE);
     bool readIndex = false;
 
     if (file)
@@ -502,14 +503,14 @@ void RemoveEffectManagerConfig()
 {
     RemoveJSONFile(EFFECTS_CONFIG_FILE);
     // We take the liberty of also removing the file with the current effect config index
-    SPIFFS.remove(CURRENT_EFFECT_CONFIG_FILE);
+    UserFS.remove(CURRENT_EFFECT_CONFIG_FILE);
 }
 
 void WriteCurrentEffectIndexFile()
 {
-    SPIFFS.remove(CURRENT_EFFECT_CONFIG_FILE);
+    UserFS.remove(CURRENT_EFFECT_CONFIG_FILE);
 
-    File file = SPIFFS.open(CURRENT_EFFECT_CONFIG_FILE, FILE_WRITE);
+    File file = UserFS.open(CURRENT_EFFECT_CONFIG_FILE, FILE_WRITE);
 
     if (!file)
     {
@@ -526,7 +527,7 @@ void WriteCurrentEffectIndexFile()
     if (bytesWritten == 0)
     {
         debugE("Unable to write to file %s!", CURRENT_EFFECT_CONFIG_FILE);
-        SPIFFS.remove(CURRENT_EFFECT_CONFIG_FILE);
+        UserFS.remove(CURRENT_EFFECT_CONFIG_FILE);
     }
 }
 
