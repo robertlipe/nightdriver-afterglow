@@ -318,7 +318,7 @@ void IRAM_ATTR DrawLoopTaskEntry(void *)
             g_ptrSystem->GetEffectManager().ReportNewFrameAvailable();
         }
 
-        if (g_ptrSystem->GetEffectManager().GetCurrentEffect().ShouldShowTitle())
+        if (graphics && g_ptrSystem->GetEffectManager().GetCurrentEffect().ShouldShowTitle())
         {
             graphics->DrawCaptionOverlay();
         }
