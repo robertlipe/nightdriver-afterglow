@@ -157,7 +157,7 @@ using nd_network::NetworkHandlingLoopEntry;
 
 // Helper prototypes used by network.cpp
 void SetupOTA(const String &strHostname);
-void IRAM_ATTR RemoteLoopEntry(void *);
+void RemoteLoopEntry(void *);
 String urlEncode(const String &str);
 
 // Local additions to match get_mac_address

@@ -29,9 +29,11 @@
 #include "globals.h"
 
 #if USE_MPDMA_HUB75
-#include <stdexcept>
 #include <algorithm>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
+#include <memory>
+#include <stdexcept>
+#include <vector>
 #include "deviceconfig.h"
 #include "espmpdmagfx.h"
 #include "systemcontainer.h"

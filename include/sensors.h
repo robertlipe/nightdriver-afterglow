@@ -38,6 +38,8 @@ class SystemHardwareHub
     i2c_master_bus_handle_t bus_handle = nullptr;
     i2c_master_dev_handle_t sensor_handle = nullptr;
 
+    void PollInertial();
+
     mutable std::mutex cache_mutex;
     InertialMetrics cached_inertial{0, 0, 0, false};
     ThermalMetrics cached_thermal{0, 0, 0, false, false};
