@@ -50,9 +50,9 @@ class SystemHardwareHub
     float previous_die_temp = 0.0f;
 
     void ConfigureSensorRegisters();
-    void PollInertial();
     void PollThermal();
-=======
+};
+
 //+--------------------------------------------------------------------------
 //
 // File:        sensors.h

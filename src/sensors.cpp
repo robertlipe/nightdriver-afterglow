@@ -209,7 +209,7 @@ ThermalMetrics SystemHardwareHub::GetThermal() const
     return cached_thermal;
 }
 #endif
-=======
+
 //+--------------------------------------------------------------------------
 //
 // File:        sensors.cpp
