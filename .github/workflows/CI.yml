@@ -43,7 +43,7 @@ jobs:
           ~/.platformio
           .pio/shared_libdeps
           .pio/libdeps
-        key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+        key: pio-v2-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
 
     - name: Install PlatformIO
       if: steps.pio-cache.outputs.cache-hit != 'true'
@@ -86,7 +86,7 @@ jobs:
           ~/.platformio
           .pio/shared_libdeps
           .pio/libdeps
-        key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+        key: pio-v2-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
 
     - name: Install PlatformIO
       run: |
