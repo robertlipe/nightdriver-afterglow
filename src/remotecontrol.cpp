@@ -369,7 +369,7 @@ public:
         if (rmt_config(&config) != ESP_OK) return false;
         if (rmt_driver_install(_channel, 1024, 0) != ESP_OK) return false;
         if (rmt_get_ringbuf_handle(_channel, &_ringbuf) != ESP_OK) return false;
-        if (rmt_driver_install(_channel, 1000, 0) != ESP_OK) return false;
+        if (rmt_rx_start(_channel, true) != ESP_OK) return false;
 
         return true;
     }

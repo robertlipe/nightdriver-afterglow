@@ -425,10 +425,10 @@ void SoundAnalyzerBase::InitI2S_Modern()
         .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO),
         .gpio_cfg = {
             .mclk = I2S_GPIO_UNUSED,
-            .bclk = I2S_BCLK_PIN,
-            .ws = I2S_WS_PIN,
+            .bclk = (gpio_num_t)I2S_BCLK_PIN,
+            .ws = (gpio_num_t)I2S_WS_PIN,
             .dout = I2S_GPIO_UNUSED,
-            .din = INPUT_PIN,
+            .din = (gpio_num_t)INPUT_PIN,
         },
     };
 
@@ -558,7 +558,7 @@ size_t SoundAnalyzerBase::SampleI2S_Modern()
     {
         if (i * kChannels >= (bytesRead / 4)) break;
         int32_t s32 = tempBuffer[i * kChannels]; // Left channel
-        ptrSampleBuffer[i] = (int16_t)std::clamp(s32 >> 15, -32768, 32767);
+        ptrSampleBuffer[i] = (int16_t)std::clamp((int)(s32 >> 15), -32768, 32767);
     }
     bytesReadTotal = bytesRead / kChannels / 2; // Rough approximation of output samples converted to bytes
 #endif
