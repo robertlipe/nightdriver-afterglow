@@ -97,8 +97,7 @@ extern const uint8_t thunderstorm_start[]           asm("_binary_assets_bmp_thun
 extern const uint8_t thunderstorm_end[]             asm("_binary_assets_bmp_thunderstorm_jpg_end");
 extern const uint8_t thunderstorm_night_start[]     asm("_binary_assets_bmp_thunderstormnight_jpg_start");
 extern const uint8_t thunderstorm_night_end[]       asm("_binary_assets_bmp_thunderstormnight_jpg_end");
-
-static constexpr auto pszDaysOfWeek = std::to_array<const char*>( { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" } );
+static constexpr std::array pszDaysOfWeek = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
 
 static const std::map<const String, EmbeddedFile, std::less<const String>, psram_allocator<std::pair<const String, EmbeddedFile>>>& GetWeatherIcons()
 {

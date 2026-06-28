@@ -410,15 +410,15 @@ class StatusEffect : public EffectWithId<StatusEffect>
 };
 
 #if CLASSIC_GE_C9
-static constexpr auto TwinkleColors =  std::to_array<CRGB>(
+static constexpr std::array TwinkleColors =
 {
     CRGB(238, 51, 39),      // Red
     CRGB(0, 172, 87),       // Green
     CRGB(250, 164, 25),     // Yellow
     CRGB(0, 131, 203)       // Blue
-});
+};
 #else
-static constexpr auto TwinkleColors =  std::to_array<CRGB>(
+static constexpr std::array TwinkleColors =
 {
     CRGB::Red,
     CRGB::Green,
@@ -426,7 +426,7 @@ static constexpr auto TwinkleColors =  std::to_array<CRGB>(
     CRGB::Blue,
     CRGB::Purple,
     CRGB::Yellow
-});
+};
 #endif
 
 class TwinkleEffect : public EffectWithId<TwinkleEffect>

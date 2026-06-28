@@ -38,7 +38,7 @@
 //
 // Draws a set of N bouncing balls using a simple little kinematics formula.  Clears the section first.
 
-static constexpr auto ballColors = std::to_array<CRGB>(
+static constexpr std::array ballColors =
 {
     CRGB::Green,
     CRGB::Red,
@@ -47,7 +47,7 @@ static constexpr auto ballColors = std::to_array<CRGB>(
     CRGB::Purple,
     CRGB::Yellow,
     CRGB::Indigo,
-});
+};
 
 class BouncingBallEffect : public EffectWithId<BouncingBallEffect>
 {
