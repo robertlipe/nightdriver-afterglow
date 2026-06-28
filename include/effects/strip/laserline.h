@@ -90,7 +90,7 @@ class LaserLineEffect : public BeatEffectBase, public EffectWithId<LaserLineEffe
     {
     }
 
-    LaserLineEffect(const JsonObjectConst& jsonObject)
+    explicit LaserLineEffect(const JsonObjectConst& jsonObject)
         : BeatEffectBase(1.50, 0.00),
           EffectWithId<LaserLineEffect>(jsonObject),
           _defaultSize(jsonObject[PTY_SIZE]),
@@ -137,7 +137,7 @@ class LaserLineEffect : public BeatEffectBase, public EffectWithId<LaserLineEffe
         }
     }
 
-    virtual void HandleBeat(bool bMajor, float elapsed, float span) override
+    void HandleBeat(bool bMajor, float elapsed, float span) override
     {
         _shots.push_back(LaserShot(0.0, _defaultSpeed, _defaultSize, random8()));
     };

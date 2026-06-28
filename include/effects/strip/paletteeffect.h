@@ -76,7 +76,7 @@ class PaletteEffectBase : public EffectWithId<TEffect>
     {
     }
 
-    PaletteEffectBase(const JsonObjectConst& jsonObject)
+    explicit PaletteEffectBase(const JsonObjectConst& jsonObject)
       : EffectWithId<TEffect>(jsonObject),
         _startIndex(0.0f),
         _paletteIndex(0.0f),

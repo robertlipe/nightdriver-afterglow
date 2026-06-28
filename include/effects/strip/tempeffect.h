@@ -45,13 +45,13 @@ class SimpleInsulatorBeatEffect : public EffectWithId<SimpleInsulatorBeatEffect>
 
     std::deque<int> _lit;
 
-    virtual void Draw() override
+    void Draw() override
     {
         BeatEffectBase::ProcessAudio();
         fadeAllChannelsToBlackBy(min(255.0, g_Values.AppTime.LastFrameTime() * 1500.0));
     }
 
-    virtual void HandleBeat(bool bMajor, float elapsed, float span) override
+    void HandleBeat(bool bMajor, float elapsed, float span) override
     {
         while (_lit.size() >= NUM_FANS - 1)
             _lit.pop_front();
@@ -73,7 +73,7 @@ class SimpleInsulatorBeatEffect : public EffectWithId<SimpleInsulatorBeatEffect>
     SimpleInsulatorBeatEffect(const String & strName)
       : EffectWithId<SimpleInsulatorBeatEffect>(strName), BeatEffectBase(0.5, 0.01) {}
 
-    SimpleInsulatorBeatEffect(const JsonObjectConst& jsonObject)
+    explicit SimpleInsulatorBeatEffect(const JsonObjectConst& jsonObject)
       : EffectWithId<SimpleInsulatorBeatEffect>(jsonObject), BeatEffectBase(0.5, 0.01) {}
 };
 
@@ -83,13 +83,13 @@ class SimpleInsulatorBeatEffect2 : public EffectWithId<SimpleInsulatorBeatEffect
 
     std::deque<int> _lit;
 
-    virtual void Draw() override
+    void Draw() override
     {
         BeatEffectBase::ProcessAudio();
         fadeAllChannelsToBlackBy(min(255.0, g_Values.AppTime.LastFrameTime() * 1500.0));
     }
 
-    virtual void HandleBeat(bool bMajor, float elapsed, float span) override
+    void HandleBeat(bool bMajor, float elapsed, float span) override
     {
         while (_lit.size() >= NUM_FANS - 1)
             _lit.pop_front();
@@ -109,7 +109,7 @@ class SimpleInsulatorBeatEffect2 : public EffectWithId<SimpleInsulatorBeatEffect
     SimpleInsulatorBeatEffect2(const String & strName)
       : EffectWithId<SimpleInsulatorBeatEffect2>(strName), BeatEffectBase() {}
 
-    SimpleInsulatorBeatEffect2(const JsonObjectConst& jsonObject)
+    explicit SimpleInsulatorBeatEffect2(const JsonObjectConst& jsonObject)
       : EffectWithId<SimpleInsulatorBeatEffect2>(jsonObject), BeatEffectBase() {}
 };
 
@@ -129,7 +129,7 @@ class VUInsulatorsEffect : public EffectWithId<VUInsulatorsEffect>
       setPixelOnAllChannels(i, c);
     }
 
-    virtual void Draw() override
+    void Draw() override
     {
       static int iPeakVUy = 0;              // Where the peak occurred
       static unsigned long msPeakVU = 0;    // Timestamp of when the last big peak was

@@ -393,7 +393,7 @@ class ColorBeatWithFlash : public BeatEffectBase, public ParticleSystem<RingPart
     {
     }
 
-    ColorBeatWithFlash(const JsonObjectConst& jsonObject)
+    explicit ColorBeatWithFlash(const JsonObjectConst& jsonObject)
       : BeatEffectBase(),
         ParticleSystem<RingParticle>(),
         EffectWithId<ColorBeatWithFlash>(jsonObject)
@@ -408,7 +408,7 @@ class ColorBeatWithFlash : public BeatEffectBase, public ParticleSystem<RingPart
       _allParticles.push_back(newparticle);
     }
 
-    virtual void HandleBeat(bool bMajor, float elapsed, float span) override
+    void HandleBeat(bool bMajor, float elapsed, float span) override
     {
       for (int pass = 0; pass < 1; pass++)
       {
@@ -425,7 +425,7 @@ class ColorBeatWithFlash : public BeatEffectBase, public ParticleSystem<RingPart
       }
     }
 
-    virtual void Draw() override
+    void Draw() override
     {
       // We are inheriting from both the insulator music beat effect and a particle system effect, and both need
       //
@@ -456,14 +456,14 @@ class ColorBeatOverRed : public EffectWithId<ColorBeatOverRed>, public BeatEffec
     {
     }
 
-    ColorBeatOverRed(const JsonObjectConst& jsonObject)
+    explicit ColorBeatOverRed(const JsonObjectConst& jsonObject)
       : EffectWithId<ColorBeatOverRed>(jsonObject),
         BeatEffectBase(1.75, 0.2),
         ParticleSystem<RingParticle>()
     {
     }
 
-    virtual void HandleBeat(bool bMajor, float elapsed, float span) override
+    void HandleBeat(bool bMajor, float elapsed, float span) override
     {
         int iInsulator;
         do
@@ -481,7 +481,7 @@ class ColorBeatOverRed : public EffectWithId<ColorBeatOverRed>, public BeatEffec
         _allParticles.push_back(RingParticle(iInsulator, 0, RandomSaturatedColor(), flashtime, fadetime));
     }
 
-    virtual void Draw() override
+    void Draw() override
     {
       ProcessAudio();
 
@@ -720,7 +720,7 @@ class MoltenGlassOnVioletBkgnd : public EffectWithId<MoltenGlassOnVioletBkgnd>, 
     {
     }
 
-    MoltenGlassOnVioletBkgnd(const JsonObjectConst& jsonObject)
+    explicit MoltenGlassOnVioletBkgnd(const JsonObjectConst& jsonObject)
       : EffectWithId<MoltenGlassOnVioletBkgnd>(jsonObject),
         BeatEffectBase(1.50, 0.05),
         ParticleSystem<SpinningPaletteRingParticle>(),
@@ -728,7 +728,7 @@ class MoltenGlassOnVioletBkgnd : public EffectWithId<MoltenGlassOnVioletBkgnd>, 
     {
     }
 
-    virtual bool SerializeToJSON(JsonObject& jsonObject) override
+    bool SerializeToJSON(JsonObject& jsonObject) override
     {
         auto jsonDoc = CreateJsonDocument();
 
@@ -741,7 +741,7 @@ class MoltenGlassOnVioletBkgnd : public EffectWithId<MoltenGlassOnVioletBkgnd>, 
     }
 
 
-    virtual void HandleBeat(bool bMajor, float elapsed, float span) override
+    void HandleBeat(bool bMajor, float elapsed, float span) override
     {
         int iInsulator;
         do
@@ -777,7 +777,7 @@ class MoltenGlassOnVioletBkgnd : public EffectWithId<MoltenGlassOnVioletBkgnd>, 
         }
     }
 
-    virtual void Draw() override
+    void Draw() override
     {
       // We are inheriting from both the insulator music beat effect and a particle system effect, and both need a chance
       // to draw.  BeatEffectBase doesn't draw anything directly, but it does call us back at HandleBeat when needed.  We
@@ -813,7 +813,7 @@ class NewMoltenGlassOnVioletBkgnd : public EffectWithId<NewMoltenGlassOnVioletBk
     {
     }
 
-    NewMoltenGlassOnVioletBkgnd(const JsonObjectConst& jsonObject)
+    explicit NewMoltenGlassOnVioletBkgnd(const JsonObjectConst& jsonObject)
       : EffectWithId<NewMoltenGlassOnVioletBkgnd>(jsonObject),
         BeatEffectBase(1.0, 0.25 ),
         ParticleSystem<SpinningPaletteRingParticle>(),
@@ -821,7 +821,7 @@ class NewMoltenGlassOnVioletBkgnd : public EffectWithId<NewMoltenGlassOnVioletBk
     {
     }
 
-    virtual bool SerializeToJSON(JsonObject& jsonObject) override
+    bool SerializeToJSON(JsonObject& jsonObject) override
     {
         auto jsonDoc = CreateJsonDocument();
 
@@ -833,7 +833,7 @@ class NewMoltenGlassOnVioletBkgnd : public EffectWithId<NewMoltenGlassOnVioletBk
         return SetIfNotOverflowed(jsonDoc, jsonObject, __PRETTY_FUNCTION__);
     }
 
-    virtual void HandleBeat(bool bMajor, float elapsed, float span) override
+    void HandleBeat(bool bMajor, float elapsed, float span) override
     {
         int iInsulator;
         do
@@ -869,7 +869,7 @@ class NewMoltenGlassOnVioletBkgnd : public EffectWithId<NewMoltenGlassOnVioletBk
         }
     }
 
-    virtual void Draw() override
+    void Draw() override
     {
       ProcessAudio();
       // We are inheriting from both the insulator music beat effect and a particle system effect, and both need a chance
@@ -901,7 +901,7 @@ class SparklySpinningMusicEffect : public EffectWithId<SparklySpinningMusicEffec
     {
     }
 
-    SparklySpinningMusicEffect(const JsonObjectConst& jsonObject)
+    explicit SparklySpinningMusicEffect(const JsonObjectConst& jsonObject)
       : EffectWithId<SparklySpinningMusicEffect>(jsonObject),
         BeatEffectBase(),
         ParticleSystem<SpinningPaletteRingParticle>(),
@@ -909,7 +909,7 @@ class SparklySpinningMusicEffect : public EffectWithId<SparklySpinningMusicEffec
     {
     }
 
-    virtual bool SerializeToJSON(JsonObject& jsonObject) override
+    bool SerializeToJSON(JsonObject& jsonObject) override
     {
         auto jsonDoc = CreateJsonDocument();
 
@@ -921,7 +921,7 @@ class SparklySpinningMusicEffect : public EffectWithId<SparklySpinningMusicEffec
         return SetIfNotOverflowed(jsonDoc, jsonObject, __PRETTY_FUNCTION__);
     }
 
-    virtual void HandleBeat(bool bMajor, float elapsed, float span) override
+    void HandleBeat(bool bMajor, float elapsed, float span) override
     {
         int iInsulator;
         do
@@ -933,7 +933,7 @@ class SparklySpinningMusicEffect : public EffectWithId<SparklySpinningMusicEffec
         _allParticles.push_back(SpinningPaletteRingParticle(iInsulator, 0, _Palette, 1, 1.0, 1.0, 1, 0, NOBLEND, true, 1.0, min(0.15f, elapsed/2)));
     }
 
-    virtual void Draw() override
+    void Draw() override
     {
       // We are inheriting from both the insulator music beat effect and a particle system effect, and both need a chance
       // to draw.  BeatEffectBase doesn't draw anything directly, but it does call us back at HandleBeat when needed.  We
@@ -962,9 +962,9 @@ class MusicalHotWhiteInsulatorEffect : public EffectWithId<MusicalHotWhiteInsula
 
     MusicalHotWhiteInsulatorEffect(const String & strName) : EffectWithId<MusicalHotWhiteInsulatorEffect>(strName), BeatEffectBase(), ParticleSystem<HotWhiteRingParticle>() {}
 
-    MusicalHotWhiteInsulatorEffect(const JsonObjectConst& jsonObject) : EffectWithId<MusicalHotWhiteInsulatorEffect>(jsonObject), BeatEffectBase(), ParticleSystem<HotWhiteRingParticle>() {}
+    explicit MusicalHotWhiteInsulatorEffect(const JsonObjectConst& jsonObject) : EffectWithId<MusicalHotWhiteInsulatorEffect>(jsonObject), BeatEffectBase(), ParticleSystem<HotWhiteRingParticle>() {}
 
-    virtual void HandleBeat(bool bMajor, float elapsed, float span) override
+    void HandleBeat(bool bMajor, float elapsed, float span) override
     {
         int iInsulator;
         do
@@ -976,7 +976,7 @@ class MusicalHotWhiteInsulatorEffect : public EffectWithId<MusicalHotWhiteInsula
         _allParticles.push_back(HotWhiteRingParticle(iInsulator, 0, 0.25, 0.75));
     }
 
-    virtual void Draw() override
+    void Draw() override
     {
       // We are inheriting from both the insulator music beat effect and a particle system effect, and both need a chance
       // to draw.  BeatEffectBase doesn't draw anything directly, but it does call us back at HandleBeat when needed.  We

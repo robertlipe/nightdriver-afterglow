@@ -84,7 +84,7 @@ class BouncingBallEffect : public EffectWithId<BouncingBallEffect>
     {
     }
 
-    BouncingBallEffect(const JsonObjectConst&  jsonObject)
+    explicit BouncingBallEffect(const JsonObjectConst& jsonObject)
         : EffectWithId<BouncingBallEffect>(jsonObject),
           _cBalls(jsonObject["blc"]),
           _cBallSize(jsonObject["bls"]),
@@ -108,7 +108,7 @@ class BouncingBallEffect : public EffectWithId<BouncingBallEffect>
         return SetIfNotOverflowed(jsonDoc, jsonObject, __PRETTY_FUNCTION__);
     }
 
-    virtual size_t DesiredFramesPerSecond() const override
+    size_t DesiredFramesPerSecond() const override
     {
         return 61;
     }
