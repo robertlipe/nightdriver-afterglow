@@ -75,7 +75,7 @@ class SnakeEffect : public EffectWithId<SnakeEffect>
         construct();
     }
 
-    SnakeEffect(const JsonObjectConst& jsonObject)
+    explicit SnakeEffect(const JsonObjectConst& jsonObject)
         : EffectWithId<SnakeEffect>(jsonObject),
           LEDCount(jsonObject[PTY_LEDCOUNT]),
           SnakeSpeed(jsonObject[PTY_SPEED])

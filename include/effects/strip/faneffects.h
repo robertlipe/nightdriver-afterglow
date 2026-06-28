@@ -385,7 +385,7 @@ class FanBeatEffect : public EffectWithId<FanBeatEffect>
 
   FanBeatEffect(const String & strName) : EffectWithId<FanBeatEffect>(strName) {}
 
-  FanBeatEffect(const JsonObjectConst& jsonObject) : EffectWithId<FanBeatEffect>(jsonObject) {}
+  explicit FanBeatEffect(const JsonObjectConst& jsonObject) : EffectWithId<FanBeatEffect>(jsonObject) {}
 
   void Draw() override
   {
@@ -492,7 +492,7 @@ private:
 public:
 
   TapeReelEffect(const String & strName) : EffectWithId<TapeReelEffect>(strName) {}
-  TapeReelEffect(const JsonObjectConst& jsonObject) : EffectWithId<TapeReelEffect>(jsonObject) {}
+  explicit TapeReelEffect(const JsonObjectConst& jsonObject) : EffectWithId<TapeReelEffect>(jsonObject) {}
 
   void Draw() override
   {
@@ -575,7 +575,7 @@ private:
 public:
   PaletteReelEffect(const String & strName) : EffectWithId<PaletteReelEffect>(strName) {}
 
-  PaletteReelEffect(const JsonObjectConst& jsonObject) : EffectWithId<PaletteReelEffect>(jsonObject) {}
+  explicit PaletteReelEffect(const JsonObjectConst& jsonObject) : EffectWithId<PaletteReelEffect>(jsonObject) {}
 
   void Draw() override
   {
@@ -678,7 +678,7 @@ public:
   {
   }
 
-  PaletteSpinEffect(const JsonObjectConst& jsonObject)
+  explicit PaletteSpinEffect(const JsonObjectConst& jsonObject)
       : EffectWithId<PaletteSpinEffect>(jsonObject),
         _Palette(jsonObject[PTY_PALETTE].as<CRGBPalette16>()),
         _bReplaceMagenta(jsonObject["rpm"]),
@@ -753,7 +753,7 @@ public:
   {
   }
 
-  ColorCycleEffect(const JsonObjectConst& jsonObject)
+  explicit ColorCycleEffect(const JsonObjectConst& jsonObject)
     : EffectWithId<ColorCycleEffect>(jsonObject),
       _order((PixelOrder)jsonObject[PTY_ORDER]),
       _step(jsonObject["stp"])
@@ -1001,7 +1001,7 @@ public:
     abHeat.reset( psram_allocator<uint8_t>().allocate(CellCount()) );
   }
 
-  FireFanEffectBase(const JsonObjectConst& jsonObject)
+  explicit FireFanEffectBase(const JsonObjectConst& jsonObject)
       : EffectWithId<TEffect>(jsonObject),
         Palette(jsonObject[PTY_PALETTE].as<CRGBPalette16>()),
         LEDCount(jsonObject[PTY_LEDCOUNT]),
@@ -1227,7 +1227,7 @@ class RingTestEffect : public EffectWithId<RingTestEffect>
   // ID provided by EffectWithId
 
     RingTestEffect() : EffectWithId<RingTestEffect>("Ring Test") {}
-    RingTestEffect(const JsonObjectConst& jsonObject) : EffectWithId<RingTestEffect>(jsonObject) {}
+    explicit RingTestEffect(const JsonObjectConst& jsonObject) : EffectWithId<RingTestEffect>(jsonObject) {}
 
     void Draw() override
     {
@@ -1412,7 +1412,7 @@ private:
 public:
   LanternEffect() : EffectWithId<LanternEffect>("LanternEffect") {}
 
-  LanternEffect(const JsonObjectConst& jsonObject) : EffectWithId<LanternEffect>(jsonObject) {}
+  explicit LanternEffect(const JsonObjectConst& jsonObject) : EffectWithId<LanternEffect>(jsonObject) {}
 
   size_t DesiredFramesPerSecond() const override
   {

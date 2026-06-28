@@ -193,7 +193,7 @@ class SimpleColorBeat : public BeatEffectBase, public EffectWithId<SimpleColorBe
     SimpleColorBeat(const String & strName)
       : BeatEffectBase(0.5, 0.25), EffectWithId<SimpleColorBeat>(strName) {}
 
-    SimpleColorBeat(const JsonObjectConst& jsonObject)
+    explicit SimpleColorBeat(const JsonObjectConst& jsonObject)
       : BeatEffectBase(0.5, 0.25), EffectWithId<SimpleColorBeat>(jsonObject) {}
 };
 

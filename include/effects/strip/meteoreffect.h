@@ -188,7 +188,7 @@ class MeteorEffect : public EffectWithId<MeteorEffect>
     {
     }
 
-    MeteorEffect(const JsonObjectConst& jsonObject)
+    explicit MeteorEffect(const JsonObjectConst& jsonObject)
         : EffectWithId<MeteorEffect>(jsonObject),
           _Meteors(),
           _cMeteors(jsonObject["mto"]),

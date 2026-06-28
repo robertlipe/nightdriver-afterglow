@@ -306,10 +306,10 @@
         }
 
         // AMOLED is a full color panel but we want a different default theme
-        virtual bool IsMonochrome() const override { return false; }
-        virtual uint16_t GetTextColor() const override { return Screen::to16bit(CRGB(100, 255, 20)); }
-        virtual uint16_t GetBkgndColor() const override { return Screen::to16bit(CRGB::Black); }
-        virtual uint16_t GetBorderColor() const override { return Screen::to16bit(CRGB::Red); }
+        bool IsMonochrome() const override { return false; }
+        uint16_t GetTextColor() const override { return Screen::to16bit(CRGB(100, 255, 20)); }
+        uint16_t GetBkgndColor() const override { return Screen::to16bit(CRGB::Black); }
+        uint16_t GetBorderColor() const override { return Screen::to16bit(CRGB::Red); }
     };
 #endif
 

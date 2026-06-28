@@ -71,7 +71,7 @@ class SimpleRainbowTestEffect : public EffectWithId<SimpleRainbowTestEffect>
         debugV("SimpleRainbowTestEffect constructor");
     }
 
-    SimpleRainbowTestEffect(const JsonObjectConst& jsonObject)
+    explicit SimpleRainbowTestEffect(const JsonObjectConst& jsonObject)
         : EffectWithId<SimpleRainbowTestEffect>(jsonObject),
           _EveryNth(jsonObject[PTY_EVERYNTH]),
           _SpeedDivisor(jsonObject[PTY_SPEEDDIVISOR])
@@ -120,7 +120,7 @@ class RainbowTwinkleEffect : public EffectWithId<RainbowTwinkleEffect>
         debugV("RainbowFill constructor");
     }
 
-    RainbowTwinkleEffect(const JsonObjectConst& jsonObject)
+    explicit RainbowTwinkleEffect(const JsonObjectConst& jsonObject)
       : EffectWithId<RainbowTwinkleEffect>(jsonObject),
         _speedDivisor(jsonObject[PTY_SPEEDDIVISOR]),
         _deltaHue(jsonObject[PTY_DELTAHUE])
@@ -183,7 +183,7 @@ class RainbowFillEffect : public EffectWithId<RainbowFillEffect>
         debugV("RainbowFill constructor");
     }
 
-    RainbowFillEffect(const JsonObjectConst& jsonObject)
+    explicit RainbowFillEffect(const JsonObjectConst& jsonObject)
       : EffectWithId<RainbowFillEffect>(jsonObject),
         _speedDivisor(jsonObject[PTY_SPEEDDIVISOR]),
         _deltaHue(jsonObject[PTY_DELTAHUE]),
@@ -256,7 +256,7 @@ class ColorFillEffect : public EffectWithId<ColorFillEffect>
         debugV("Color Fill constructor");
     }
 
-    ColorFillEffect(const JsonObjectConst& jsonObject)
+    explicit ColorFillEffect(const JsonObjectConst& jsonObject)
       : EffectWithId<ColorFillEffect>(jsonObject),
         _everyNth(jsonObject[PTY_EVERYNTH]),
         _color(jsonObject[PTY_COLOR].as<CRGB>()),
@@ -314,14 +314,14 @@ class SplashLogoEffect : public EffectWithId<SplashLogoEffect>
         debugV("Splash logo constructor");
     }
 
-    SplashLogoEffect(const JsonObjectConst& jsonObject)
+    explicit SplashLogoEffect(const JsonObjectConst& jsonObject)
       : EffectWithId<SplashLogoEffect>(jsonObject),
         logo(logo_start, logo_end)
     {
         debugV("Splash logo JSON constructor");
     }
 
-    virtual size_t MaximumEffectTime() const override
+    size_t MaximumEffectTime() const override
     {
         return 5.0 * MILLIS_PER_SECOND;
     }
@@ -369,7 +369,7 @@ class StatusEffect : public EffectWithId<StatusEffect>
         debugV("Status Fill constructor");
     }
 
-    StatusEffect(const JsonObjectConst& jsonObject)     // Warmer: CRGB(246,200,160)
+    explicit StatusEffect(const JsonObjectConst& jsonObject)     // Warmer: CRGB(246,200,160)
       : EffectWithId<StatusEffect>(jsonObject),
         _everyNth(jsonObject[PTY_EVERYNTH]),
         _color(jsonObject[PTY_COLOR].as<CRGB>())
@@ -447,7 +447,7 @@ class TwinkleEffect : public EffectWithId<TwinkleEffect>
     {
     }
 
-    TwinkleEffect(const JsonObjectConst& jsonObject)
+    explicit TwinkleEffect(const JsonObjectConst& jsonObject)
       : EffectWithId<TwinkleEffect>(jsonObject),
         _countToDraw(jsonObject["ctd"]),
         _fadeFactor(jsonObject[PTY_FADE]),
@@ -532,14 +532,14 @@ class SilonEffect : public EffectWithId<SilonEffect>
   public:
 
     SilonEffect() : EffectWithId<SilonEffect>("SilonEffect") {}
-    SilonEffect(const JsonObjectConst& jsonObject) : EffectWithId<SilonEffect>(jsonObject) {}
+    explicit SilonEffect(const JsonObjectConst& jsonObject) : EffectWithId<SilonEffect>(jsonObject) {}
 
-    virtual size_t DesiredFramesPerSecond() const override
+    size_t DesiredFramesPerSecond() const override
     {
         return 20;
     }
 
-    virtual void Draw() override
+    void Draw() override
     {
         _offset += _direction;
         if (_offset >= MATRIX_WIDTH)
@@ -576,9 +576,9 @@ class PDPGridEffect : public EffectWithId<PDPGridEffect>
   public:
 
     PDPGridEffect() : EffectWithId<PDPGridEffect>("PDPGridEffect") {}
-    PDPGridEffect(const JsonObjectConst& jsonObject) : EffectWithId<PDPGridEffect>(jsonObject) {}
+    explicit PDPGridEffect(const JsonObjectConst& jsonObject) : EffectWithId<PDPGridEffect>(jsonObject) {}
 
-    virtual size_t DesiredFramesPerSecond() const override
+    size_t DesiredFramesPerSecond() const override
     {
         return 5;
     }
@@ -588,12 +588,12 @@ class PDPGridEffect : public EffectWithId<PDPGridEffect>
         return false;
     }
 
-    virtual void Start() override
+    void Start() override
     {
         g()->Clear();
     }
 
-    virtual void Draw() override
+    void Draw() override
     {
         fadeAllChannelsToBlackBy(60);
         g()->MoveY(1);
@@ -663,24 +663,24 @@ class PDPCMXEffect : public EffectWithId<PDPCMXEffect>
   public:
 
     PDPCMXEffect() : EffectWithId<PDPCMXEffect>("PDPCMXEffect") {}
-    PDPCMXEffect(const JsonObjectConst& jsonObject) : EffectWithId<PDPCMXEffect>(jsonObject) {}
+    explicit PDPCMXEffect(const JsonObjectConst& jsonObject) : EffectWithId<PDPCMXEffect>(jsonObject) {}
 
-    virtual size_t DesiredFramesPerSecond() const override
+    size_t DesiredFramesPerSecond() const override
     {
         return 30; // Moderate speed for scrolling effect
     }
 
-    virtual bool CanDisplayVUMeter() const override
+    bool CanDisplayVUMeter() const override
     {
         return false;
     }
 
-    virtual void Start() override
+    void Start() override
     {
         g()->Clear();
     }
 
-    virtual void Draw() override
+    void Draw() override
     {
         // Process each logical group
         int numGroups = (MATRIX_HEIGHT + GROUP_HEIGHT - 1) / GROUP_HEIGHT; // Ceiling division
@@ -709,9 +709,9 @@ class OuterHexRingEffect : public EffectWithId<OuterHexRingEffect>
   public:
 
     OuterHexRingEffect() : EffectWithId<OuterHexRingEffect>("OuterRingHexEffect") {}
-    OuterHexRingEffect(const JsonObjectConst& jsonObject) : EffectWithId<OuterHexRingEffect>(jsonObject) {}
+    explicit OuterHexRingEffect(const JsonObjectConst& jsonObject) : EffectWithId<OuterHexRingEffect>(jsonObject) {}
 
-    virtual void Draw() override
+    void Draw() override
     {
         static int colorOffset = HUE_BLUE;
         static int indent = 0;

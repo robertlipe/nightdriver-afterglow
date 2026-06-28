@@ -344,7 +344,7 @@ template <typename ObjectType> class BeatStarterEffect : public BeatEffectBase
 
     }
 
-    virtual void Draw() override
+    void Draw() override
     {
         BeatEffectBase::Draw();
     }
@@ -391,7 +391,7 @@ class StarEffectBase : public EffectWithId<StarEffectBase<StarType, TEffect>>
     {
     }
 
-    StarEffectBase(const JsonObjectConst& jsonObject)
+    explicit StarEffectBase(const JsonObjectConst& jsonObject)
       : EffectWithId<StarEffectBase<StarType, TEffect>>(jsonObject),
         _palette(jsonObject[PTY_PALETTE].as<CRGBPalette16>()),
         _newStarProbability(jsonObject["spb"]),
@@ -519,7 +519,7 @@ template <typename StarType> class BlurStarEffect : public StarEffectBase<StarTy
     {
     }
 
-    BlurStarEffect(const JsonObjectConst& jsonObject)
+    explicit BlurStarEffect(const JsonObjectConst& jsonObject)
         : StarEffectBase<StarType, BlurStarEffect<StarType>>(jsonObject)
     {
     }
@@ -544,7 +544,7 @@ class TwinkleStarEffect : public EffectWithId<TwinkleStarEffect>
   public:
 
     TwinkleStarEffect() : EffectWithId<TwinkleStarEffect>("Twinkle Star") {}
-    TwinkleStarEffect(const JsonObjectConst& jsonObject) : EffectWithId<TwinkleStarEffect>(jsonObject) {}
+    explicit TwinkleStarEffect(const JsonObjectConst& jsonObject) : EffectWithId<TwinkleStarEffect>(jsonObject) {}
 
     bool Init(std::vector<std::shared_ptr<GFXBase>>& gfx) override
     {

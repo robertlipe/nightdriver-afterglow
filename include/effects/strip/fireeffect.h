@@ -90,7 +90,7 @@ class FireEffect : public EffectWithId<FireEffect>
         construct();
     }
 
-    FireEffect(const JsonObjectConst& jsonObject)
+    explicit FireEffect(const JsonObjectConst& jsonObject)
         : EffectWithId<FireEffect>(jsonObject),
           LEDCount(jsonObject[PTY_LEDCOUNT]),
           CellsPerLED(jsonObject[PTY_CELLSPERLED]),
@@ -230,7 +230,7 @@ class PaletteFlameEffect : public FireEffect
     {
     }
 
-    PaletteFlameEffect(const JsonObjectConst& jsonObject)
+    explicit PaletteFlameEffect(const JsonObjectConst& jsonObject)
       : FireEffect(jsonObject),
         _palette(jsonObject[PTY_PALETTE].as<CRGBPalette16>()),
         _ignoreGlobalColor(jsonObject[PTY_IGNOREGLOBALCOLOR])
@@ -250,7 +250,7 @@ class PaletteFlameEffect : public FireEffect
         return SetIfNotOverflowed(jsonDoc, jsonObject, __PRETTY_FUNCTION__);
     }
 
-    virtual CRGB GetBlackBodyHeatColor(float temp) const override
+    CRGB GetBlackBodyHeatColor(float temp) const override
     {
         temp = min(1.0f, temp);
         int index = fmap(temp, 0.0f, 1.0f, 0.0f, 240.0f);
@@ -289,7 +289,7 @@ class MusicalPaletteFire : public PaletteFlameEffect, protected BeatEffectBase
     {
     }
 
-    MusicalPaletteFire(const JsonObjectConst& jsonObject)
+    explicit MusicalPaletteFire(const JsonObjectConst& jsonObject)
         : PaletteFlameEffect(jsonObject),
           BeatEffectBase(1.00, 0.01)
     {
@@ -297,7 +297,7 @@ class MusicalPaletteFire : public PaletteFlameEffect, protected BeatEffectBase
 
   protected:
 
-    virtual void HandleBeat(bool bMajor, float elapsed, float span) override
+    void HandleBeat(bool bMajor, float elapsed, float span) override
     {
         if (elapsed > 1)
             GenerateSparks(100);
@@ -305,7 +305,7 @@ class MusicalPaletteFire : public PaletteFlameEffect, protected BeatEffectBase
             GenerateSparks(g_Analyzer.VURatio() * 50);
     }
 
-    virtual void Draw() override
+    void Draw() override
     {
         BeatEffectBase::ProcessAudio();
         PaletteFlameEffect::Draw();
@@ -331,7 +331,7 @@ class ClassicFireEffect : public EffectWithId<ClassicFireEffect>
     {
     }
 
-    ClassicFireEffect(const JsonObjectConst& jsonObject)
+    explicit ClassicFireEffect(const JsonObjectConst& jsonObject)
         : EffectWithId<ClassicFireEffect>(jsonObject),
           _Mirrored(jsonObject[PTY_MIRORRED]),
           _Reversed(jsonObject[PTY_REVERSED]),
@@ -489,7 +489,7 @@ class SmoothFireEffect : public EffectWithId<SmoothFireEffect>
     {
     }
 
-    SmoothFireEffect(const JsonObjectConst& jsonObject)
+    explicit SmoothFireEffect(const JsonObjectConst& jsonObject)
         : EffectWithId<SmoothFireEffect>(jsonObject),
           _Reversed(jsonObject[PTY_REVERSED]),
           _Cooling(jsonObject[PTY_COOLING]),
@@ -656,7 +656,7 @@ class BaseFireEffect : public EffectWithId<BaseFireEffect>
         construct();
     }
 
-    BaseFireEffect(const JsonObjectConst& jsonObject)
+    explicit BaseFireEffect(const JsonObjectConst& jsonObject)
         : EffectWithId<BaseFireEffect>(jsonObject),
           Cooling(jsonObject[PTY_COOLING]),
           Sparks(jsonObject[PTY_SPARKS]),

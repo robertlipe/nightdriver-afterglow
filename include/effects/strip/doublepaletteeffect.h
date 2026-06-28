@@ -49,7 +49,7 @@ class DoublePaletteEffect : public EffectWithId<DoublePaletteEffect>
     {
     }
 
-    DoublePaletteEffect(const JsonObjectConst&  jsonObject)
+    explicit DoublePaletteEffect(const JsonObjectConst& jsonObject)
       : EffectWithId<DoublePaletteEffect>(jsonObject),
         _PaletteEffect1(jsonObject["pt1"].as<JsonObjectConst>()),
         _PaletteEffect2(jsonObject["pt2"].as<JsonObjectConst>())
