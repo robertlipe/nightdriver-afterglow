@@ -200,7 +200,7 @@ bool SocketServer::DecompressBuffer(std::span<const uint8_t> compressed, std::sp
     d.source_read_cb = nullptr;
     d.dest           = output.data();
     d.dest_start     = output.data();
-    d.dest_limit     = output.data() + output.size();
+    d.dest_limit     = output.data() + output.size() + 1;
 
     int res = uzlib_zlib_parse_header(&d);
     if (res < 0)
