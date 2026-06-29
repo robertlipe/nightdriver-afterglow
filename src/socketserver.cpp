@@ -312,12 +312,12 @@ bool SocketServer::ProcessIncomingConnectionsLoop()
 
         // Now that we have the header we can see how much more data is expected to follow
 
-        const uint32_t header  = _pBuffer[3] << 24  | _pBuffer[2] << 16  | _pBuffer[1] << 8  | _pBuffer[0];
+        const uint32_t header   = DWORDFromMemory(&_pBuffer[0]);
         if (header == COMPRESSED_HEADER)
         {
-            uint32_t compressedSize = _pBuffer[7] << 24  | _pBuffer[6] << 16  | _pBuffer[5] << 8  | _pBuffer[4];
-            uint32_t expandedSize   = _pBuffer[11] << 24 | _pBuffer[10] << 16 | _pBuffer[9] << 8  | _pBuffer[8];
-            uint32_t reserved       = _pBuffer[15] << 24 | _pBuffer[14] << 16 | _pBuffer[13] << 8 | _pBuffer[12];
+            uint32_t compressedSize = DWORDFromMemory(&_pBuffer[4]);
+            uint32_t expandedSize   = DWORDFromMemory(&_pBuffer[8]);
+            uint32_t reserved       = DWORDFromMemory(&_pBuffer[12]);
             debugV("Compressed Header: compressedSize: %lu, expandedSize: %lu, reserved: %lu", (unsigned long)compressedSize, (unsigned long)expandedSize, (unsigned long)reserved);
 
             if (expandedSize > MAXIMUM_PACKET_SIZE)
