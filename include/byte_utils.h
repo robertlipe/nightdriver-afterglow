@@ -36,17 +36,17 @@
 
 inline uint64_t ByteswapU64(uint64_t value)
 {
-    return std::byteswap(value);
+    return __builtin_bswap64(value);
 }
 
 inline uint32_t ByteswapU32(uint32_t value)
 {
-    return std::byteswap(value);
+    return __builtin_bswap32(value);
 }
 
 inline uint16_t ByteswapU16(uint16_t value)
 {
-    return std::byteswap(value);
+    return __builtin_bswap16(value);
 }
 
 inline uint64_t ULONGFromMemory(const uint8_t * payloadData)
@@ -54,7 +54,7 @@ inline uint64_t ULONGFromMemory(const uint8_t * payloadData)
     uint64_t value = 0;
     std::memcpy(&value, payloadData, sizeof(value));
     if constexpr (std::endian::native == std::endian::big) {
-        return std::byteswap(value);
+        return ByteswapU64(value);
     } else {
         return value;
     }
@@ -65,7 +65,7 @@ inline uint32_t DWORDFromMemory(const uint8_t * payloadData)
     uint32_t value = 0;
     std::memcpy(&value, payloadData, sizeof(value));
     if constexpr (std::endian::native == std::endian::big) {
-        return std::byteswap(value);
+        return ByteswapU32(value);
     } else {
         return value;
     }
@@ -76,7 +76,7 @@ inline uint16_t WORDFromMemory(const uint8_t * payloadData)
     uint16_t value = 0;
     std::memcpy(&value, payloadData, sizeof(value));
     if constexpr (std::endian::native == std::endian::big) {
-        return std::byteswap(value);
+        return ByteswapU16(value);
     } else {
         return value;
     }
