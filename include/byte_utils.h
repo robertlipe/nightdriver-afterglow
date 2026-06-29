@@ -31,14 +31,14 @@
 #include "globals.h"
 
 #include <bit>
+#include <concepts>
 #include <cstdint>
 #include <cstring>
 #include <type_traits>
 
-template <typename T>
+template <std::integral T>
 inline T ReadFromMemory(const uint8_t* payloadData)
 {
-    static_assert(std::is_integral_v<T>, "ReadFromMemory requires an integral type");
     T value;
     // std::memcpy is the only strictly conforming way to do unaligned reads in C++.
     // Modern compilers completely optimize this away into a direct (unaligned) load instruction.
