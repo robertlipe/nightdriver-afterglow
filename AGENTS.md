@@ -124,6 +124,13 @@ To maintain build stability across Av2 and Av3, adhere to these strict rules:
 
 ---
 
+## PlatformIO Configurations & Environment Inheritance
+
+*   **The `extends` Trap:** When an environment inherits from another via `extends`, it automatically inherits `build_flags`. **Do not** manually inject `${parent.build_flags}` into a child's `build_src_flags` unless the parent *explicitly* defines `build_flags`. If the parent doesn't define it, PlatformIO interpolates it incorrectly, silently erasing the global `base.build_flags` (like our C++26 mandate). Rely on native `extends` inheritance whenever possible.
+*   **Flag Placement (`build_flags` vs `build_src_flags`):** Frameworks (like Arduino) often inject their own default compiler flags (e.g., `-std=gnu++20`). To successfully override these (e.g., to enforce `-std=gnu++26`), your flags MUST be placed in `build_flags`, NOT `build_src_flags`.
+
+---
+
 ## Building & Tools
 *   **Audit Tools**: Run `python3 tools/audit_globals_order.py` and `python3 tools/audit_include_rules.py`.
 *   **List Available Targets**: `python3 tools/show_envs.py`.
