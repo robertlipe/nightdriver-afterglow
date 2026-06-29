@@ -30,63 +30,54 @@
 
 #include "globals.h"
 
+#include <bit>
 #include <cstdint>
 #include <cstring>
 
 inline uint64_t ByteswapU64(uint64_t value)
 {
-    return  (value >> 56) |
-            ((value >> 40) & 0x000000000000FF00ULL) |
-            ((value >> 24) & 0x0000000000FF0000ULL) |
-            ((value >> 8)  & 0x00000000FF000000ULL) |
-            ((value << 8)  & 0x000000FF00000000ULL) |
-            ((value << 24) & 0x0000FF0000000000ULL) |
-            ((value << 40) & 0x00FF000000000000ULL) |
-            (value << 56);
+    return std::byteswap(value);
 }
 
 inline uint32_t ByteswapU32(uint32_t value)
 {
-    return  (value >> 24) |
-            ((value >> 8)  & 0x0000FF00U) |
-            ((value << 8)  & 0x00FF0000U) |
-            (value << 24);
+    return std::byteswap(value);
 }
 
 inline uint16_t ByteswapU16(uint16_t value)
 {
-    return (uint16_t)((value >> 8) | (value << 8));
+    return std::byteswap(value);
 }
 
 inline uint64_t ULONGFromMemory(const uint8_t * payloadData)
 {
     uint64_t value = 0;
     std::memcpy(&value, payloadData, sizeof(value));
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    return ByteswapU64(value);
-#else
-    return value;
-#endif
+    if constexpr (std::endian::native == std::endian::big) {
+        return std::byteswap(value);
+    } else {
+        return value;
+    }
 }
 
 inline uint32_t DWORDFromMemory(const uint8_t * payloadData)
 {
     uint32_t value = 0;
     std::memcpy(&value, payloadData, sizeof(value));
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    return ByteswapU32(value);
-#else
-    return value;
-#endif
+    if constexpr (std::endian::native == std::endian::big) {
+        return std::byteswap(value);
+    } else {
+        return value;
+    }
 }
 
 inline uint16_t WORDFromMemory(const uint8_t * payloadData)
 {
     uint16_t value = 0;
     std::memcpy(&value, payloadData, sizeof(value));
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    return ByteswapU16(value);
-#else
-    return value;
-#endif
+    if constexpr (std::endian::native == std::endian::big) {
+        return std::byteswap(value);
+    } else {
+        return value;
+    }
 }
