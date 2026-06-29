@@ -95,6 +95,14 @@ jobs:
         grep -v "^#define cszSSID" include/secrets.example.h > include/secrets.h
         echo '#define cszSSID ""' >> include/secrets.h
 
+    - name: Cache Object Files
+      uses: actions/cache@v4
+      with:
+        path: .pio/build_cache
+        key: pio-obj-${{ runner.os }}-${{ matrix.envname }}-${{ github.sha }}
+        restore-keys: |
+          pio-obj-${{ runner.os }}-${{ matrix.envname }}-
+
     - name: "Build environment: ${{ matrix.envname }}"
       run: pio run -e ${{ matrix.envname }}
 
