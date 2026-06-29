@@ -696,7 +696,7 @@ bool ProcessIncomingData(std::span<const uint8_t> payloadData)
         {
             return false;
         }
-        uint16_t command16 = payloadData[1] << 8 | payloadData[0];
+        uint16_t command16 = WORDFromMemory(&payloadData[0]);
         debugV("payloadLength: %zu, command16: %d", payloadData.size(), command16);
 
         switch (command16)
