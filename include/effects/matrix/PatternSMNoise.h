@@ -1,6 +1,7 @@
 #pragma once
 
 #include "effectmanager.h"
+#include <numeric>
 
 // Derived from https://editor.soulmatelights.com/gallery/1509-noise-palettes
 // Cycles through 17 effects of pallette noise, looking like a surreal topo.
@@ -531,8 +532,8 @@ class PatternSMNoise : public EffectWithId<PatternSMNoise>
                 // The range of the inoise8 function is roughly 16-238.
                 // These two operations expand those values out to roughly 0..255
                 // You can comment them out if you want the raw noise data.
-                data = qsub8(data, 16);
-                data = qadd8(data, scale8(data, 39));
+                data = std::sub_sat<uint8_t>(data, (uint8_t)16);
+                data = std::add_sat<uint8_t>(data, scale8(data, 39));
 
                 if (dataSmoothing)
                 {

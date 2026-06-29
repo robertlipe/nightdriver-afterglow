@@ -1,5 +1,5 @@
 #include "globals.h"
-
+#include "byte_utils.h"
 #if USE_WS_S3_HUB75 || MATRIX_S3
 
 #include <esp_log.h>
@@ -126,9 +126,9 @@ void SystemHardwareHub::PollInertial()
 
     if (i2c_master_transmit_receive(sensor_handle, &start_reg, 1, raw_buffer, 6, -1) == ESP_OK)
     {
-        int16_t raw_x = (int16_t)(raw_buffer[1] << 8 | raw_buffer[0]);
-        int16_t raw_y = (int16_t)(raw_buffer[3] << 8 | raw_buffer[2]);
-        int16_t raw_z = (int16_t)(raw_buffer[5] << 8 | raw_buffer[4]);
+        int16_t raw_x = ReadFromMemory<int16_t>(&raw_buffer[0]);
+        int16_t raw_y = ReadFromMemory<int16_t>(&raw_buffer[2]);
+        int16_t raw_z = ReadFromMemory<int16_t>(&raw_buffer[4]);
 
         std::lock_guard<std::mutex> lock(cache_mutex);
 #if defined(HAS_LIS3DH)

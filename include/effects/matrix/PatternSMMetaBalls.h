@@ -2,6 +2,7 @@
 
 #include "effectmanager.h"
 #include "colordata.h"
+#include <numeric>
 
 // Derived from https://wokwi.com/projects/289218075224441356
 // N Glowing balls in orbit around each other around a rotating plane.
@@ -50,7 +51,7 @@ class PatternSMMetaBalls : public EffectWithId<PatternSMMetaBalls>
                 uint8_t sum = dist(i, j, bx[0], by[0]);
                 for (uint8_t a = 1; a < 5; a++)
                 {
-                    sum = qadd8(sum, dist(i, j, bx[a], by[a]));
+                    sum = std::add_sat<uint8_t>(sum, dist(i, j, bx[a], by[a]));
                 }
                 // HeatColors2_p peaks with blue instead of white and looks nicer for this effect
                 g()->leds[XY(i, j)] = ColorFromPalette(HeatColors2_p, sum + 220, 254, LINEARBLEND);
