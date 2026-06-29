@@ -49,6 +49,16 @@ This file contains critical context, constraints, and architectural information 
 
 ---
 
+## 🕵️ AI Code Review Protocols
+*   **Pre-Commit Rigor:** Before committing or pushing ANY code, act as a strict, senior C++ security and safety reviewer. Do not just commit because the code compiles.
+*   **Memory & Lifetimes:** Rigorously audit the lifetimes of `std::string_view`, `std::span`, pointers, and references. **Never** construct views over local/stack variables that could outlive their scope or dangle.
+*   **Concurrency & Reentrancy:** Check for race conditions, unprotected shared states, and interrupt/ISR safety.
+*   **Modernization Anti-Patterns:** Ensure modern C++20/26 features are used safely, not just blindly applied.
+*   **Data Types:** Watch for silent narrowing conversions, sign-extension bugs, and legacy `uint8_t` vs `char` mismatching in text/string paths.
+*   If you spot a flaw during your internal pre-commit review, **STOP**, fix it, and explain the fix to the user before proceeding.
+
+---
+
 ## Project Overview
 
 NightDriverStrip is a comprehensive C++ firmware framework for the ESP32 microcontroller designed to drive various LED displays, including WS2812B strips and HUB75 matrices.
