@@ -33,51 +33,24 @@
 #include <bit>
 #include <cstdint>
 #include <cstring>
+#include <type_traits>
 
-inline uint64_t ByteswapU64(uint64_t value)
+template <typename T>
+inline T ReadFromMemory(const uint8_t* payloadData)
 {
-    return __builtin_bswap64(value);
-}
+    static_assert(std::is_integral_v<T>, "ReadFromMemory requires an integral type");
+    T value;
+    // std::memcpy is the only strictly conforming way to do unaligned reads in C++.
+    // Modern compilers completely optimize this away into a direct (unaligned) load instruction.
+    std::memcpy(&value, payloadData, sizeof(T));
 
-inline uint32_t ByteswapU32(uint32_t value)
-{
-    return __builtin_bswap32(value);
-}
-
-inline uint16_t ByteswapU16(uint16_t value)
-{
-    return __builtin_bswap16(value);
-}
-
-inline uint64_t ULONGFromMemory(const uint8_t * payloadData)
-{
-    uint64_t value = 0;
-    std::memcpy(&value, payloadData, sizeof(value));
     if constexpr (std::endian::native == std::endian::big) {
-        return ByteswapU64(value);
+        return std::byteswap(value);
     } else {
         return value;
     }
 }
 
-inline uint32_t DWORDFromMemory(const uint8_t * payloadData)
-{
-    uint32_t value = 0;
-    std::memcpy(&value, payloadData, sizeof(value));
-    if constexpr (std::endian::native == std::endian::big) {
-        return ByteswapU32(value);
-    } else {
-        return value;
-    }
-}
-
-inline uint16_t WORDFromMemory(const uint8_t * payloadData)
-{
-    uint16_t value = 0;
-    std::memcpy(&value, payloadData, sizeof(value));
-    if constexpr (std::endian::native == std::endian::big) {
-        return ByteswapU16(value);
-    } else {
-        return value;
-    }
-}
+inline uint64_t ULONGFromMemory(const uint8_t* payloadData) { return ReadFromMemory<uint64_t>(payloadData); }
+inline uint32_t DWORDFromMemory(const uint8_t* payloadData) { return ReadFromMemory<uint32_t>(payloadData); }
+inline uint16_t WORDFromMemory(const uint8_t* payloadData)  { return ReadFromMemory<uint16_t>(payloadData); }
