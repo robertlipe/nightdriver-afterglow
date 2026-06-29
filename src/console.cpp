@@ -135,7 +135,7 @@ ConsoleManager::ConsoleManager()
     _serialSession = std::make_shared<ConsoleSession>(&g_SerialSink);
 }
 
-void ConsoleManager::FeedSerialByte(uint8_t byte)
+void ConsoleManager::FeedSerialByte(char c)
 {
     std::shared_ptr<ConsoleSession> session;
     {
@@ -143,10 +143,10 @@ void ConsoleManager::FeedSerialByte(uint8_t byte)
         session = _serialSession;
     }
     if (_byteHandler && session)
-        _byteHandler(byte, session);
+        _byteHandler(c, session);
 }
 
-void ConsoleManager::FeedTelnetByte(uint8_t byte)
+void ConsoleManager::FeedTelnetByte(char c)
 {
     std::shared_ptr<ConsoleSession> session;
     {
@@ -154,7 +154,7 @@ void ConsoleManager::FeedTelnetByte(uint8_t byte)
         session = _telnetSession;
     }
     if (_byteHandler && session)
-        _byteHandler(byte, session);
+        _byteHandler(c, session);
 }
 
 void ConsoleManager::Broadcast(std::string_view data)
@@ -259,7 +259,7 @@ void ConsoleManager::AddDmesgLine(std::string_view line)
         }
 
         // Filter out the periodic 5-second status message to prevent dmesg flooding
-        if (sub.find("Mem: ") != std::string_view::npos && sub.find("LED FPS: ") != std::string_view::npos)
+        if (sub.contains("Mem: ") && sub.contains("LED FPS: "))
         {
             continue;
         }

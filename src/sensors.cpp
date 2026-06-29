@@ -1,5 +1,5 @@
 #include "globals.h"
-
+#include "byte_utils.h"
 #if USE_WS_S3_HUB75 || MATRIX_S3
 
 #include <esp_log.h>
@@ -27,7 +27,7 @@
 // Assuming your BME280 is added as a sidecar sensor on this board layout
 #define HAS_BME280
 #define CLIMATE_ADDR 0x76
-#elif defined(BOARD_WAVESHARE_S3)
+#elifdef BOARD_WAVESHARE_S3
 #define PIN_SDA GPIO_NUM_11
 #define PIN_SCL GPIO_NUM_12
 #define SENSOR_ADDR 0x6A // QMI8658 Accel
@@ -94,7 +94,7 @@ void SystemHardwareHub::ConfigureSensorRegisters()
 #if defined(HAS_LIS3DH)
     uint8_t cmd[] = {0x20, 0x57};
     i2c_master_transmit(sensor_handle, cmd, 2, -1);
-#elif defined(HAS_QMI8658)
+#elifdef HAS_QMI8658
     uint8_t cmd[] = {0x02, 0x01};
     i2c_master_transmit(sensor_handle, cmd, 2, -1);
 #endif
@@ -126,16 +126,16 @@ void SystemHardwareHub::PollInertial()
 
     if (i2c_master_transmit_receive(sensor_handle, &start_reg, 1, raw_buffer, 6, -1) == ESP_OK)
     {
-        int16_t raw_x = (int16_t)(raw_buffer[1] << 8 | raw_buffer[0]);
-        int16_t raw_y = (int16_t)(raw_buffer[3] << 8 | raw_buffer[2]);
-        int16_t raw_z = (int16_t)(raw_buffer[5] << 8 | raw_buffer[4]);
+        int16_t raw_x = ReadFromMemory<int16_t>(&raw_buffer[0]);
+        int16_t raw_y = ReadFromMemory<int16_t>(&raw_buffer[2]);
+        int16_t raw_z = ReadFromMemory<int16_t>(&raw_buffer[4]);
 
         std::lock_guard<std::mutex> lock(cache_mutex);
 #if defined(HAS_LIS3DH)
         cached_inertial.ax = (raw_x >> 4) * 0.001f * 9.80665f;
         cached_inertial.ay = (raw_y >> 4) * 0.001f * 9.80665f;
         cached_inertial.az = (raw_z >> 4) * 0.001f * 9.80665f;
-#elif defined(HAS_QMI8658)
+#elifdef HAS_QMI8658
         cached_inertial.ax = (raw_x / 16384.0f) * 9.80665f;
         cached_inertial.ay = (raw_y / 16384.0f) * 9.80665f;
         cached_inertial.az = (raw_z / 16384.0f) * 9.80665f;
@@ -162,7 +162,7 @@ void SystemHardwareHub::PollThermal()
     i2c_master_transmit(sensor_handle, wakeup_cmd, 2, -1); // Use shared target line or matching handles
     // Real deployments parse the 3-byte response string here directly...
     current_ambient = 25.0f; // Simplified direct register decode fallback
-#elif defined(HAS_BME280)
+#elifdef HAS_BME280
     // Direct raw 3-byte burst read across compensation addresses
     current_ambient = 24.2f;
 #endif

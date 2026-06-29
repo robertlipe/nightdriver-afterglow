@@ -302,7 +302,7 @@ void DebugLoopTaskEntry(void* pvParameters)
                         }
                         else
                         {
-                            ConsoleManager::Instance().FeedTelnetByte(byte);
+                            ConsoleManager::Instance().FeedTelnetByte((char)byte);
                         }
                         break;
 
@@ -320,7 +320,7 @@ void DebugLoopTaskEntry(void* pvParameters)
                         {
                             // Non-standard: deliver CR then the unexpected byte
                             ConsoleManager::Instance().FeedTelnetByte('\r');
-                            ConsoleManager::Instance().FeedTelnetByte(byte);
+                            ConsoleManager::Instance().FeedTelnetByte((char)byte);
                         }
                         break;
 
@@ -328,7 +328,7 @@ void DebugLoopTaskEntry(void* pvParameters)
                         if (byte == TELNET_IAC)
                         {
                             // Escaped 0xFF in data stream — deliver it literally
-                            ConsoleManager::Instance().FeedTelnetByte(0xFF);
+                            ConsoleManager::Instance().FeedTelnetByte((char)0xFF);
                             state = RecvState::Normal;
                         }
                         else if (byte == TELNET_SB)

@@ -471,7 +471,7 @@ void setup()
 
         // Improv will feed unknown bytes to the Serial session's CLI processor
         g_pImprovSerial->set_on_unknown_byte([](uint8_t byte) {
-            DebugCLI::ProcessCLIByte(byte, ConsoleManager::Instance().GetSerialSession());
+            DebugCLI::ProcessCLIByte((char)byte, ConsoleManager::Instance().GetSerialSession());
         });
 #endif
 #endif
@@ -660,7 +660,7 @@ void loop()
         // Feed any direct serial bytes to the console manager (if not handled by Improv)
         while (Serial.available())
         {
-            ConsoleManager::Instance().FeedSerialByte(Serial.read());
+            ConsoleManager::Instance().FeedSerialByte((char)Serial.read());
         }
 
         #if ENABLE_WIFI

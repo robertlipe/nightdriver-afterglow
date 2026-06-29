@@ -142,8 +142,8 @@ void CWebServer::begin()
     _staticStats.ChipModel = ESP.getChipModel();
     _staticStats.ChipCores = ESP.getChipCores();
     _staticStats.CpuFreqMHz = ESP.getCpuFreqMHz();
-    _staticStats.SketchSize = ESP.getSketchSize();
-    _staticStats.FreeSketchSpace = ESP.getFreeSketchSpace();
+    _staticStats.SketchSize = 0; // ESP.getSketchSize();  // Known to trigger Task WDT on ESP32 Core v3
+    _staticStats.FreeSketchSpace = 0; // ESP.getFreeSketchSpace();
     _staticStats.FlashChipSize = ESP.getFlashChipSize();
 
     debugI("Connecting Web Endpoints");

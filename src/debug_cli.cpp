@@ -323,7 +323,7 @@ std::string_view TabComplete(std::string_view partial, std::string_view full_lin
         }
     }
     // If we're completing an argument for 'effect'
-    else if (full_line.substr(0, 6) == "effect")
+    else if (full_line.starts_with("effect"))
     {
         auto& effectManager = g_ptrSystem->GetEffectManager();
         std::string_view firstMatch = "";
@@ -923,17 +923,18 @@ void cli_printf(const char *fmt, ...)
         free(buf);
 }
 
-void ProcessCLIByte(uint8_t byte, std::shared_ptr<ConsoleSession> session)
+void ProcessCLIByte(char c, std::shared_ptr<ConsoleSession> session)
 {
     if (!session) return;
     std::string& cmd = session->StringBuffer();
 
-    switch (byte)
+    switch (c)
     {
     case '\t':
     {
-        size_t lastSpace = cmd.find_last_of(' ');
-        std::string_view partial = (lastSpace == std::string::npos) ? std::string_view(cmd) : std::string_view(cmd).substr(lastSpace + 1);
+        std::string_view partial(cmd);
+        if (size_t lastSpace = partial.rfind(' '); lastSpace != std::string_view::npos)
+            partial.remove_prefix(lastSpace + 1);
         std::string_view suffix = TabComplete(partial, cmd);
         if (!suffix.empty())
         {
@@ -970,8 +971,8 @@ void ProcessCLIByte(uint8_t byte, std::shared_ptr<ConsoleSession> session)
 
     default:
         if (session->EchoEnabled())
-            session->WriteRaw(std::string_view(reinterpret_cast<const char*>(&byte), 1));
-        cmd += (char)byte;
+            session->WriteRaw(c);
+        cmd += c;
         break;
     }
 }

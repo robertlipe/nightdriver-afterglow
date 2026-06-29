@@ -49,6 +49,16 @@ This file contains critical context, constraints, and architectural information 
 
 ---
 
+## 🕵️ AI Code Review Protocols
+*   **Pre-Commit Rigor:** Before committing or pushing ANY code, act as a strict, senior C++ security and safety reviewer. Do not just commit because the code compiles.
+*   **Memory & Lifetimes:** Rigorously audit the lifetimes of `std::string_view`, `std::span`, pointers, and references. **Never** construct views over local/stack variables that could outlive their scope or dangle.
+*   **Concurrency & Reentrancy:** Check for race conditions, unprotected shared states, and interrupt/ISR safety.
+*   **Modernization Anti-Patterns:** Ensure modern C++20/26 features are used safely, not just blindly applied.
+*   **Data Types:** Watch for silent narrowing conversions, sign-extension bugs, and legacy `uint8_t` vs `char` mismatching in text/string paths.
+*   If you spot a flaw during your internal pre-commit review, **STOP**, fix it, and explain the fix to the user before proceeding.
+
+---
+
 ## Project Overview
 
 NightDriverStrip is a comprehensive C++ firmware framework for the ESP32 microcontroller designed to drive various LED displays, including WS2812B strips and HUB75 matrices.
@@ -111,6 +121,13 @@ To maintain build stability across Av2 and Av3, adhere to these strict rules:
 5.  **Include Skepticism**: Prefer forward declarations over includes in headers. Keep heavy display/driver includes in `.cpp` files.
 6.  **Non-Trivial Classes**: Class method implementations MUST reside in `.cpp` files. Headers should be declaration-only.
 7.  **Arduino3 Collisions**: Use `nd_network.h` for project networking; `network.h` is reserved for the Arduino framework.
+
+---
+
+## PlatformIO Configurations & Environment Inheritance
+
+*   **The `extends` Trap:** When an environment inherits from another via `extends`, it automatically inherits `build_flags`. **Do not** manually inject `${parent.build_flags}` into a child's `build_src_flags` unless the parent *explicitly* defines `build_flags`. If the parent doesn't define it, PlatformIO interpolates it incorrectly, silently erasing the global `base.build_flags` (like our C++26 mandate). Rely on native `extends` inheritance whenever possible.
+*   **Flag Placement (`build_flags` vs `build_src_flags`):** Frameworks (like Arduino) often inject their own default compiler flags (e.g., `-std=gnu++20`). To successfully override these (e.g., to enforce `-std=gnu++26`), your flags MUST be placed in `build_flags`, NOT `build_src_flags`.
 
 ---
 

@@ -81,7 +81,7 @@ namespace DebugCLI
     void cli_printf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
     // Process a single byte of input from a specific session.
-    void ProcessCLIByte(uint8_t byte, std::shared_ptr<ConsoleSession> session);
+    void ProcessCLIByte(char c, std::shared_ptr<ConsoleSession> session);
 
     // Process a single command line string.
     void RunCommand(std::string_view line, std::shared_ptr<ConsoleSession> session);

@@ -61,6 +61,7 @@ public:
 
     // IConsoleSink methods
     void WriteRaw(std::string_view data);
+    void WriteRaw(char data) { if (_sink) _sink->Write(&data, 1); }
     void WriteText(std::string_view text);   // no newline appended
     void WriteLine(std::string_view text);   // appends '\n'
     void Flush() override;
@@ -84,7 +85,7 @@ private:
     std::string _buffer;
 };
 
-using ConsoleByteHandler = void (*)(uint8_t byte, std::shared_ptr<ConsoleSession> session);
+using ConsoleByteHandler = void (*)(char c, std::shared_ptr<ConsoleSession> session);
 
 class ConsoleManager
 {
@@ -99,8 +100,8 @@ public:
 
     void SetByteHandler(ConsoleByteHandler handler) { _byteHandler = handler; }
 
-    void FeedSerialByte(uint8_t byte);
-    void FeedTelnetByte(uint8_t byte);
+    void FeedSerialByte(char c);
+    void FeedTelnetByte(char c);
 
     void Broadcast(std::string_view data);
     void Broadcast(LogLevel level, const char* tag, const char* message);

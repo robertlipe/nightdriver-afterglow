@@ -34,6 +34,7 @@
 
 #include <gfxfont.h>
 #include <memory>
+#include <numeric>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -186,9 +187,9 @@ void GFXBase::drawPixelXYF_Wu(float x, float y, CRGB color)
         int16_t xn = x + (i & 1), yn = y + ((i >> 1) & 1);
         if (isValidPixel(xn, yn)) {
             CRGB clr = leds[XY(xn, yn)];
-            clr.r = qadd8(clr.r, (color.r * wu[i]) >> 8);
-            clr.g = qadd8(clr.g, (color.g * wu[i]) >> 8);
-            clr.b = qadd8(clr.b, (color.b * wu[i]) >> 8);
+            clr.r = std::add_sat<uint8_t>(clr.r, (color.r * wu[i]) >> 8);
+            clr.g = std::add_sat<uint8_t>(clr.g, (color.g * wu[i]) >> 8);
+            clr.b = std::add_sat<uint8_t>(clr.b, (color.b * wu[i]) >> 8);
             leds[XY(xn, yn)] = clr;
         }
     }
