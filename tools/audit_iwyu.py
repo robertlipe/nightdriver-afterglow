@@ -114,7 +114,7 @@ def load_iwyu_policy(policy_file=IWYU_POLICY_FILE):
     if not policy_file.is_file():
         return keep_globs, mapping_files
 
-    for raw_line in policy_file.read_text().splitlines():
+    for raw_line in policy_file.read_text(encoding='utf-8').splitlines():
         line = raw_line.split('#', 1)[0].strip()
         if not line:
             continue
