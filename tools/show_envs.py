@@ -45,16 +45,46 @@
 
 import configparser
 import json
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def discover_config_files():
+    config_files = [PROJECT_ROOT / 'platformio.ini']
+
+    parser = configparser.ConfigParser()
+    parser.read(PROJECT_ROOT / 'platformio.ini')
+
+    extra_configs = parser.get('platformio', 'extra_configs', fallback='')
+    for line in extra_configs.splitlines():
+        pattern = line.split(';', 1)[0].split('#', 1)[0].strip()
+        if not pattern or pattern.startswith(';') or pattern.startswith('#'):
+            continue
+        config_files.extend(sorted(PROJECT_ROOT.glob(pattern)))
+
+    unique_files = []
+    seen = set()
+    for path in config_files:
+        resolved = path.resolve()
+        if not resolved.is_file() or resolved in seen:
+            continue
+        seen.add(resolved)
+        unique_files.append(resolved)
+
+    return unique_files
 
 def getenvs():
-    config = configparser.ConfigParser()
-    config.read('platformio.ini')
-
     envs = []
+    for config_file in discover_config_files():
+        config = configparser.ConfigParser()
+        config.read(config_file)
 
-    for section in config.sections():
-        if section.startswith('env:') and len(section) > 4:
-            envs.append(section[4::])
+        for section in config.sections():
+            if section.startswith('env:') and len(section) > 4:
+                env = section[4::]
+                if env not in envs:
+                    envs.append(env)
 
     return envs
 
