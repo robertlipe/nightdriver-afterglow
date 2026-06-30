@@ -338,6 +338,14 @@ cd tools
 ./buddybuild.sh
 ```
 
+One of those helpers is [`tools/audit_iwyu.py`](tools/audit_iwyu.py), which regenerates PlatformIO's compilation database and runs `include-what-you-use` across the selected environments. By default it audits every environment defined in `platformio.ini`; to narrow the run, pass one or more `-e` values. The helper loads project-wide IWYU defaults from [`tools/iwyu.policy`](tools/iwyu.policy), keeps `globals.h` and `WString.h` by default, enables IWYU's Clang standard-library mappings, and accepts repeated `--iwyu-keep` and `--iwyu-mapping-file` flags when IWYU needs help understanding umbrella headers or library-specific include policy. Output is filtered down to the actionable add/remove/error lines, and it drops the known clang-only internal header chatter (`vector.tcc`, `stl_uninitialized.h`, `hashtable_policy`, and the `globals.h` / `WString.h` policy noise); if you need the full include trace, use IWYU's own verbosity flags via `--iwyu-arg`. `--no-header-sweep` reduces the repetition when you only want to analyze translation units. `-j` is passed through to `iwyu_tool.py` and is safe to use for parallel analysis; output is captured per environment, but the order of suggestions within a single environment is not guaranteed:
+
+```shell
+tools/audit_iwyu.py -e demo -e heltecv3demo
+tools/audit_iwyu.py -e mesmerizer --iwyu-keep ArduinoJson.h
+tools/audit_iwyu.py -e mesmerizer -j 10
+```
+
 ## COM port problems
 
 Specifically on the Windows platform, there have been cases where people have experienced problems communicating to the serial port that the ESP32 device is connected to from PlatformIO, usually in the shape of PlatformIO showing messages that the COM port in question doesn't exist where it absolutely did before. This tends to be caused by the COM port being used by another process within PlatformIO (the monitor function being a known cause), or some other application effectively blocking the COM port in question. A confirmed example of the latter is Malwarebytes.

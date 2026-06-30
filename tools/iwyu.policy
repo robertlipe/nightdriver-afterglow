@@ -1,0 +1,11 @@
+# IWYU policy for NightDriverStrip.
+#
+# Keep rules here are loaded automatically by tools/audit_iwyu.py, so you do
+# not need to pass them on every invocation.
+#
+# Format:
+#   keep <glob>
+#   mapping <path-to-iwyu-mapping-file>
+
+keep globals.h
+keep WString.h
