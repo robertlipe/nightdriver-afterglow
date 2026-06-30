@@ -440,7 +440,7 @@ def main():
             temp_dir = Path(temp_dir_name)
 
             try:
-                compilation_db = json.loads(compilation_db_path.read_text())
+                compilation_db = json.loads(compilation_db_path.read_text(encoding='utf-8'))
             except (OSError, json.JSONDecodeError) as error:
                 errors.append(f'{env}: failed to read compile_commands.json ({error})')
                 continue
