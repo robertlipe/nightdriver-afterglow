@@ -29,15 +29,12 @@
 #include "globals.h"
 
 #if USE_MPDMA_HUB75
-#include <algorithm>
-#include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
-#include <memory>
-#include <stdexcept>
-#include <vector>
-#include "deviceconfig.h"
-#include "espmpdmagfx.h"
-#include "systemcontainer.h"
-#include "values.h"
+#include <algorithm>                          // for max
+#include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>  // for MatrixPanel_I2S_DMA
+#include <memory>                             // for shared_ptr, unique_ptr
+#include <stdexcept>                          // for runtime_error
+#include <vector>                             // for vector
+#include "espmpdmagfx.h"                      // for ESPMPDMAGFX---
 
 std::unique_ptr<MatrixPanel_I2S_DMA> ESPMPDMAGFX::driver;
 std::unique_ptr<CRGB[]> ESPMPDMAGFX::drawBuffer;
@@ -104,7 +101,7 @@ void ESPMPDMAGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devi
     std::static_pointer_cast<ESPMPDMAGFX>(devices[0])->setLeds(drawBuffer.get());
 }
 
-void ESPMPDMAGFX::SetBrightness(byte amount)
+void ESPMPDMAGFX::SetBrightness(uint8_t amount)
 {
     if (driver)
         driver->setBrightness8(amount);
@@ -127,5 +124,5 @@ void ESPMPDMAGFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixel
 
     FastLED.countFPS();
 }
-#endif
+#endif // USE_MPDMA_HUB75
 

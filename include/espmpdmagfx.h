@@ -65,7 +65,7 @@ public:
 
     static void InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devices);
 
-    void SetBrightness(byte amount) override;
+    void SetBrightness(uint8_t amount) override;
 
     void PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsDrawn) override;
 };
