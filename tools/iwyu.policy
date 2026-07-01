@@ -9,3 +9,6 @@
 
 keep globals.h
 keep WString.h
+keep esp_arduino_version.h
+keep esp_idf_version.h
+mapping tools/nightdriver.imp
