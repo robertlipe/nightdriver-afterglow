@@ -34,7 +34,7 @@
 #include <memory>                             // for shared_ptr, unique_ptr
 #include <stdexcept>                          // for runtime_error
 #include <vector>                             // for vector
-#include "espmpdmagfx.h"                      // for ESPMPDMAGFX---
+#include "espmpdmagfx.h"                      // for ESPMPDMAGFX
 
 std::unique_ptr<MatrixPanel_I2S_DMA> ESPMPDMAGFX::driver;
 std::unique_ptr<CRGB[]> ESPMPDMAGFX::drawBuffer;

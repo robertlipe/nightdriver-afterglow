@@ -28,10 +28,14 @@
 
 #include "globals.h"
 
+#include <arpa/inet.h>
 #include <cstring>         // for memset, size_t, strerror
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 #include "ledviewer.h"     // for LEDViewer
-#include "nd_network.h"    // for SetSocketBlockingEnabled---
+#include "nd_network.h"    // for SetSocketBlockingEnabled
 
 LEDViewer::LEDViewer(int port) :
     _port(port),
