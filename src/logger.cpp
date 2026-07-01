@@ -26,6 +26,8 @@
 //
 //---------------------------------------------------------------------------
 
+#include "globals.h"
+
 #include <esp_log.h>
 #include <string_view>
 #include "console.h"

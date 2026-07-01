@@ -63,8 +63,8 @@ class BouncingBallEffect : public EffectWithId<BouncingBallEffect>
 
     static constexpr float Gravity = -9.81f;
     static constexpr float StartHeight = 1.0f;
-    // Note: VSCode flags sqrt() for calling a non-constexpr builtin function, but it compiles and runs
-    static constexpr float ImpactVelocityStart = sqrt(-2.0f * Gravity * StartHeight);
+    // Note: VSCode flags sqrtf() for calling a non-constexpr builtin function, but it compiles and runs
+    static inline const float ImpactVelocityStart = sqrtf(-2.0f * Gravity * StartHeight);
 
     std::vector<double> ClockTimeSinceLastBounce;
     std::vector<double> TimeSinceLastBounce;
