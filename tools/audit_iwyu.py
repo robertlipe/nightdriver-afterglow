@@ -272,6 +272,59 @@ def rewrite_compilation_database(compilation_db, output_dir):
     return output_path
 
 
+import re
+
+def remove_no_op_includes(text):
+    output_blocks = []
+    for block in text.split('---\n'):
+        lines = block.splitlines()
+        add_lines = set()
+        remove_lines = set()
+        in_add = False
+        in_remove = False
+        has_minus_line = False
+
+        for line in lines:
+            if 'should add these lines:' in line:
+                in_add = True
+                in_remove = False
+            elif 'should remove these lines:' in line:
+                in_add = False
+                in_remove = True
+            elif in_remove and line.startswith('- '):
+                has_minus_line = True
+
+            if '#include' in line:
+                match = re.search(r'#include\s+([<"][^>"]+[>"])', line)
+                if match:
+                    inc_file = match.group(1)
+                    if in_add:
+                        add_lines.add(inc_file)
+                    elif in_remove and line.startswith('- '):
+                        remove_lines.add(inc_file)
+
+        common = add_lines.intersection(remove_lines)
+        if not common and has_minus_line:
+            output_blocks.append(block)
+            continue
+        elif not has_minus_line and remove_lines:
+            # The user requested that we ignore blocks where there are no '- ' lines
+            # in the remove section, as IWYU is likely confused and suggesting deleting everything.
+            # But if there are NO remove lines at all, we should still process the add section.
+            continue
+
+        new_lines = []
+        for line in lines:
+            if '#include' in line:
+                match = re.search(r'#include\s+([<"][^>"]+[>"])', line)
+                if match and match.group(1) in common:
+                    continue
+            new_lines.append(line)
+
+        output_blocks.append('\n'.join(new_lines))
+
+    return '---\n'.join(output_blocks)
+
 def filter_iwyu_output(output_text):
     filtered_lines = []
     warning_block = False
@@ -312,7 +365,8 @@ def filter_iwyu_output(output_text):
         if line.strip():
             filtered_lines.append(line)
 
-    return '\n'.join(filtered_lines)
+    raw_filtered = '\n'.join(filtered_lines)
+    return remove_no_op_includes(raw_filtered)
 
 
 def build_iwyu_args(extra_iwyu_args, mapping_files, keep_globs, check_also_headers):
