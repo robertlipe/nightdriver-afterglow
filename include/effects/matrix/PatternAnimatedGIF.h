@@ -43,7 +43,6 @@
 #include <Arduino.h>
 
 #include <ArduinoJson.h>
-#include <string.h>
 #include <map>
 
 #include "effects.h"

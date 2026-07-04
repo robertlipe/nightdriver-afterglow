@@ -27,14 +27,15 @@
 //
 
 #include "globals.h"
-#include "ledviewer.h"
-#include "nd_network.h"
 
 #include <arpa/inet.h>
-#include <cstring>
+#include <cstring>         // for memset, size_t, strerror
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
+
+#include "ledviewer.h"     // for LEDViewer
+#include "nd_network.h"    // for SetSocketBlockingEnabled
 
 LEDViewer::LEDViewer(int port) :
     _port(port),
@@ -136,7 +137,7 @@ bool LEDViewer::SendPacket(int socket, void * pData, size_t cbSize)
 {
     // Send data to the emulator's virtual serial port
 
-    const byte * pb = (byte *)pData;
+    const uint8_t * pb = (uint8_t *)pData;
     debugV("Sending Packet:  %02X, %02X, %02X, %02X, %02X, %02X, %02X, %02X, %02X, %02X, %02X, %02X,...",
                             pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], pb[6], pb[7], pb[8], pb[9], pb[10], pb[11]);
 
