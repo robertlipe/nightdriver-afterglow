@@ -38,7 +38,6 @@
 #define PatternStocks_H
 
 #include <Arduino.h>
-#include <string.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <chrono>

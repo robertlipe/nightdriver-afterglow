@@ -2,9 +2,9 @@
 
 #include "globals.h"
 
+#include <cstdint>
 #include <driver/i2c_master.h>
 #include <mutex>
-#include <stdint.h>
 
 struct InertialMetrics
 {

@@ -126,8 +126,6 @@ void IRAM_ATTR AudioSamplerTaskEntry(void *)
 //
 // The VICESocketServer acts as a server that sends serial data to the socket on the emulator machine to emulate serial data.
 
-#include <fcntl.h>
-
 class VICESocketServer
 {
 private:

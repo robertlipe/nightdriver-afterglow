@@ -40,9 +40,9 @@
 #include <ArduinoJson.h>
 #include <array>
 #include <chrono>
+#include <cstring>
 #include <HTTPClient.h>
 #include <map>
-#include <string.h>
 #include <thread>
 #include <UrlEncode.h>
 
@@ -50,6 +50,7 @@
 
 #include "systemcontainer.h"
 #include "TJpg_Decoder.h"
+
 #include "types.h"
 
 // Use centralized Apple5x7 font across all targets
