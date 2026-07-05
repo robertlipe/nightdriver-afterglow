@@ -93,15 +93,9 @@ class PatternSMBoidExplosion : public EffectWithId<PatternSMBoidExplosion>
         float G;          // Gravitational Constant
         PVector location; // Location
         float coldiv;
-        Attractor()
+        Attractor() : mass(11.0f), G(11.0f), coldiv(1.5f)
         {
-            location = PVector(ROWS / (float)2.0,
-                               COLS / (float)coldiv); // PVector(ROWS /
-                                                      // (float)random((float)1.1,(float)4.0), COLS
-                                                      // / (float)random((float)1.1,(float)4.0));
-            mass = 11.0F;                             // random(5.5,8);
-            G = 11.0F;                                //(float)random((float)1.5F,(float)2.9F);//random(.5,1.1);
-            coldiv = 1.5F;
+            location = PVector(ROWS / (float)2.0, COLS / (float)coldiv);
         }
         void UpdateLocation()
         {

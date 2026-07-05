@@ -10,8 +10,8 @@
 class PatternSMXorCircles : public EffectWithId<PatternSMXorCircles>
 {
   private:
-    static constexpr uint8_t scale_x = std::log2f(64.0f / MATRIX_WIDTH);
-    static constexpr uint8_t scale_y = std::log2f(64.0f / MATRIX_HEIGHT);
+    static constexpr uint8_t scale_x = (MATRIX_WIDTH <= 64) ? (uint8_t)std::log2f(64.0f / MATRIX_WIDTH) : 0;
+    static constexpr uint8_t scale_y = (MATRIX_HEIGHT <= 64) ? (uint8_t)std::log2f(64.0f / MATRIX_HEIGHT) : 0;
 
   public:
     PatternSMXorCircles() : EffectWithId<PatternSMXorCircles>("Xor Circles")

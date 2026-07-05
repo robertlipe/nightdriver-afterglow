@@ -57,9 +57,13 @@ class PatternSMBubbles : public EffectWithId<PatternSMBubbles>
     {
         EVERY_N_MILLISECONDS(2000)
         {
-            if (count <= 5 || count >= 79)
+            if (count <= 5)
             {
-                speed = -speed;
+                speed = 1;
+            }
+            else if (count >= 80)
+            {
+                speed = -1;
             }
             count += speed;
         }

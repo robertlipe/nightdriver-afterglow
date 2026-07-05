@@ -26,15 +26,13 @@ class PatternSMSquaresAndDots : public EffectWithId<PatternSMSquaresAndDots>
     void printSpr(int x, int y, int numSpr)
     {
         int hue = random8();
-        int y1 = y;
+        int startX = std::clamp(x, 3, MATRIX_WIDTH - 3);
+        int startY = std::clamp(y, 3, MATRIX_HEIGHT - 3);
         for (unsigned j = 0; j < 3; j++)
         {
-            int x1 = x;
             for (unsigned i = 0; i < 3; i++)
             {
-                x1 = std::clamp(x1, 3, MATRIX_WIDTH - 3);
-                y1 = std::clamp(y1, 3, MATRIX_HEIGHT - 3);
-                uint16_t index = XY(x1, y1);
+                uint16_t index = XY(startX + i, startY + j);
                 if (sprites[numSpr][i][j])
                 {
                     g()->leds[index].setHue(hue);
@@ -43,9 +41,7 @@ class PatternSMSquaresAndDots : public EffectWithId<PatternSMSquaresAndDots>
                 {
                     g()->leds[index] = 0;
                 }
-                x1++;
             }
-            y1++;
         }
     }
 

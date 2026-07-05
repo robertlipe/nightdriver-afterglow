@@ -16,18 +16,16 @@ class PatternSMTwist : public EffectWithId<PatternSMTwist>
 
     void patt1(int i, int j, uint8_t color1, uint8_t color2)
     {
-        //  leds[XY(i, j)] = CHSV(0, 255, 0);
-        g()->leds[XY(i + 1, j)] = CHSV(color1, 255, BRIGHTNESS);
-        g()->leds[XY(i + 1, j + 1)] = CHSV(color1, 255, BRIGHTNESS);
-        g()->leds[XY(i, j + 1)] = CHSV(color2, 255, BRIGHTNESS);
+        g()->drawPixel(i + 1, j, CHSV(color1, 255, BRIGHTNESS));
+        g()->drawPixel(i + 1, j + 1, CHSV(color1, 255, BRIGHTNESS));
+        g()->drawPixel(i, j + 1, CHSV(color2, 255, BRIGHTNESS));
     }
 
     void patt2(int i, int j, uint8_t color1, uint8_t color2)
     {
-        //  leds[XY(i, j)] = CHSV(0, 255, 0);
-        g()->leds[XY(i + 1, j)] = CHSV(color1, 255, BRIGHTNESS);
-        g()->leds[XY(i + 1, j + 1)] = CHSV(color2, 255, BRIGHTNESS);
-        g()->leds[XY(i, j + 1)] = CHSV(color2, 255, BRIGHTNESS);
+        g()->drawPixel(i + 1, j, CHSV(color1, 255, BRIGHTNESS));
+        g()->drawPixel(i + 1, j + 1, CHSV(color2, 255, BRIGHTNESS));
+        g()->drawPixel(i, j + 1, CHSV(color2, 255, BRIGHTNESS));
     }
 
   public:

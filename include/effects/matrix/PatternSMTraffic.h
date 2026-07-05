@@ -79,7 +79,7 @@ class PatternSMTraffic : public EffectWithId<PatternSMTraffic>
 
         g()->drawPixel(center + 4, centerY + 4, light_colorV);
         g()->drawPixel(center + 5, centerY + 5, light_colorV);
-        g()->drawPixel(center - 5, centerY - 5, light_colorH);
+        g()->drawPixel(center - 4, centerY - 4, light_colorH);
         g()->drawPixel(center - 5, centerY - 5, light_colorH);
 
         g()->drawPixel(center, centerY + 1, CRGB::Black);
@@ -147,7 +147,7 @@ class PatternSMTraffic : public EffectWithId<PatternSMTraffic>
             g()->drawPixel((center - 1), MATRIX_HEIGHT - 1, color);
 
             // [B] ****
-            for (uint8_t y = centerY - 2; y > 0; y--)
+            for (int y = (int)centerY - 2; y > 0; y--)
             {
                 g()->drawPixel((center + 1), y, g()->getPixel((center + 1U), y - 1U));
             }
