@@ -227,31 +227,48 @@ class ISoundAnalyzer
 
 class SoundAnalyzer : public ISoundAnalyzer // Non-audio case stub
 {
+  private:
     PeakData _emptyPeaks; // zero-initialized
+    bool _simulateBeat = false;
+    int _simBPM = 120;
+    mutable PeakData _simulatedPeaks{};
+
+    bool isOnBeat() const
+    {
+        if (!_simulateBeat)
+            return false;
+        const float beatsPerSecond = _simBPM / 60.0f;
+        const float beatPeriodMillis = (beatsPerSecond > 0) ? (1000.0f / beatsPerSecond) : 1000.0f;
+        const float beatActiveDurationMillis = beatPeriodMillis * 0.20f; // 20% duration
+        unsigned long currentTime = millis();
+        float timeInCycle = fmodf(static_cast<float>(currentTime), beatPeriodMillis);
+        return (timeInCycle < beatActiveDurationMillis);
+    }
+
   public:
     float VURatio() const override
     {
-        return 0.0f;
+        return isOnBeat() ? 0.85f : 0.02f;
     }
 
     float VURatioFade() const override
     {
-        return 0.0f;
+        return VURatio();
     }
 
     float VU() const override
     {
-        return 0.0f;
+        return VURatio();
     }
 
     float PeakVU() const override
     {
-        return 0.0f;
+        return VURatio();
     }
 
     float MinVU() const override
     {
-        return 0.0f;
+        return VURatio();
     }
 
     int AudioFPS() const override
@@ -271,22 +288,31 @@ class SoundAnalyzer : public ISoundAnalyzer // Non-audio case stub
 
     const PeakData &Peaks() const override
     {
+        if (isOnBeat())
+        {
+            for (int i = 0; i < NUM_BANDS; ++i)
+            {
+                float level = std::max(0.0f, 1.0f - (float)i / (NUM_BANDS * 0.85f));
+                _simulatedPeaks[i] = powf(level, 0.333f);
+            }
+            return _simulatedPeaks;
+        }
         return _emptyPeaks;
     }
 
     float Peak2Decay(int) const override
     {
-        return 0.0f;
+        return VURatio();
     }
 
     float Peak1Decay(int) const override
     {
-        return 0.0f;
+        return VURatio();
     }
 
     unsigned long LastPeak1Time(int) const override
     {
-        return 0;
+        return isOnBeat() ? millis() : 0;
     }
 
     void SetPeakDecayRates(float, float) override
@@ -295,19 +321,26 @@ class SoundAnalyzer : public ISoundAnalyzer // Non-audio case stub
 
     bool GetSimulateBeat() const override
     {
-		return false;
-	}
+        return _simulateBeat;
+    }
 
     int GetSimulateBPM() const override
-	{
-		return 0;
-	}
+    {
+        return _simBPM;
+    }
 
-    void SetSimulateBeat(bool) override {}
-    void SetSimulateBPM(int) override {}
+    void SetSimulateBeat(bool b) override
+    {
+        _simulateBeat = b;
+    }
+
+    void SetSimulateBPM(int bpm) override
+    {
+        _simBPM = bpm;
+    }
+
     void RunSamplerPass() override {}
     void SimulateBeatPass() override {}
-
 };
 
 #else // Audio case
