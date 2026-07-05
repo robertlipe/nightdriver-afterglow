@@ -1,0 +1,50 @@
+#pragma once
+
+#include "effectmanager.h"
+#include <cmath>
+
+// Yo Dawg! Circles inside your circles, but XORing the patterns.
+// Needs more clever color.
+// Inspired by https://editor.soulmatelights.com/gallery/1521-xor-circles
+
+class PatternSMXorCircles : public EffectWithId<PatternSMXorCircles>
+{
+  private:
+    static constexpr uint8_t scale_x = (MATRIX_WIDTH <= 64) ? (uint8_t)std::log2f(64.0f / MATRIX_WIDTH) : 0;
+    static constexpr uint8_t scale_y = (MATRIX_HEIGHT <= 64) ? (uint8_t)std::log2f(64.0f / MATRIX_HEIGHT) : 0;
+
+  public:
+    PatternSMXorCircles() : EffectWithId<PatternSMXorCircles>("Xor Circles")
+    {
+    }
+
+    PatternSMXorCircles(const JsonObjectConst &jsonObject) : EffectWithId<PatternSMXorCircles>(jsonObject)
+    {
+    }
+
+    void Start() override
+    {
+        g()->Clear();
+    }
+
+    void Draw() override
+    {
+        uint16_t x1sh = beatsin16(5, 0, MATRIX_WIDTH);
+        uint16_t y1sh = beatsin16(6, 0, MATRIX_HEIGHT);
+        uint16_t x2sh = beatsin16(7, 0, MATRIX_WIDTH);
+        uint16_t y2sh = beatsin16(4, 0, MATRIX_HEIGHT);
+        for (int y = 0; y < MATRIX_HEIGHT; y++)
+        {
+            for (int x = 0; x < MATRIX_WIDTH; x++)
+            {
+                int cx = x - x1sh;
+                int cy = y - y1sh;
+                uint8_t a = sqrt16(((cx * cx) + (cy * cy))) << scale_x;
+                cx = x - x2sh;
+                cy = y - y2sh;
+                uint8_t v = sqrt16(((cx * cx) + (cy * cy))) << scale_y;
+                g()->leds[XY(x, y)] = (((a ^ v) >> 4) & 1) * 255;
+            }
+        }
+    }
+};
