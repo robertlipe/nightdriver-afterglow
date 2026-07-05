@@ -228,24 +228,41 @@ class ISoundAnalyzer
 class SoundAnalyzer : public ISoundAnalyzer // Non-audio case stub
 {
   private:
-    PeakData _emptyPeaks; // zero-initialized
+    PeakData _emptyPeaks{}; // zero-initialized
     bool _simulateBeat = false;
     int _simBPM = 120;
-    mutable PeakData _simulatedPeaks{};
+    PeakData _simulatedPeaks{};
+    mutable unsigned long _lastBeatMillis = ULONG_MAX;
+    mutable bool _cachedBeat = false;
 
     bool isOnBeat() const
     {
-        if (!_simulateBeat)
+        if (!_simulateBeat || _simBPM <= 0)
             return false;
-        const float beatsPerSecond = _simBPM / 60.0f;
-        const float beatPeriodMillis = (beatsPerSecond > 0) ? (1000.0f / beatsPerSecond) : 1000.0f;
-        const float beatActiveDurationMillis = beatPeriodMillis * 0.20f; // 20% duration
-        unsigned long currentTime = millis();
-        float timeInCycle = fmodf(static_cast<float>(currentTime), beatPeriodMillis);
-        return (timeInCycle < beatActiveDurationMillis);
+            
+        unsigned long currentMillis = millis();
+        if (currentMillis == _lastBeatMillis)
+            return _cachedBeat;
+
+        const uint32_t beatPeriodMillis = (60 * 1000) / (uint32_t)_simBPM;
+        const uint32_t beatActiveDurationMillis = beatPeriodMillis / 5; // 20% duration
+        uint32_t timeInCycle = currentMillis % beatPeriodMillis;
+        
+        _cachedBeat = (timeInCycle < beatActiveDurationMillis);
+        _lastBeatMillis = currentMillis;
+        return _cachedBeat;
     }
 
   public:
+    SoundAnalyzer()
+    {
+        for (int i = 0; i < NUM_BANDS; ++i)
+        {
+            float level = std::max(0.0f, 1.0f - (float)i / (NUM_BANDS * 0.85f));
+            _simulatedPeaks[i] = powf(level, 0.333f);
+        }
+    }
+
     float VURatio() const override
     {
         return isOnBeat() ? 0.85f : 0.02f;
@@ -288,16 +305,7 @@ class SoundAnalyzer : public ISoundAnalyzer // Non-audio case stub
 
     const PeakData &Peaks() const override
     {
-        if (isOnBeat())
-        {
-            for (int i = 0; i < NUM_BANDS; ++i)
-            {
-                float level = std::max(0.0f, 1.0f - (float)i / (NUM_BANDS * 0.85f));
-                _simulatedPeaks[i] = powf(level, 0.333f);
-            }
-            return _simulatedPeaks;
-        }
-        return _emptyPeaks;
+        return isOnBeat() ? _simulatedPeaks : _emptyPeaks;
     }
 
     float Peak2Decay(int) const override
