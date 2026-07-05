@@ -72,16 +72,16 @@ private:
 
   uint8_t radiusx = MATRIX_WIDTH / 4;
   uint8_t radiusy = MATRIX_HEIGHT / 4;
-  uint8_t minx = MATRIX_CENTER_X - radiusx;
-  uint8_t maxx = MATRIX_CENTER_X + radiusx - 1;
-  uint8_t miny = MATRIX_CENTER_Y - radiusy;
-  uint8_t maxy = MATRIX_CENTER_Y + radiusy - 1;
+  int minx = MATRIX_CENTER_X - radiusx;
+  int maxx = MATRIX_CENTER_X + radiusx - 1;
+  int miny = MATRIX_CENTER_Y - radiusy;
+  int maxy = MATRIX_CENTER_Y + radiusy - 1;
 
-  uint8_t spirocount = 1;
-  uint8_t spirooffset = 256 / spirocount;
-  boolean spiroincrement = false;
+  int spirocount = 1;
+  int spirooffset = 256 / spirocount;
+  bool spiroincrement = false;
 
-  boolean handledChange = false;
+  bool handledChange = false;
 
 public:
 
@@ -99,15 +99,15 @@ public:
 
     // effects.ShowFrame();
 
-    boolean change = false;
+    bool change = false;
 
     for (int i = 0; i < spirocount; i++)
     {
-      uint8_t x = graphics->mapsin8(theta1 + i * spirooffset, minx, maxx);
-      uint8_t y = graphics->mapcos8(theta1 + i * spirooffset, miny, maxy);
+      int x = graphics->mapsin8(theta1 + i * spirooffset, minx, maxx);
+      int y = graphics->mapcos8(theta1 + i * spirooffset, miny, maxy);
 
-      uint8_t x2 = graphics->mapsin8(theta2 + i * spirooffset, x - radiusx, x + radiusx);
-      uint8_t y2 = graphics->mapcos8(theta2 + i * spirooffset, y - radiusy, y + radiusy);
+      int x2 = graphics->mapsin8(theta2 + i * spirooffset, x - radiusx, x + radiusx);
+      int y2 = graphics->mapcos8(theta2 + i * spirooffset, y - radiusy, y + radiusy);
 
       CRGB color = graphics->ColorFromCurrentPalette(hueoffset + i * spirooffset, 128);
       graphics->leds[graphics->xy(x2, y2)] += color;
@@ -147,7 +147,7 @@ public:
             spirocount -= 1;
         }
 
-        spirooffset = 256 / spirocount;
+        spirooffset = (spirocount > 0) ? 256 / spirocount : 256;
       }
 
       if (!change)

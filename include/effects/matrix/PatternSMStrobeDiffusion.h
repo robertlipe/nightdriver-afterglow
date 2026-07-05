@@ -93,14 +93,14 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
         static int ct;
         ct++;
         // Scroll existing snowflakes down the screen.
-        for (uint8_t x = 0U; x < MATRIX_WIDTH; x++)
+        for (int x = 0; x < MATRIX_WIDTH; x++)
         {
             // Don't copy the very top (usable) line that we're about to fill with
             // fresh snowflakes.
-            for (uint8_t y = MATRIX_HEIGHT - 1; y > top_line_offset; y--)
+            for (int y = MATRIX_HEIGHT - 1; y > top_line_offset; y--)
             {
-                assert((x >= 0) && (x < MATRIX_WIDTH));
-                assert((y >= 0) && (y < MATRIX_HEIGHT));
+                assert(x < MATRIX_WIDTH);
+                assert(y < MATRIX_HEIGHT);
                 snowAt(x, y) = snowAt(x, y - 1);
                 if (snowAt(x, y) > 0)
                 {

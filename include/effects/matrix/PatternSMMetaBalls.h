@@ -12,10 +12,10 @@ class PatternSMMetaBalls : public EffectWithId<PatternSMMetaBalls>
 {
   private:
 
-    uint8_t bx[5];
-    uint8_t by[5];
+    int bx[5];
+    int by[5];
 
-    uint8_t dist(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2)
+    uint8_t dist(int x1, int y1, int x2, int y2)
     {
         int a = y2 - y1;
         int b = x2 - x1;
@@ -41,8 +41,8 @@ class PatternSMMetaBalls : public EffectWithId<PatternSMMetaBalls>
     {
         for (uint8_t a = 0; a < 5; a++)
         {
-            bx[a] = beatsin8(15 + a * 2, 0, MATRIX_WIDTH - 1, 0, a * 32);
-            by[a] = beatsin8(18 + a * 2, 0, MATRIX_HEIGHT - 1, 0, a * 32);
+            bx[a] = beatsin16(15 + a * 2, 0, MATRIX_WIDTH - 1, 0, a * 32);
+            by[a] = beatsin16(18 + a * 2, 0, MATRIX_HEIGHT - 1, 0, a * 32);
         }
         for (unsigned i = 0; i < MATRIX_WIDTH - 1; i++)
         {

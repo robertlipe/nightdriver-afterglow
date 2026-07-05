@@ -56,11 +56,8 @@
 // Use centralized Apple5x7 font across all targets
 extern const GFXfont Apple5x7 PROGMEM;
 
-using namespace std::chrono;
-using namespace std::chrono_literals;
-
-#define WEATHER_INTERVAL_SECONDS 600s
-#define WEATHER_CHECK_WIFI_WAIT 5000
+static constexpr auto WEATHER_INTERVAL = std::chrono::seconds(600);
+static constexpr uint32_t WEATHER_CHECK_WIFI_WAIT = 5000;
 
 extern const uint8_t brokenclouds_start[]           asm("_binary_assets_bmp_brokenclouds_jpg_start");
 extern const uint8_t brokenclouds_end[]             asm("_binary_assets_bmp_brokenclouds_jpg_end");
@@ -130,6 +127,9 @@ static const std::map<const String, EmbeddedFile, std::less<const String>, psram
  * @brief This class implements the Weather Data effect
  *
  */
+using namespace std::chrono;
+using namespace std::chrono_literals;
+
 class PatternWeather : public EffectWithId<PatternWeather>
 {
   private:
@@ -191,7 +191,7 @@ class PatternWeather : public EffectWithId<PatternWeather>
      */
     static inline float KelvinToFarenheit(float K)
     {
-        return (K - 273.15) * 9.0f/5.0f + 32;
+        return (K - 273.15f) * 9.0f/5.0f + 32.0f;
     }
 
     /**
@@ -202,7 +202,7 @@ class PatternWeather : public EffectWithId<PatternWeather>
      */
     static inline float KelvinToCelsius(float K)
     {
-        return K - 273.15;
+        return K - 273.15f;
     }
 
     /**
@@ -504,7 +504,7 @@ public:
 
         // If location and/or country have changed, trigger an update regardless of timer, but
         // not more than once every half a minute
-        if (secondsSinceLastUpdate >= WEATHER_INTERVAL_SECONDS || (HasLocationChanged() && secondsSinceLastUpdate >= 30s))
+        if (secondsSinceLastUpdate >= WEATHER_INTERVAL || (HasLocationChanged() && secondsSinceLastUpdate >= std::chrono::seconds(30)))
         {
             latestUpdate = now;
 

@@ -13,20 +13,21 @@ class PatternSMHolidayLights : public EffectWithId<PatternSMHolidayLights>
 
   private:
 
+    static_assert(MATRIX_HEIGHT > 4, "PatternSMHolidayLights requires MATRIX_HEIGHT > 4");
     static constexpr int speed = (200 / (MATRIX_HEIGHT - 4));
     uint8_t hue {0};
     uint8_t effId = 2; // 1 - 3
 
-    const uint8_t maxDim = max(MATRIX_WIDTH, MATRIX_HEIGHT);
-    const uint8_t minDim = min(MATRIX_WIDTH, MATRIX_HEIGHT);
-    const uint8_t width_adj = (MATRIX_WIDTH < MATRIX_HEIGHT ? (MATRIX_HEIGHT - MATRIX_WIDTH) / 2 : 0);
-    const uint8_t height_adj = (MATRIX_HEIGHT < MATRIX_WIDTH ? (MATRIX_WIDTH - MATRIX_HEIGHT) / 2 : 0);
+    const int maxDim = std::max(MATRIX_WIDTH, MATRIX_HEIGHT);
+    const int minDim = std::min(MATRIX_WIDTH, MATRIX_HEIGHT);
+    const int width_adj = (MATRIX_WIDTH < MATRIX_HEIGHT ? (MATRIX_HEIGHT - MATRIX_WIDTH) / 2 : 0);
+    const int height_adj = (MATRIX_HEIGHT < MATRIX_WIDTH ? (MATRIX_WIDTH - MATRIX_HEIGHT) / 2 : 0);
     const bool glitch = abs(MATRIX_WIDTH - MATRIX_HEIGHT) >= minDim / 4;
 
     uint8_t density = 50;
     uint8_t fadingSpeed = 10;
     uint8_t updateFromRGBWeight = 10;
-    const uint8_t scaleToNumLeds = NUM_LEDS / 256;
+    const int scaleToNumLeds = std::max(1, NUM_LEDS / 256);
 
     void confetti()
     {

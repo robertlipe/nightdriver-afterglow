@@ -51,15 +51,14 @@
 #include "systemcontainer.h"
 
 extern const GFXfont Apple5x7 PROGMEM;
-using namespace std;
+static constexpr auto STOCKS_UPDATE_INTERVAL = std::chrono::seconds(6);
+static constexpr auto STOCKS_FETCH_INTERVAL  = std::chrono::seconds(60);
+
+static constexpr char DEFAULT_STOCK_SERVER[] = "davepl.dyndns.org:8888";
+static constexpr char DEFAULT_TICKER_SYMBOLS[] = "AAPL,AMZN,TSLA,MSFT";
+
 using namespace std::chrono;
 using namespace std::chrono_literals;
-
-#define STOCKS_UPDATE_INTERVAL_SECONDS 6s
-#define STOCKS_FETCH_INTERVAL_SECONDS  60s
-
-#define DEFAULT_STOCK_SERVER           "davepl.dyndns.org:8888"
-#define DEFAULT_TICKER_SYMBOLS         "AAPL,AMZN,TSLA,MSFT"
 
 // AnimatedText
 //
@@ -158,7 +157,7 @@ public:
     float close = 0.0f;
     float volume = 0.0f;
 
-    vector<StockPoint> points;
+    std::vector<StockPoint> points;
 
     String to_string() const
     {
@@ -202,13 +201,14 @@ private:
 
     std::map<String, StockData> stockData;  // map of stock symbols to quotes
 
-    using StockDataCallback = function<void(const StockData&)>;
+    using StockDataCallback = std::function<void(const StockData&)>;
 
     HTTPClient http;
 
     void GetQuote(const String &symbol, StockDataCallback callback = nullptr)
     {
-        http.begin("http://" + stockServer + "/?ticker=" + symbol);
+        String url = String("http://") + stockServer + "/?ticker=" + symbol;
+        http.begin(url);
 
         int httpCode = http.GET();
         if (httpCode == HTTP_CODE_OK)
@@ -451,7 +451,7 @@ public:
         int y = 24;
         int w = MATRIX_WIDTH;
         int h = MATRIX_HEIGHT - y;
-        int n = std::min((uint)MATRIX_WIDTH, currentStock.points.size());
+        int n = std::min(static_cast<size_t>(MATRIX_WIDTH), currentStock.points.size());
 
         if (n > 0)
         {
@@ -509,7 +509,7 @@ public:
         {
             if (system_clock::now() >= nextFetch)
             {
-                nextFetch = system_clock::now() + STOCKS_FETCH_INTERVAL_SECONDS;
+                nextFetch = system_clock::now() + STOCKS_FETCH_INTERVAL;
                 // Trigger the stock data reader.
                 g_ptrSystem->GetNetworkReader().FlagReader(readerIndex);
             }
@@ -520,7 +520,7 @@ public:
         auto now = system_clock::now();
 
         // We move on to next stock if the interval has passed, or we have less stock data available than before
-        auto showNextStock = now - lastUpdate >= STOCKS_UPDATE_INTERVAL_SECONDS || stockData.size() < lastCount;
+        auto showNextStock = now - lastUpdate >= STOCKS_UPDATE_INTERVAL || stockData.size() < lastCount;
 
         // Only do something if we should and have stock data to show
         if (showNextStock && !stockData.empty())
@@ -528,14 +528,11 @@ public:
             lastUpdate = now;
             lastCount = stockData.size();
 
-            if (showNextStock)
-            {
-                iCurrentStock = (iCurrentStock + 1) % stockData.size();
+            iCurrentStock = (iCurrentStock + 1) % stockData.size();
 
-                auto it = stockData.begin();
-                std::advance(it, iCurrentStock);
-                StartQuoteDisplay(it->second);
-            }
+            auto it = stockData.begin();
+            std::advance(it, iCurrentStock);
+            StartQuoteDisplay(it->second);
         }
 
         // Paint Frame

@@ -64,7 +64,7 @@ class PatternSpin : public EffectWithId<PatternSpin>
     float radius = 16;
 
     float speedStart = 1;
-    float velocityStart = 0.6;
+    float velocityStart = 0.6f;
 
     float maxSpeed = 30;
 
@@ -98,15 +98,15 @@ class PatternSpin : public EffectWithId<PatternSpin>
         // target position
         float targetDegrees = degrees + speed;
         float targetRadians = radians(targetDegrees);
-        int targetX = (int) (MATRIX_CENTER_X + radius * cos(targetRadians));
-        int targetY = (int) (MATRIX_CENTER_Y - radius * sin(targetRadians));
+        int targetX = (int) (MATRIX_CENTER_X + radius * cosf(targetRadians));
+        int targetY = (int) (MATRIX_CENTER_Y - radius * sinf(targetRadians));
 
         float tempDegrees = degrees;
 
         do{
-            float radians = radians(tempDegrees);
-            x = (int) (MATRIX_CENTER_X + radius * cos(radians));
-            y = (int) (MATRIX_CENTER_Y - radius * sin(radians));
+            float rad = radians(tempDegrees);
+            x = (int) (MATRIX_CENTER_X + radius * cosf(rad));
+            y = (int) (MATRIX_CENTER_Y - radius * sinf(rad));
 
             g()->drawPixel(x, y, color);
             g()->drawPixel(y, x, color);

@@ -10,15 +10,15 @@ class PatternSMTwister : public EffectWithId<PatternSMTwister>
 {
   private:
 
-    void mydrawLine(uint8_t x, uint8_t x1, uint8_t y, CHSV color, bool dot, bool grad, uint8_t numline, uint8_t side, uint8_t sinOff,
+    void mydrawLine(int x, int x1, int y, CHSV color, bool dot, bool grad, uint8_t numline, uint8_t side, uint8_t sinOff,
                     uint16_t a)
     { // my ugly hori line draw function )))
 
-        uint8_t steps = abs8(x1 - x) + 1;
+        int steps = abs(x1 - x) + 1;
 
         for (uint16_t i = 1; i <= steps; i++)
         {
-            uint8_t dx = lerp8by8(x1, x, i * 255 / steps);
+            int dx = lerp8by8(x1, x, i * 255 / steps);
             uint16_t index = XY(dx, y);
             g()->leds[index] = color;
             if (grad)
@@ -47,14 +47,14 @@ class PatternSMTwister : public EffectWithId<PatternSMTwister>
         uint16_t a = millis() / 10;
         g()->Clear();
 
-        for (uint16_t i = 0; i < MATRIX_HEIGHT; i++)
+        for (int i = 0; i < MATRIX_HEIGHT; i++)
         {
             uint8_t sinOff = sin8(i * 8 / PI + cos8(a / 2 + i) / 4 + a / 3);
 
-            uint8_t x1 = sin8(sinOff + a) * (MATRIX_WIDTH) / 255;
-            uint8_t x2 = sin8(sinOff + a + 64) * (MATRIX_WIDTH) / 255;
-            uint8_t x3 = sin8(sinOff + a + 128) * (MATRIX_WIDTH) / 255;
-            uint8_t x4 = sin8(sinOff + a + 192) * (MATRIX_WIDTH) / 255;
+            int x1 = sin8(sinOff + a) * (MATRIX_WIDTH) / 255;
+            int x2 = sin8(sinOff + a + 64) * (MATRIX_WIDTH) / 255;
+            int x3 = sin8(sinOff + a + 128) * (MATRIX_WIDTH) / 255;
+            int x4 = sin8(sinOff + a + 192) * (MATRIX_WIDTH) / 255;
             x1 = x1 >= MATRIX_WIDTH ? (MATRIX_WIDTH - 1) : x1;
             x2 = x2 >= MATRIX_WIDTH ? (MATRIX_WIDTH - 1) : x2;
             x3 = x3 >= MATRIX_WIDTH ? (MATRIX_WIDTH - 1) : x3;

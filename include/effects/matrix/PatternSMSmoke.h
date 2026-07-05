@@ -68,7 +68,7 @@ public:
     // Two diagonal (note Y is used for height AND X offset)
     // "wipers", of different colors. Each leaves a
     // sky-written trailer of color.
-    for (uint8_t y = 0; y < HEIGHT; y++)
+    for (int y = 0; y < HEIGHT; y++)
     {
       g()->leds[XY((deltaHue + y + 1U) % WIDTH, HEIGHT - 1U - y)] += color;
       g()->leds[XY((deltaHue + y) % WIDTH, HEIGHT - 1U - y)] += color2; // color2

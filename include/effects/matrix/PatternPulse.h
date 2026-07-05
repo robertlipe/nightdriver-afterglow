@@ -69,9 +69,8 @@ class PatternPulse : public EffectWithId<PatternPulse>
     int centerX = 0;
     int centerY = 0;
     int step = -1;
-    int maxSteps = min(MATRIX_HEIGHT, MATRIX_WIDTH);
-    float fadeRate = 0.90;
-    int diff;
+    int maxSteps = std::min(MATRIX_HEIGHT, MATRIX_WIDTH);
+    float fadeRate = 0.90f;
 
   public:
 
@@ -102,12 +101,12 @@ class PatternPulse : public EffectWithId<PatternPulse>
             if (step < maxSteps)
             {
                 // initial pulse
-                graphics->DrawSafeCircle(centerX, centerY, step, graphics->to16bit(ColorFromPalette(RainbowColors_p, hue, pow(fadeRate, step - 2) * 255)));
+                graphics->DrawSafeCircle(centerX, centerY, step, graphics->to16bit(ColorFromPalette(RainbowColors_p, hue, powf(fadeRate, step - 2) * 255.0f)));
 
                 // secondary pulse
                 if (step > 5)
                 {
-                    graphics->DrawSafeCircle(centerX, centerY, step - 3, graphics->to16bit(ColorFromPalette(RainbowColors_p, hue, pow(fadeRate, step - 2) * 255)));
+                    graphics->DrawSafeCircle(centerX, centerY, step - 3, graphics->to16bit(ColorFromPalette(RainbowColors_p, hue, powf(fadeRate, step - 2) * 255.0f)));
                 }
                 step++;
             }
@@ -134,8 +133,7 @@ class PatternPulsar : public BeatEffectBase, public EffectWithId<PatternPulsar> 
 
     std::vector<PulsePop> _pops;
 
-    float fadeRate = 0.9;
-    int diff;
+    float fadeRate = 0.9f;
 
   public:
     PatternPulsar() :
@@ -205,11 +203,11 @@ class PatternPulsar : public BeatEffectBase, public EffectWithId<PatternPulsar> 
                 if (pop->step < pop->maxSteps)
                 {
                     // initial pulse
-                    g()->DrawSafeCircle(pop->centerX, pop->centerY, pop->step, g()->to16bit(g()->ColorFromCurrentPalette(pop->hue, pow(fadeRate, pop->step - 1) * 255)));
+                    g()->DrawSafeCircle(pop->centerX, pop->centerY, pop->step, g()->to16bit(g()->ColorFromCurrentPalette(pop->hue, powf(fadeRate, pop->step - 1) * 255.0f)));
 
                     // secondary pulse
                     if (pop->step > 3)
-                        g()->DrawSafeCircle(pop->centerX, pop->centerY, pop->step - 3, g()->to16bit(g()->ColorFromCurrentPalette(pop->hue, pow(fadeRate, pop->step - 2) * 255)));
+                        g()->DrawSafeCircle(pop->centerX, pop->centerY, pop->step - 3, g()->to16bit(g()->ColorFromCurrentPalette(pop->hue, powf(fadeRate, pop->step - 2) * 255.0f)));
 
                     // This looks like PDP-11 code to me.  double post-inc for the win!
                     pop++->step++;
