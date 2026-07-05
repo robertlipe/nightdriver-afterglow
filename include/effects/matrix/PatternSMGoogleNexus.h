@@ -1,0 +1,139 @@
+#pragma once
+
+#include "effectmanager.h"
+
+// Derived from https://editor.soulmatelights.com/gallery/729-google-nexus
+// Clearly, this is not a Google product; it's rendition of the boot and life
+// screen effect used on the first Google Nexus device, the Nexus S.
+
+class PatternSMGoogleNexus : public EffectWithId<PatternSMGoogleNexus>
+{
+  private:
+    static constexpr int GOOGLE_NEXUS = MATRIX_WIDTH;
+
+    uint8_t speed = 180; // 0-255
+    uint8_t scale = 60;  // Number of drops. (ed.: relatively speaking.... 0-255)
+                         // probably should be a function of WIDTH * HEIGHT.
+
+    // These are clearly wrong...Just treat it like a square for now.
+    struct Dot {
+        float posX;
+        float posY;
+        int8_t direct;
+        CRGB color;
+        float accel;
+    };
+    Dot dots[MATRIX_WIDTH];
+
+    static constexpr float fmap(float x, float in_min, float in_max, float out_min, float out_max) noexcept
+    {
+        return (out_max - out_min) * (x - in_min) / (in_max - in_min) + out_min;
+    }
+
+    void resetDot(int idx)
+    {
+        dots[idx].direct = random8(0, 4);                                            // set direction
+        dots[idx].color = ColorFromPalette(RainbowColors_p, random(0, 9) * 31, 255); // color
+        dots[idx].accel = (float)random(5, 10) / 70; // make particles slightly different acceleration
+        switch (dots[idx].direct)
+        {
+        case 0:                                      // вверх
+            dots[idx].posX = random8(0, MATRIX_WIDTH); // Scatter drops across the width
+            dots[idx].posY = 0;                        // and height
+            break;
+        case 1:                                      //  вниз
+            dots[idx].posX = random8(0, MATRIX_WIDTH); // Scatter drops across the width
+            dots[idx].posY = MATRIX_HEIGHT - 1;        // and height
+            break;
+        case 2:                                       // вправо
+            dots[idx].posX = 0;                         // Scatter drops across the width
+            dots[idx].posY = random8(0, MATRIX_HEIGHT); // and height
+            break;
+        case 3:                                       // влево
+            dots[idx].posX = MATRIX_WIDTH - 1;          // Scatter drops across the width
+            dots[idx].posY = random8(0, MATRIX_HEIGHT); // and height
+            break;
+        default:
+            break;
+        }
+    }
+
+  public:
+    PatternSMGoogleNexus() : EffectWithId<PatternSMGoogleNexus>("Google Nexus")
+    {
+    }
+
+    PatternSMGoogleNexus(const JsonObjectConst &jsonObject) : EffectWithId<PatternSMGoogleNexus>(jsonObject)
+    {
+    }
+
+    void Start() override
+    {
+        g()->Clear();
+        randomSeed(micros());
+        for (int i = 0; i < GOOGLE_NEXUS; i++)
+        {
+            dots[i].direct = random(0, 4);           // Set direction
+            dots[i].posX = random(0, MATRIX_WIDTH);  // Scatter particles across width
+            dots[i].posY = random(0, MATRIX_HEIGHT); // and height
+            dots[i].color = ColorFromPalette(RainbowColors_p, random8(0, 9) * 31,
+                                           255);     // dot color
+            dots[i].accel = (float)random(5, 11) / 70; // make particles each slightly different speed
+        }
+    }
+
+    void Draw() override
+    {
+        float speedfactor = fmap(speed, 1.0f, 255.0f, 0.1f, 0.33f);
+        fadeAllChannelsToBlackBy(::map(speed, 1, 255, 11, 33));
+
+        for (int i = 0; i < ::map(scale, 1, 255, 4, GOOGLE_NEXUS); i++)
+        {
+            switch (dots[i].direct)
+            {
+            case 0: // up
+                dots[i].posY += (speedfactor + dots[i].accel);
+                break;
+            case 1: //  down
+                dots[i].posY -= (speedfactor + dots[i].accel);
+                break;
+            case 2: // right
+                dots[i].posX += (speedfactor + dots[i].accel);
+                break;
+            case 3: // left
+                dots[i].posX -= (speedfactor + dots[i].accel);
+                break;
+            default:
+                break;
+            }
+
+            // // Make it seamless in Y. And move the blob to the beginning of the
+            // track
+            if (dots[i].posY < 0)
+            {
+                dots[i].posY = (float)MATRIX_HEIGHT - 1.;
+                resetDot(i);
+            }
+
+            if (dots[i].posY > (MATRIX_HEIGHT - 1))
+            {
+                dots[i].posY = 0;
+                resetDot(i);
+            }
+
+            // / Make X seamless.
+            if (dots[i].posX < 0)
+            {
+                dots[i].posX = (MATRIX_WIDTH - 1);
+                resetDot(i);
+            }
+            if (dots[i].posX > (MATRIX_WIDTH - 1))
+            {
+                dots[i].posX = 0;
+                resetDot(i);
+            }
+
+            g()->drawPixelXYF_Wu(dots[i].posX, dots[i].posY, dots[i].color);
+        }
+    }
+};
