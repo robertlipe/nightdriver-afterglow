@@ -31,8 +31,7 @@
 //
 //---------------------------------------------------------------------------
 
-#ifndef PatternQR_H
-#define PatternQR_H
+
 
 #include "qrcode.h"
 
@@ -40,7 +39,8 @@ class PatternQR : public EffectWithId<PatternQR>
 {
     void construct()
     {
-        qrcodeData = (uint8_t *) PreferPSRAMAlloc(qrcode_getBufferSize(qrVersion));
+        // Allocate buffer and ensure it is freed on destruction.
+        qrcodeData.reset((uint8_t *) PreferPSRAMAlloc(qrcode_getBufferSize(kQrVersion)));
         lastData = "";
     }
 
@@ -48,8 +48,8 @@ protected:
 
     String lastData;
     QRCode qrcode;
-    uint8_t * qrcodeData = nullptr;
-    const int qrVersion = 2;
+    std::unique_ptr<uint8_t[], decltype(&free)> qrcodeData{nullptr, free};
+    static constexpr int kQrVersion = 2;
 
 public:
 
@@ -65,7 +65,6 @@ public:
 
     virtual ~PatternQR()
     {
-        free(qrcodeData);
     }
 
     void Start() override
@@ -83,7 +82,7 @@ public:
         if (sIP != lastData)
         {
             lastData = sIP;
-            qrcode_initText(&qrcode, qrcodeData, qrVersion, ECC_LOW, sIP.c_str());
+            qrcode_initText(&qrcode, qrcodeData.get(), kQrVersion, ECC_LOW, sIP.c_str());
         }
         g()->fillScreen(g()->to16bit(CRGB::DarkBlue));
         const int leftMargin = MATRIX_CENTER_X - qrcode.size / 2;
@@ -97,19 +96,18 @@ public:
         int w = qrcode.size + borderSize * 2;
         int h = w;
 
-        int startX = leftMargin < 0 ? -leftMargin : 0;
+        int startX = std::max(0, -leftMargin);
         int endX = std::min((int)qrcode.size, MATRIX_WIDTH - leftMargin);
 
-        int startY = topMargin < 0 ? -topMargin : 0;
+        int startY = std::max(0, -topMargin);
         int endY = std::min((int)qrcode.size, MATRIX_HEIGHT - topMargin);
 
-        for (uint8_t y = startY; y < endY; y++) {
-            for (uint8_t x = startX; x < endX; x++) {
+        for (int y = startY; y < endY; y++) {
+            for (int x = startX; x < endX; x++) {
                 g()->setPixel(leftMargin + x, topMargin + y, (qrcode_getModule(&qrcode, x, y) ? foregroundColor : BLACK16));
             }
         }
     }
 };
 
-#endif
 

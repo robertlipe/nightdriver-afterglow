@@ -28,9 +28,9 @@ class PatternSMRadialWave : public EffectWithId<PatternSMRadialWave>
         t++;
         const auto& rMap = GFXBase::getPolarMap();
 
-        for (uint8_t x = 0; x < MATRIX_WIDTH; x++)
+        for (int x = 0; x < MATRIX_WIDTH; x++)
         {
-            for (uint8_t y = 0; y < MATRIX_HEIGHT; y++)
+            for (int y = 0; y < MATRIX_HEIGHT; y++)
             {
                 uint8_t angle = rMap[x][y].angle;
                 uint8_t radius = rMap[x][y].scaled_radius;

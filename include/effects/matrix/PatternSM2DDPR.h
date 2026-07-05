@@ -54,15 +54,15 @@ class PatternSM2DDPR : public EffectWithId<PatternSM2DDPR> {
             ZVoffset += 4;
         }
 
-        for (unsigned x = 0; x < MATRIX_WIDTH; x++)
+        for (int x = 0; x < MATRIX_WIDTH; x++)
         {
-            for (unsigned y = 0; y < MATRIX_HEIGHT; y++)
+            for (int y = 0; y < MATRIX_HEIGHT; y++)
             {
                 int dist = ZVcalcDist(x, y, HALF_WIDTH, HALF_HEIGHT);
 
                 // exclude outside of circle
                 int brightness = 1;
-                if (dist += radius)
+                if (dist <= radius)
                 {
                     brightness = ::map(dist, -effTimer, radius, 255, 110);
                     brightness += ZVoffset;

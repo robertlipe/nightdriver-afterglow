@@ -87,13 +87,13 @@ class PatternRainbowFlag : public EffectWithId<PatternRainbowFlag>
             CRGB::Violet
         };
 
-        uint32_t y = 2;
+        int y = 2;
 
-        for (uint32_t c = 0; c < rainbow.size() && y < MATRIX_HEIGHT; c++)
+        for (int c = 0; c < (int)rainbow.size() && y < MATRIX_HEIGHT; c++)
         {
-            for (uint32_t j = 0; j < 5 && y < MATRIX_HEIGHT; j++)
+            for (int j = 0; j < 5 && y < MATRIX_HEIGHT; j++)
             {
-                for (uint32_t x = 0; x < MATRIX_WIDTH; x++)
+                for (int x = 0; x < MATRIX_WIDTH; x++)
                 {
                     g()->leds[XY(x, y)] += rainbow[c];
                 }

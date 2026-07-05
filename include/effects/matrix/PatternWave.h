@@ -74,12 +74,12 @@ class PatternWave : public EffectWithId<PatternWave>
 
     uint8_t rotation = 0;
 
-    uint8_t scale = 256 / MATRIX_WIDTH;
+    int scale = 256 / MATRIX_WIDTH;
 
-    uint8_t maxX = MATRIX_WIDTH - 1;
-    uint8_t maxY = MATRIX_HEIGHT - 1;
+    int maxX = MATRIX_WIDTH - 1;
+    int maxY = MATRIX_HEIGHT - 1;
 
-    uint8_t waveCount = 1;
+    int waveCount = 1;
 
     void construct()
     {
