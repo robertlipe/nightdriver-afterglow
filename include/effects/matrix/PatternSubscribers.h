@@ -45,12 +45,12 @@
 extern const GFXfont Apple5x7 PROGMEM;
 
 // Update subscribers every 30 minutes, retry after 30 seconds on error, and check other things every 5 seconds
-#define SUB_CHECK_INTERVAL          (30 * 60000)
-#define SUB_CHECK_ERROR_INTERVAL    30000
-#define SUB_READER_INTERVAL         5000
+static constexpr uint32_t SUB_CHECK_INTERVAL       = 30 * 60000;
+static constexpr uint32_t SUB_CHECK_ERROR_INTERVAL = 30000;
+static constexpr uint32_t SUB_READER_INTERVAL      = 5000;
 
-#define DEFAULT_CHANNEL_GUID "9558daa1-eae8-482f-8066-17fa787bc0e4"
-#define DEFAULT_CHANNEL_NAME "Daves Garage"
+static constexpr char DEFAULT_CHANNEL_GUID[] = "9558daa1-eae8-482f-8066-17fa787bc0e4";
+static constexpr char DEFAULT_CHANNEL_NAME[] = "Daves Garage";
 
 class PatternSubscribers : public EffectWithId<PatternSubscribers>
 {
@@ -59,9 +59,9 @@ class PatternSubscribers : public EffectWithId<PatternSubscribers>
     // This requires a matching INIT_EFFECT_SETTING_SPECS() in effects.cpp or linker errors will ensue
     DECLARE_EFFECT_SETTING_SPECS(mySettingSpecs);
 
-    long subscribers                        = 0;
-    String youtubeChannelGuid               = DEFAULT_CHANNEL_GUID;
-    String youtubeChannelName               = DEFAULT_CHANNEL_NAME;
+    int32_t subscribers                     = 0;
+    String youtubeChannelGuid               = String(DEFAULT_CHANNEL_GUID);
+    String youtubeChannelName               = String(DEFAULT_CHANNEL_NAME);
     CRGB backgroundColor                    = CRGB(0,16,64);
     CRGB borderColor                        = CRGB(160,160,255);
     bool guidUpdated                        = true;

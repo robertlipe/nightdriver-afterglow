@@ -782,7 +782,6 @@ class PatternSMNoise : public EffectWithId<PatternSMNoise>
         noisescale = 10; // 20
         colorLoop = 0;
         return drawNoise(shikon_23_gp);
-        return drawNoise(shikon_22_gp);
     }
     //===============================================
     uint16_t ColorCube()

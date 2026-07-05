@@ -66,25 +66,22 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef PatternPongClock_H
-#define PatternPongClock_H
+
 
 #include "systemcontainer.h"
 
 extern const GFXfont Apple5x7 PROGMEM;
 
-#define BAT1_X 2 // Pong left bat x pos (this is where the ball collision occurs, the bat is drawn 1 behind these coords)
-#define BAT2_X (MATRIX_WIDTH - 4)
-#define BAT_HEIGHT (MATRIX_HEIGHT / 4)
-#define SPEEDUP 1.15
-#define MAXSPEED 4.0f
+static constexpr int BAT1_X = 2; // Pong left bat x pos (this is where the ball collision occurs, the bat is drawn 1 behind these coords)
+static constexpr int BAT2_X = MATRIX_WIDTH - 4;
+static constexpr int BAT_HEIGHT = MATRIX_HEIGHT / 4;
+static constexpr float SPEEDUP = 1.15f;
+static constexpr float MAXSPEED = 4.0f;
 
 class PatternPongClock : public EffectWithId<PatternPongClock>
 {
   private:
     float ballpos_x, ballpos_y;
-    uint8_t erase_x = 10; // holds ball old pos so we can erase it, set to blank area of screen initially.
-    uint8_t erase_y = 10;
     float ballvel_x, ballvel_y;
     int bat1_y = 5; // bat starting y positions
     int bat2_y = 5;
@@ -92,11 +89,11 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
     int bat2_target_y = 5;
     uint8_t bat1_update = 1; // flags - set to update bat position
     uint8_t bat2_update = 1;
-    uint8_t bat1miss, bat2miss; // flags set on the minute or hour that trigger the bats to miss the ball, thus upping the score to match the time.
+    uint8_t bat1miss = 0, bat2miss = 0; // flags set on the minute or hour that trigger the bats to miss the ball, thus upping the score to match the time.
     uint8_t restart = 1;        // game restart flag - set to 1 initially to set up 1st game
 
-    uint8_t mins;
-    uint8_t hours;
+    int mins;
+    int hours;
 
   public:
 
@@ -136,9 +133,9 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
 
         g()->Clear();
 
-        // draw pitch centre line
-        for (uint16_t y = 0; y < MATRIX_HEIGHT; y += 2)
-            g()->setPixel(MATRIX_WIDTH / 2, y, 0x6666);
+        for (int y = 0; y < MATRIX_HEIGHT; y += 2)
+        {    g()->setPixel(MATRIX_WIDTH / 2, y, 0x6666);
+        }
 
         // draw hh:mm separator colon that blinks once per second
 
@@ -194,11 +191,11 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
 
             if (random(0, 2) > 0)
             {
-                ballvel_y = 0.5;
+                ballvel_y = 0.5f;
             }
             else
             {
-                ballvel_y = -0.5;
+                ballvel_y = -0.5f;
             }
             // draw bats in initial positions
             bat1miss = 0;
@@ -235,16 +232,16 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
 
         // Define the "Thinking zone" around center.  Player will set their targets based on what they see here.
 
-        constexpr float LOOKAHEAD = 1.0;
-        constexpr float leftEdge  = MATRIX_WIDTH / 2 - MAXSPEED * LOOKAHEAD;
-        constexpr float rightEdge = MATRIX_WIDTH / 2 + MAXSPEED * LOOKAHEAD;
+        const float LOOKAHEAD = 1.0f;
+        const float leftEdge  = MATRIX_WIDTH / 2.0f - MAXSPEED * LOOKAHEAD;
+        const float rightEdge = MATRIX_WIDTH / 2.0f + MAXSPEED * LOOKAHEAD;
 
         // If ball going leftwards towards BAT1,
 
         if (ballvel_x < 0 && ballpos_x > leftEdge  && ballpos_x < rightEdge)
         {
 
-            uint8_t end_ball_y = pong_get_ball_endpoint(ballpos_x, ballpos_y, ballvel_x, ballvel_y);
+            int end_ball_y = pong_get_ball_endpoint(ballpos_x, ballpos_y, ballvel_x, ballvel_y);
 
             // if the miss flag is set,  then the bat needs to miss the ball when it gets to end_ball_y
             if (bat1miss == 1)
@@ -276,7 +273,7 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
 
         if (ballvel_x > 0 && ballpos_x > leftEdge && ballpos_x < rightEdge)
         {
-            uint8_t end_ball_y = pong_get_ball_endpoint(ballpos_x, ballpos_y, ballvel_x, ballvel_y);
+            int end_ball_y = pong_get_ball_endpoint(ballpos_x, ballpos_y, ballvel_x, ballvel_y);
 
             // if flag set to miss, move bat out way of ball
             if (bat2miss == 1)
@@ -371,8 +368,7 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
             }
             else
             {
-                bat1_update = 1;
-                uint8_t flick; // 0 = up, 1 = down.
+                uint8_t flick = 0; // 0 = up, 1 = down.
 
                 if (bat1_y > 1 || bat1_y < MATRIX_HEIGHT / 2)
                 {
@@ -398,7 +394,7 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
                     ballvel_x = ballvel_x * -1;
                     if (ballvel_y < 2)
                     {
-                        ballvel_y = ballvel_y + 0.5;
+                        ballvel_y = ballvel_y + 0.5f;
                     }
                     break;
 
@@ -406,9 +402,9 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
                 case 1:
                     bat1_target_y = bat1_target_y - random(1, 3);
                     ballvel_x = ballvel_x * -1;
-                    if (ballvel_y > 0.5)
+                    if (ballvel_y > 0.5f)
                     {
-                        ballvel_y = ballvel_y - 0.5;
+                        ballvel_y = ballvel_y - 0.5f;
                     }
                     break;
                 }
@@ -431,8 +427,7 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
             }
             else
             {
-                bat1_update = 1;
-                uint8_t flick; // 0 = up, 1 = down.
+                uint8_t flick = 0; // 0 = up, 1 = down.
 
                 if (bat2_y > 1 || bat2_y < MATRIX_HEIGHT / 2)
                     flick = random(0, 2); // pick a random dir to flick - up or down
@@ -454,23 +449,23 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
                     bat2_target_y = bat2_target_y + random(1, 3);
                     ballvel_x = ballvel_x * -1;
                     if (ballvel_y < 2)
-                        ballvel_y = ballvel_y + random(1.0) + 0.5;
+                        ballvel_y = ballvel_y + random(0, 2) + 0.5f;
                     break;
 
                     // flick down
                 case 1:
                     bat2_target_y = bat2_target_y - random(1, 3);
                     ballvel_x = ballvel_x * -1;
-                    if (ballvel_y > 0.5)
-                        ballvel_y = ballvel_y - random(1.0) - 0.5;
+                    if (ballvel_y > 0.5f)
+                        ballvel_y = ballvel_y - random(0, 2) - 0.5f;
                     break;
                 }
             }
         }
 
         // plot the ball on the screen
-        uint8_t plot_x = (int)(ballpos_x + 0.5f);
-        uint8_t plot_y = (int)(ballpos_y + 0.5f);
+        int plot_x = (int)(ballpos_x + 0.5f);
+        int plot_y = (int)(ballpos_y + 0.5f);
 
         if (g()->isValidPixel(plot_x, plot_y))
             g()->setPixel(plot_x, plot_y, WHITE16);
@@ -512,4 +507,3 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
         return newY;
     }
 };
-#endif

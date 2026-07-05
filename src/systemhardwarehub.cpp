@@ -1,9 +1,5 @@
 #include "globals.h"
 
-#if defined(DHT11_PIN) || defined(HAS_TEMP_SENSOR)
-#include "values.h"
-#endif
-
 #if USE_WS_S3_HUB75 || MATRIX_S3
 
 #include <driver/temperature_sensor.h> // Pure ESP-IDF internal chip sensor driver
@@ -127,6 +123,9 @@ void SystemHardwareHub::Tick()
 
 void SystemHardwareHub::PollInertial()
 {
+    if (!sensor_handle)
+        return;
+
     uint8_t start_reg = REG_DATA_START;
     uint8_t raw_buffer[6] = {0};
 
@@ -165,7 +164,10 @@ void SystemHardwareHub::PollThermal()
 #if defined(HAS_SHTC3)
     // SHTC3 Wakeup -> Measure -> Read sequence bypasses heavy driver abstraction layers
     uint8_t wakeup_cmd[] = {0x35, 0x17};
-    i2c_master_transmit(sensor_handle, wakeup_cmd, 2, -1); // Use shared target line or matching handles
+    if (sensor_handle)
+    {
+        i2c_master_transmit(sensor_handle, wakeup_cmd, 2, -1); // Use shared target line or matching handles
+    }
     // Real deployments parse the 3-byte response string here directly...
     current_ambient = 25.0f; // Simplified direct register decode fallback
 #elifdef HAS_BME280

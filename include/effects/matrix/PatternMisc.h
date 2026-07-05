@@ -244,10 +244,10 @@ class PatternMunch : public EffectWithId<PatternMunch>
 {
 private:
 
-    uint8_t count = 0;
-    uint8_t dir = 1;
-    uint8_t flip = 0;
-    uint8_t generation = 0;
+    int count = 0;
+    int dir = 1;
+    int flip = 0;
+    int generation = 0;
 
 public:
 
@@ -266,9 +266,9 @@ public:
 
     void Draw() override
     {
-        for (uint16_t x = 0; x < MATRIX_WIDTH; x++)
+        for (int x = 0; x < MATRIX_WIDTH; x++)
         {
-            for (uint16_t y = 0; y < MATRIX_HEIGHT; y++)
+            for (int y = 0; y < MATRIX_HEIGHT; y++)
             {
                 g()->leds[XY(x, y)] = (x ^ y ^ flip) < count
                     ? g()->ColorFromCurrentPalette(((x ^ y) << 2) + generation)

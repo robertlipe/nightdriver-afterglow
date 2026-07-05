@@ -43,6 +43,8 @@ def audit_directory(dir_path):
                     if re_globals.match(line):
                         if globals_line == -1:
                             globals_line = line_no
+                        else:
+                            violations.append((file_path, f"Duplicate globals.h included at line {line_no} (first at {globals_line})"))
 
                     match = re_if.match(line)
                     if match:

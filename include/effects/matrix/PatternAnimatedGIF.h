@@ -37,13 +37,11 @@
 //
 //---------------------------------------------------------------------------
 
-#ifndef PatternAnimatedGIF_H
-#define PatternAnimatedGIF_H
+
 
 #include <Arduino.h>
 
 #include <ArduinoJson.h>
-#include <string.h>
 #include <map>
 
 #include "effects.h"
@@ -134,10 +132,10 @@ struct
     // Scaling parameters for best-fit rendering
     float           _scaleX    = 1.0f;
     float           _scaleY    = 1.0f;
-    uint16_t        _srcWidth  = 0;
-    uint16_t        _srcHeight = 0;
-    uint16_t        _dstWidth  = 0;
-    uint16_t        _dstHeight = 0;
+    int             _srcWidth  = 0;
+    int             _srcHeight = 0;
+    int             _dstWidth  = 0;
+    int             _dstHeight = 0;
 }
 g_gifDecoderState;
 
@@ -188,8 +186,8 @@ class PatternAnimatedGIF : public EffectWithId<PatternAnimatedGIF>
         auto& g = *(g_ptrSystem->GetEffectManager().g(0));
 
         // Apply scaling transformation
-        int16_t scaledX = (int16_t)(x * g_gifDecoderState._scaleX) + g_gifDecoderState._offsetX;
-        int16_t scaledY = (int16_t)(y * g_gifDecoderState._scaleY) + g_gifDecoderState._offsetY;
+        int scaledX = static_cast<int>(x * g_gifDecoderState._scaleX) + g_gifDecoderState._offsetX;
+        int scaledY = static_cast<int>(y * g_gifDecoderState._scaleY) + g_gifDecoderState._offsetY;
 
         if (false == g.isValidPixel(scaledX, scaledY))
         {
@@ -211,7 +209,7 @@ class PatternAnimatedGIF : public EffectWithId<PatternAnimatedGIF>
         // I don't think this is ever called, but if it is, we may need to implement it.  For now, it seems they just
         // call drawPixelCallback for each pixel in the image.
 
-        throw new std::runtime_error("drawLineCallback not implemented for animated GIFs");
+        throw std::runtime_error("drawLineCallback not implemented for animated GIFs");
     }
 
     // For slower animations that run at a lower framerate, we double the framerate by discarding every other frame,
@@ -286,7 +284,7 @@ public:
             scaleY = (float)MATRIX_HEIGHT / (float)gifHeight;
 
             // Use the smaller scale factor to maintain aspect ratio (best fit)
-            float scale = min(scaleX, scaleY);
+            float scale = std::min(scaleX, scaleY);
             scaleX = scale;
             scaleY = scale;
         }
@@ -320,7 +318,7 @@ public:
         GetGIFDecoder()->setDrawPixelCallback( drawPixelCallback );
         GetGIFDecoder()->setDrawLineCallback( drawLineCallback );
 
-        _gifReadyToDraw = (ERROR_NONE == GetGIFDecoder()->startDecoding((uint8_t *) gif->second.contents, gif->second.length));
+        _gifReadyToDraw = (ERROR_NONE == GetGIFDecoder()->startDecoding(const_cast<uint8_t*>(gif->second.contents), gif->second.length));
         if (!_gifReadyToDraw)
             debugW("Failed to start decoding GIF");
     }
@@ -351,4 +349,3 @@ public:
     }
 };
 
-#endif

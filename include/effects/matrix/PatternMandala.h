@@ -83,14 +83,12 @@ class PatternMandala : public EffectWithId<PatternMandala>
 {
 private:
     // The coordinates for 16-bit noise spaces.
-#define NUM_LAYERS 1
+    static constexpr int MANDALA_NUM_LAYERS = 1;
 
     // used for the random based animations
-    int16_t dx;
-    int16_t dy;
-    int16_t dz;
-    int16_t dsx;
-    int16_t dsy;
+    int dx{0};
+    int dy{0};
+    int dz{0};
 
 public:
 
@@ -127,8 +125,6 @@ public:
         dx = random8();
         dy = random8();
         dz = random8();
-        dsx = random8();
-        dsy = random8();
     }
 
     void Draw() override
@@ -159,9 +155,9 @@ public:
     // show just one layer
     void ShowNoiseLayer(uint8_t layer, uint8_t colorrepeat, uint8_t colorshift)
     {
-        for (uint16_t i = 0; i < MATRIX_WIDTH; i++)
+        for (int i = 0; i < MATRIX_WIDTH; i++)
         {
-            for (uint16_t j = 0; j < MATRIX_HEIGHT; j++)
+            for (int j = 0; j < MATRIX_HEIGHT; j++)
             {
 
                 uint8_t color = g()->GetNoise().noise[i][j];

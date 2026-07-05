@@ -73,9 +73,7 @@ extern DRAM_ATTR std::mutex g_buffer_mutex;
     #include "byte_utils.h"
     #include "console.h"
     #include "debug_cli.h"
-    #include "ledviewer.h"
     #include "ntptimeclient.h"
-    #include "soundanalyzer.h"
 
     #if USE_HUB75
         #include "hub75gfx.h"

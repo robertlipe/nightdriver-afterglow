@@ -1,4 +1,5 @@
 #include "globals.h"
+
 // NightDriverStrip - (c) 2026 Robert Lipe All Rights Reserved.
 //
 // Description:
@@ -20,7 +21,6 @@
 //
 //---------------------------------------------------------------------------
 
-#include "globals.h"
 #include "sensors.h"
 #include "values.h"
 

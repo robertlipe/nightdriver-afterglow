@@ -1,8 +1,6 @@
 #pragma once
 
 #include "globals.h"
-#include <mutex>
-#include <stdint.h>
 
 
 //+--------------------------------------------------------------------------
@@ -27,8 +25,6 @@
 //    along with Nightdriver.  It is normally found in copying.txt
 //    If not, see <https://www.gnu.org/licenses/>.
 //
-
-#include "globals.h"
 
 class SensorManager
 {

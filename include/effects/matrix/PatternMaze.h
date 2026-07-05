@@ -247,10 +247,10 @@ private:
             Directions direction = directions[i];
 
             Point newPoint = point.Move(direction);
-            if (newPoint.x >= 0 && newPoint.y >= 0 && newPoint.x < width && newPoint.y < height && grid[newPoint.y][newPoint.x] == None)
+            if (newPoint.x >= 0 && newPoint.y >= 0 && newPoint.x < width && newPoint.y < height && grid[newPoint.x][newPoint.y] == None)
             {
-                grid[point.y][point.x]       = (Directions) ((int) grid[point.y][point.x] | (int) direction);
-                grid[newPoint.y][newPoint.x] = (Directions) ((int) grid[newPoint.y][newPoint.x] | (int) point.Opposite(direction));
+                grid[point.x][point.y]       = (Directions) ((int) grid[point.x][point.y] | (int) direction);
+                grid[newPoint.x][newPoint.y] = (Directions) ((int) grid[newPoint.x][newPoint.y] | (int) point.Opposite(direction));
 
                 Point newImagePoint = imagePoint.Move(direction);
 

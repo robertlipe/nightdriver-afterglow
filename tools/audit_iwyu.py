@@ -307,7 +307,7 @@ def remove_no_op_includes(text):
         if not common and has_minus_line:
             output_blocks.append(block)
             continue
-        elif not has_minus_line and remove_lines:
+        elif any('should remove these lines:' in l for l in lines) and not has_minus_line:
             # The user requested that we ignore blocks where there are no '- ' lines
             # in the remove section, as IWYU is likely confused and suggesting deleting everything.
             # But if there are NO remove lines at all, we should still process the add section.

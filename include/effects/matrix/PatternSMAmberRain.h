@@ -9,8 +9,8 @@ struct Circle
     float thickness = 3.0;
     long startTime;
     uint16_t offset;
-    int16_t centerX;
-    int16_t centerY;
+    int centerX;
+    int centerY;
     int hue;
     int bpm = 10;
 
@@ -31,7 +31,7 @@ struct Circle
 
     float radius()
     {
-        float radius = beatsin16(30, 0, 500, offset) / 100.0;
+        float radius = beatsin16(30, 0, 500, offset) / 100.0f;
         return radius;
     }
 };
@@ -46,39 +46,40 @@ class PatternSMAmberRain : public EffectWithId<PatternSMAmberRain>
 
     void drawCircle(Circle circle)
     {
-        int16_t centerX = circle.centerX;
-        int16_t centerY = circle.centerY;
+        int centerX = circle.centerX;
+        int centerY = circle.centerY;
         int hue = circle.hue;
         float radius = circle.radius();
 
-        int16_t startX = centerX - ceil(radius);
-        int16_t endX = centerX + ceil(radius);
-        int16_t startY = centerY - ceil(radius);
-        int16_t endY = centerY + ceil(radius);
+        int startX = centerX - std::ceil(radius);
+        int endX = centerX + std::ceil(radius);
+        int startY = centerY - std::ceil(radius);
+        int endY = centerY + std::ceil(radius);
 
-        for (u_int16_t x = startX; x < endX; x++)
+        for (int x = startX; x < endX; x++)
         {
-            for (u_int16_t y = startY; y < endY; y++)
+            for (int y = startY; y < endY; y++)
             {
-                int16_t index = XY(x, y);
-                double distance = sqrt(sq(x - centerX) + sq(y - centerY));
+                if (!g()->isValidPixel(x, y))
+                    continue;
+
+                float distance = sqrtf(sq(x - centerX) + sq(y - centerY));
                 if (distance > radius)
                     continue;
 
                 uint16_t brightness;
-                if (radius < 1)
+                if (radius < 1.0f)
                 { // last pixel
-                    brightness = 255.0 * radius;
+                    brightness = 255.0f * radius;
                 }
                 else
                 {
-                    double percentage = distance / radius;
-                    double fraction = 1.0 - percentage;
-                    brightness = 255.0 * fraction;
+                    float percentage = distance / radius;
+                    float fraction = 1.0f - percentage;
+                    brightness = 255.0f * fraction;
                 }
 
-                if (g()->isValidPixel(index))
-                    g()->leds[index] += CHSV(hue, 255, brightness);
+                g()->leds[XY(x, y)] += CHSV(hue, 255, brightness);
             }
         }
     }
