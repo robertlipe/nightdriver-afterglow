@@ -123,7 +123,7 @@ void ESPHUB75GFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devi
     std::static_pointer_cast<ESPHUB75GFX>(devices[0])->setLeds(drawBuffer.get());
 }
 
-void ESPHUB75GFX::SetBrightness(byte amount)
+void ESPHUB75GFX::SetBrightness(uint8_t amount)
 {
     if (driver)
         driver->set_brightness(amount);

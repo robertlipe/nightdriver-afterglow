@@ -24,6 +24,8 @@ def audit_directory(dir_path):
 
             file_path = os.path.join(root, file)
             globals_line = -1
+            first_include_line = -1
+            first_include_text = ""
             first_if_line = -1
             first_if_text = ""
             pragma_once_count = 0
@@ -32,6 +34,11 @@ def audit_directory(dir_path):
                 for line_no, line in enumerate(f, 1):
                     if '#pragma once' in line:
                         pragma_once_count += 1
+
+                    if line.lstrip().startswith('#include'):
+                        if first_include_line == -1:
+                            first_include_line = line_no
+                            first_include_text = line.strip()
 
                     if re_globals.match(line):
                         if globals_line == -1:
@@ -46,7 +53,16 @@ def audit_directory(dir_path):
             if pragma_once_count > 1:
                 violations.append((file_path, f"Found {pragma_once_count} #pragma once lines"))
 
-            if first_if_line != -1:
+            # Exceptions for missing globals.h
+            is_3rdparty_or_test = 'uzlib' in file_path or 'amoled' in file_path or 'test_' in file_path or 'interfaces.h' in file_path
+
+            if first_include_line != -1 and not is_3rdparty_or_test:
+                if globals_line == -1:
+                    violations.append((file_path, "No globals.h included, but has: " + first_include_text))
+                elif first_include_line < globals_line and first_include_text.startswith('#include "'):
+                    violations.append((file_path, f"Local Include '{first_include_text}' occurs before globals.h at Line {globals_line}"))
+
+            if first_if_line != -1 and not is_3rdparty_or_test:
                 if globals_line == -1:
                     violations.append((file_path, "No globals.h, but has: " + first_if_text))
                 elif first_if_line < globals_line:
