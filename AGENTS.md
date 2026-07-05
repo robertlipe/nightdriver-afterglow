@@ -56,7 +56,7 @@ This file contains critical context, constraints, and architectural information 
 *   **Modernization Anti-Patterns:** Ensure modern C++20/26 features are used safely, not just blindly applied.
 *   **Data Types:** Watch for silent narrowing conversions, sign-extension bugs, and legacy `uint8_t` vs `char` mismatching in text/string paths.
 *   **Bounds Checking & Array Access:** Never use raw unchecked array access (e.g., `g()->leds[XY(...)]`). Always prefer safe wrappers like `g()->drawPixel(...)`. Ensure clamping happens *before* nested loops if it defines origin points.
-*   **Initialization & Constructors:** Strictly check for uninitialized members in constructors (e.g., using a variable to initialize another before it's initialized itself).
+*   **Initialization & Constructors:** Strictly check for uninitialized members in constructors (e.g., using a variable to initialize another before it's initialized itself). Mark single-argument constructors as `explicit` to prevent unintended implicit type conversions.
 *   **Loop Variables & Underflows:** Watch out for `uint8_t` or `uint16_t` loop iterators that can underflow/wrap around, especially when doing math like `center - 2`. Prefer native `int` for loop iterators unless specifically optimizing structure sizes.
 *   **Math Boundary Conditions:** Check clamp and oscillation boundaries carefully. Ensure oscillation logic (like `< 5` and `> 80`) won't get stuck in an infinite flip-flop loop.
 *   **Namespace Pollution:** Never use `using namespace` in header files at the global scope.
