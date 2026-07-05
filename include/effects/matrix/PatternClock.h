@@ -44,7 +44,7 @@ class PatternClock : public EffectWithId<PatternClock>
 {
   public:
 
-    static constexpr float kDegToRad = 57.29577951f;
+    static constexpr float kRadToDeg = 57.29577951f;
 
     PatternClock() : EffectWithId<PatternClock>("Clock") {}
     PatternClock(const JsonObjectConst& jsonObject) : EffectWithId<PatternClock>(jsonObject) {}
@@ -88,7 +88,7 @@ class PatternClock : public EffectWithId<PatternClock>
         {
             // Begin at 0° and stop before 360°
             float angle = z;
-            angle = (angle / kDegToRad); // Convert degrees to radians
+            angle = (angle / kRadToDeg); // Convert degrees to radians
             int x2 = (MATRIX_CENTER_X + roundf((sinf(angle) * (radius - 4))));         // Extra 0.5 helps rounding land more evenly
             int y2 = (MATRIX_CENTER_Y - roundf(cosf(angle) * (radius - 4)));
             int x3 = (MATRIX_CENTER_X + roundf((sinf(angle) * (radius - 1))));
@@ -102,7 +102,7 @@ class PatternClock : public EffectWithId<PatternClock>
         // Draw the second hand
 
         float angle = seconds * 6;
-        angle = (angle / kDegToRad); // Convert degrees to radians
+        angle = (angle / kRadToDeg); // Convert degrees to radians
         int x3 = (MATRIX_CENTER_X + roundf(sinf(angle) * (radius - 2)));
         int y3 = (MATRIX_CENTER_Y - roundf(cosf(angle) * (radius - 2)));
         g()->drawLine(MATRIX_CENTER_X, MATRIX_CENTER_Y, x3, y3, CRGB::White);
@@ -110,7 +110,7 @@ class PatternClock : public EffectWithId<PatternClock>
         // Draw the minute hand
 
         angle = minutes * 6;
-        angle = (angle / kDegToRad); // Convert degrees to radians
+        angle = (angle / kRadToDeg); // Convert degrees to radians
         x3 = (MATRIX_CENTER_X + roundf(sinf(angle) * (radius - 3)));
         y3 = (MATRIX_CENTER_Y - roundf(cosf(angle) * (radius - 3)));
         g()->drawLine(MATRIX_CENTER_X, MATRIX_CENTER_Y, x3, y3, CRGB::Yellow);
@@ -118,7 +118,7 @@ class PatternClock : public EffectWithId<PatternClock>
         // Draw the  hour hand
 
         angle = hours * 30 + int((minutes / 12) * 6);
-        angle = (angle / kDegToRad); // Convert degrees to radians
+        angle = (angle / kRadToDeg); // Convert degrees to radians
         x3 = (MATRIX_CENTER_X + roundf(sinf(angle) * (radius / 2.0f )));
         y3 = (MATRIX_CENTER_Y - roundf(cosf(angle) * (radius / 2.0f )));
         g()->drawLine(MATRIX_CENTER_X, MATRIX_CENTER_Y, x3, y3, CRGB::Yellow);
@@ -126,7 +126,7 @@ class PatternClock : public EffectWithId<PatternClock>
         // Draw the sixtieths pixel
 
         angle = sixtieths * 6;
-        angle = (angle / kDegToRad); // Convert degrees to radians
+        angle = (angle / kRadToDeg); // Convert degrees to radians
         int x2 = (MATRIX_CENTER_X + roundf((sinf(angle) * (radius - 1))));         // Extra 0.5 helps rounding land more evenly
         int y2 = (MATRIX_CENTER_Y - roundf(cosf(angle) * (radius - 1)));
         x3 = (MATRIX_CENTER_X + roundf((sinf(angle) * (radius))));

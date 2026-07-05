@@ -18,7 +18,7 @@ class PatternSMTwister : public EffectWithId<PatternSMTwister>
 
         for (uint16_t i = 1; i <= steps; i++)
         {
-            int dx = lerp8by8(x1, x, i * 255 / steps);
+            int dx = x1 + (x - x1) * i / steps;
             uint16_t index = XY(dx, y);
             g()->leds[index] = color;
             if (grad)

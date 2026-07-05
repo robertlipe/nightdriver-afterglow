@@ -127,8 +127,6 @@ static const std::map<const String, EmbeddedFile, std::less<const String>, psram
  * @brief This class implements the Weather Data effect
  *
  */
-using namespace std::chrono;
-using namespace std::chrono_literals;
 
 class PatternWeather : public EffectWithId<PatternWeather>
 {
@@ -150,7 +148,7 @@ class PatternWeather : public EffectWithId<PatternWeather>
 
     bool   dataReady          = false;
     size_t readerIndex        = SIZE_MAX;
-    system_clock::time_point latestUpdate = system_clock::from_time_t(0);
+    std::chrono::system_clock::time_point latestUpdate = std::chrono::system_clock::from_time_t(0);
 
     /**
      * @brief Should this effect show its title.
@@ -296,8 +294,8 @@ class PatternWeather : public EffectWithId<PatternWeather>
             JsonArray list = doc["list"];
 
             // Get tomorrow's date
-            auto tomorrow = system_clock::now() + 24h;
-            auto tomorrowTime = system_clock::to_time_t(tomorrow);
+            auto tomorrow = std::chrono::system_clock::now() + std::chrono::hours(24);
+            auto tomorrowTime = std::chrono::system_clock::to_time_t(tomorrow);
             auto tomorrowLocal = localtime(&tomorrowTime);
             char dateStr[11];
             strftime(dateStr, sizeof(dateStr), "%Y-%m-%d", tomorrowLocal);
@@ -498,7 +496,7 @@ public:
         g()->fillRect(0, 0, MATRIX_WIDTH, 9, g()->to16bit(CRGB(0,0,128)));
         g()->setFont(&Apple5x7);
 
-        auto now = system_clock::now();
+        auto now = std::chrono::system_clock::now();
 
         auto secondsSinceLastUpdate = now - latestUpdate;
 

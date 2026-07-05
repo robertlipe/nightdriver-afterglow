@@ -57,8 +57,6 @@ static constexpr auto STOCKS_FETCH_INTERVAL  = std::chrono::seconds(60);
 static constexpr char DEFAULT_STOCK_SERVER[] = "davepl.dyndns.org:8888";
 static constexpr char DEFAULT_TICKER_SYMBOLS[] = "AAPL,AMZN,TSLA,MSFT";
 
-using namespace std::chrono;
-using namespace std::chrono_literals;
 
 // AnimatedText
 //
@@ -77,7 +75,7 @@ class AnimatedText
     String text;
     CRGB color;
     float animationTime;
-    system_clock::time_point startTime;
+    std::chrono::system_clock::time_point startTime;
     const GFXfont * pfont;
 
 
@@ -85,7 +83,7 @@ class AnimatedText
 
     AnimatedText(String text, CRGB color, const GFXfont * pfont, float animationTime, int startX, int startY, int endX, int endY)
     {
-        startTime = system_clock::now();
+        startTime = std::chrono::system_clock::now();
         this->startX = startX;
         this->startY = startY;
         this->endX = endX;
@@ -105,10 +103,10 @@ class AnimatedText
     void UpdatePos()
     {
         // Current time
-        auto currentTime = system_clock::now();
+        auto currentTime = std::chrono::system_clock::now();
 
         // Calculate elapsed time
-        auto elapsedTime = duration_cast<duration<float>>(currentTime - startTime);
+        auto elapsedTime = std::chrono::duration_cast<std::chrono::duration<float>>(currentTime - startTime);
 
         // Calculate progress as a percentage
         float progress = std::min(elapsedTime.count() / animationTime, 1.0f);
@@ -140,7 +138,7 @@ class AnimatedText
 class StockPoint
 {
 public:
-    system_clock::time_point dt;
+    std::chrono::system_clock::time_point dt;
     float val;
 };
 
@@ -148,7 +146,7 @@ class StockData
 {
 public:
     String symbol;
-    system_clock::time_point timestamp;
+    std::chrono::system_clock::time_point timestamp;
 
     float previousClose = 0.0f;
     float open = 0.0f;
@@ -196,8 +194,8 @@ private:
     int          iCurrentStock = 0;
     size_t       lastCount     = SIZE_MAX;
 
-    system_clock::time_point lastUpdate;    // Time of last update
-    system_clock::time_point nextFetch = system_clock::now();  // Time of last quote pull
+    std::chrono::system_clock::time_point lastUpdate;    // Time of last update
+    std::chrono::system_clock::time_point nextFetch = std::chrono::system_clock::now();  // Time of last quote pull
 
     std::map<String, StockData> stockData;  // map of stock symbols to quotes
 
@@ -223,7 +221,7 @@ private:
             {
                 StockData stockData;
                 stockData.symbol        = doc["symbol"].as<String>();
-                stockData.timestamp     = system_clock::from_time_t(doc["timestamp"].as<time_t>());
+                stockData.timestamp     = std::chrono::system_clock::from_time_t(doc["timestamp"].as<time_t>());
                 stockData.previousClose = doc["previous_close"].as<float>();
                 stockData.open          = doc["open"].as<float>();
                 stockData.high          = doc["high"].as<float>();
@@ -234,7 +232,7 @@ private:
                 for (JsonVariant point : doc["points"].as<JsonArray>())
                 {
                     StockPoint stockPoint;
-                    stockPoint.dt  = system_clock::from_time_t(point["dt"].as<time_t>());
+                    stockPoint.dt  = std::chrono::system_clock::from_time_t(point["dt"].as<time_t>());
                     stockPoint.val = point["val"].as<float>();
                     stockData.points.push_back(stockPoint);
                 }
@@ -388,7 +386,7 @@ public:
         readerIndex = g_ptrSystem->GetNetworkReader().RegisterReader([this] { FetchQuotes(); });
 
         // Fire off the stock data reader for an initial download of stock data
-        lastUpdate = system_clock::now();
+        lastUpdate = std::chrono::system_clock::now();
         g_ptrSystem->GetNetworkReader().FlagReader(readerIndex);
 
         return true;
@@ -507,9 +505,9 @@ public:
 
         if (nd_network::IsWiFiConnected())
         {
-            if (system_clock::now() >= nextFetch)
+            if (std::chrono::system_clock::now() >= nextFetch)
             {
-                nextFetch = system_clock::now() + STOCKS_FETCH_INTERVAL;
+                nextFetch = std::chrono::system_clock::now() + STOCKS_FETCH_INTERVAL;
                 // Trigger the stock data reader.
                 g_ptrSystem->GetNetworkReader().FlagReader(readerIndex);
             }
@@ -517,7 +515,7 @@ public:
 
         // Rotate the display through the available stock data
 
-        auto now = system_clock::now();
+        auto now = std::chrono::system_clock::now();
 
         // We move on to next stock if the interval has passed, or we have less stock data available than before
         auto showNextStock = now - lastUpdate >= STOCKS_UPDATE_INTERVAL || stockData.size() < lastCount;
