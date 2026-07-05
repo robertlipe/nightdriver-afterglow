@@ -378,7 +378,6 @@ void LoadEffectFactories()
             Effect<PatternSerendipity>(),
             Effect<PatternMandala>(),
             Effect<PatternMunch>(),
-
 #if USE_CG_CLOCKS
             Effect<PatternCGBreakout>(),
             Effect<PatternCGInvade>(),

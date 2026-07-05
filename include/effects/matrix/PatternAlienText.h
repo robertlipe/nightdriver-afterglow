@@ -2,7 +2,7 @@
 
 //+--------------------------------------------------------------------------
 //
-// File:        PatternLife.h
+// File:        PatternAlienText.h
 //
 // NightDriverStrip - (c) 2018 Plummer's Software LLC.  All Rights Reserved.
 //
@@ -56,8 +56,7 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef PatternAlienText_H
-#define PatternAlienText_H
+
 
 // Description: This file contains the implementation of the PatternAlienText class,
 //              which is a subclass of LEDStripEffect. The class is designed to create
@@ -81,8 +80,8 @@ private:
   const int charHeight = 6;
   const int leftMargin = 2;
   const int topMargin = 2;
-  uint8_t x;
-  uint8_t y;
+  int x;
+  int y;
 
 public:
 
@@ -144,4 +143,3 @@ public:
   }
 };
 
-#endif

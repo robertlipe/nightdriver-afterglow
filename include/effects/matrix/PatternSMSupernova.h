@@ -85,14 +85,10 @@ private:
     // crazy optimization here.
     float sqrt3(const float x)
     {
-        union
-        {
-            int i;
-            float x;
-        } u;
-        u.x = x;
-        u.i = (1 << 29) + (u.i >> 1) - (1 << 22);
-        return u.x;
+        // Bit-manipulation approximation via std::bit_cast (C++20, no UB).
+        uint32_t bits = std::bit_cast<uint32_t>(x);
+        bits = (1u << 29) + (bits >> 1) - (1u << 22);
+        return std::bit_cast<float>(bits);
     }
 
     bool inline ParticlesUpdate(DebrisItem& debris_item)
@@ -115,10 +111,10 @@ private:
     {
         if (hue++ & 0x01)
             hue2 += 1;
-        debris_item._position_x = MATRIX_WIDTH * 0.5;
-        debris_item._position_y = MATRIX_HEIGHT * 0.5;
+        debris_item._position_x = MATRIX_WIDTH * 0.5f;
+        debris_item._position_y = MATRIX_HEIGHT * 0.5f;
 
-        debris_item._speed_x = (((float)random8() - 127.) / 512.);
+        debris_item._speed_x = (static_cast<float>(random8()) - 127.0f) / 512.0f;
         debris_item._speed_y = sqrtf(0.0626f - debris_item._speed_x * debris_item._speed_x);
         if (random8(2U))
             debris_item._speed_y = -debris_item._speed_y;

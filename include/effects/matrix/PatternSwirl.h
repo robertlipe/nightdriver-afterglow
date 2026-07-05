@@ -58,6 +58,7 @@
  */
 
 #ifndef PatternSwirl_H
+#define PatternSwirl_H
 
 class PatternSwirl : public EffectWithId<PatternSwirl>
 {

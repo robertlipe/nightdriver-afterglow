@@ -56,11 +56,8 @@
 // Use centralized Apple5x7 font across all targets
 extern const GFXfont Apple5x7 PROGMEM;
 
-using namespace std::chrono;
-using namespace std::chrono_literals;
-
-#define WEATHER_INTERVAL_SECONDS 600s
-#define WEATHER_CHECK_WIFI_WAIT 5000
+static constexpr auto WEATHER_INTERVAL = std::chrono::seconds(600);
+static constexpr uint32_t WEATHER_CHECK_WIFI_WAIT = 5000;
 
 extern const uint8_t brokenclouds_start[]           asm("_binary_assets_bmp_brokenclouds_jpg_start");
 extern const uint8_t brokenclouds_end[]             asm("_binary_assets_bmp_brokenclouds_jpg_end");
@@ -130,6 +127,7 @@ static const std::map<const String, EmbeddedFile, std::less<const String>, psram
  * @brief This class implements the Weather Data effect
  *
  */
+
 class PatternWeather : public EffectWithId<PatternWeather>
 {
   private:
@@ -150,7 +148,7 @@ class PatternWeather : public EffectWithId<PatternWeather>
 
     bool   dataReady          = false;
     size_t readerIndex        = SIZE_MAX;
-    system_clock::time_point latestUpdate = system_clock::from_time_t(0);
+    std::chrono::system_clock::time_point latestUpdate = std::chrono::system_clock::from_time_t(0);
 
     /**
      * @brief Should this effect show its title.
@@ -191,7 +189,7 @@ class PatternWeather : public EffectWithId<PatternWeather>
      */
     static inline float KelvinToFarenheit(float K)
     {
-        return (K - 273.15) * 9.0f/5.0f + 32;
+        return (K - 273.15f) * 9.0f/5.0f + 32.0f;
     }
 
     /**
@@ -202,7 +200,7 @@ class PatternWeather : public EffectWithId<PatternWeather>
      */
     static inline float KelvinToCelsius(float K)
     {
-        return K - 273.15;
+        return K - 273.15f;
     }
 
     /**
@@ -296,8 +294,8 @@ class PatternWeather : public EffectWithId<PatternWeather>
             JsonArray list = doc["list"];
 
             // Get tomorrow's date
-            auto tomorrow = system_clock::now() + 24h;
-            auto tomorrowTime = system_clock::to_time_t(tomorrow);
+            auto tomorrow = std::chrono::system_clock::now() + std::chrono::hours(24);
+            auto tomorrowTime = std::chrono::system_clock::to_time_t(tomorrow);
             auto tomorrowLocal = localtime(&tomorrowTime);
             char dateStr[11];
             strftime(dateStr, sizeof(dateStr), "%Y-%m-%d", tomorrowLocal);
@@ -498,13 +496,13 @@ public:
         g()->fillRect(0, 0, MATRIX_WIDTH, 9, g()->to16bit(CRGB(0,0,128)));
         g()->setFont(&Apple5x7);
 
-        auto now = system_clock::now();
+        auto now = std::chrono::system_clock::now();
 
         auto secondsSinceLastUpdate = now - latestUpdate;
 
         // If location and/or country have changed, trigger an update regardless of timer, but
         // not more than once every half a minute
-        if (secondsSinceLastUpdate >= WEATHER_INTERVAL_SECONDS || (HasLocationChanged() && secondsSinceLastUpdate >= 30s))
+        if (secondsSinceLastUpdate >= WEATHER_INTERVAL || (HasLocationChanged() && secondsSinceLastUpdate >= std::chrono::seconds(30)))
         {
             latestUpdate = now;
 
