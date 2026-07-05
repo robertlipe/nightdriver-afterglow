@@ -244,10 +244,9 @@ class SoundAnalyzer : public ISoundAnalyzer // Non-audio case stub
         if (currentMillis == _lastBeatMillis)
             return _cachedBeat;
 
-        const float beatsPerSecond = _simBPM / 60.0f;
-        const float beatPeriodMillis = 1000.0f / beatsPerSecond;
-        const float beatActiveDurationMillis = beatPeriodMillis * 0.20f; // 20% duration
-        float timeInCycle = fmodf(static_cast<float>(currentMillis), beatPeriodMillis);
+        const uint32_t beatPeriodMillis = (60 * 1000) / (uint32_t)_simBPM;
+        const uint32_t beatActiveDurationMillis = beatPeriodMillis / 5; // 20% duration
+        uint32_t timeInCycle = currentMillis % beatPeriodMillis;
         
         _cachedBeat = (timeInCycle < beatActiveDurationMillis);
         _lastBeatMillis = currentMillis;
