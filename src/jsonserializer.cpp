@@ -35,6 +35,7 @@
 #include "userfs.h"
 
 #include "jsonserializer.h"
+#include "soundanalyzer.h"
 #include "systemcontainer.h"
 #include "taskmgr.h"
 
@@ -210,6 +211,9 @@ bool SaveToJSONFile(const String & fileName, IJSONSerializable& object)
         return false;
     }
 
+#if ENABLE_AUDIO
+    g_Analyzer.Pause();
+#endif
     UserFS.remove(fileName);
 
     File file = UserFS.open(fileName, FILE_WRITE);
@@ -217,6 +221,9 @@ bool SaveToJSONFile(const String & fileName, IJSONSerializable& object)
     if (!file)
     {
         debugE("Unable to open file %s to write JSON!", fileName.c_str());
+#if ENABLE_AUDIO
+        g_Analyzer.Resume();
+#endif
         return false;
     }
 
@@ -230,15 +237,29 @@ bool SaveToJSONFile(const String & fileName, IJSONSerializable& object)
     {
         debugE("Unable to write JSON to file %s!", fileName.c_str());
         UserFS.remove(fileName);
+#if ENABLE_AUDIO
+        g_Analyzer.Resume();
+#endif
         return false;
     }
+
+#if ENABLE_AUDIO
+    g_Analyzer.Resume();
+#endif
 
     return true;
 }
 
 bool RemoveJSONFile(const String & fileName)
 {
-    return UserFS.remove(fileName);
+#if ENABLE_AUDIO
+    g_Analyzer.Pause();
+#endif
+    bool result = UserFS.remove(fileName);
+#if ENABLE_AUDIO
+    g_Analyzer.Resume();
+#endif
+    return result;
 }
 
 size_t JSONWriter::RegisterWriter(const std::function<void()>& writer)

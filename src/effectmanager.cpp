@@ -508,6 +508,10 @@ void RemoveEffectManagerConfig()
 
 void WriteCurrentEffectIndexFile()
 {
+#if ENABLE_AUDIO
+    g_Analyzer.Pause();
+#endif
+
     UserFS.remove(CURRENT_EFFECT_CONFIG_FILE);
 
     File file = UserFS.open(CURRENT_EFFECT_CONFIG_FILE, FILE_WRITE);
@@ -515,6 +519,9 @@ void WriteCurrentEffectIndexFile()
     if (!file)
     {
         debugE("Unable to open file %s for writing!", CURRENT_EFFECT_CONFIG_FILE);
+#if ENABLE_AUDIO
+        g_Analyzer.Resume();
+#endif
         return;
     }
 
@@ -529,6 +536,10 @@ void WriteCurrentEffectIndexFile()
         debugE("Unable to write to file %s!", CURRENT_EFFECT_CONFIG_FILE);
         UserFS.remove(CURRENT_EFFECT_CONFIG_FILE);
     }
+
+#if ENABLE_AUDIO
+    g_Analyzer.Resume();
+#endif
 }
 
 //
