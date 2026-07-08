@@ -92,6 +92,7 @@ This file documents the custom reliability, diagnostic, and performance improvem
 
 ### 1. New Hardware Support: Adafruit MatrixPortal S3 & WaveShare RGB-Matrix
 - **Feature**: Added robust support for modern, high-power ESP32-S3 matrix driver boards including the Adafruit MatrixPortal S3 and the WaveShare ESP32-S3 RGB-Matrix (N32R16). These targets are fully configured for massive DMA transfers and hardware PSRAM initialization.
+- **Feature**: Added the `tinyled-demo` environment to support the Waveshare ESP32-S3-Matrix (the cracker-sized 8x8 WS2812 board). It is completely decoupled from HUB75 matrix dependencies (relying strictly on FastLED and `NUM_LEDS=64`) for high frame rate, low overhead, 1D strip demonstrations.
 - **RMT driver_ng Update**: Replaced deprecated/duplicate `rmt_driver_install` calls with `rmt_rx_start` inside `src/remotecontrol.cpp` to satisfy ESP-IDF 5's rewritten RMT driver constraints.
 - ** IDF5 Audio Update**: Correct feedback on audio gain and spectrum responsiveness in ESP-IDF port.
 
