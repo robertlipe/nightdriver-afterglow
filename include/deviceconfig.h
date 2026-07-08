@@ -274,4 +274,3 @@ class DeviceConfig : public IJSONSerializable
     void SetPortalTimeoutSeconds(uint32_t newPortalTimeoutSeconds);
     #endif
 };
-

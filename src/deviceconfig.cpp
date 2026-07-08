@@ -595,4 +595,3 @@ void DeviceConfig::SetPortalTimeoutSeconds(uint32_t newPortalTimeoutSeconds)
     SetAndSave(portalTimeoutSeconds, newPortalTimeoutSeconds);
 }
 #endif
-
