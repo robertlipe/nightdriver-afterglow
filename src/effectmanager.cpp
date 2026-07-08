@@ -41,6 +41,7 @@
 #include "gfxbase.h"
 #include "jsonserializer.h"
 #include "ledstripeffect.h"
+#include "soundanalyzer.h" // for g_Analyzer.Pause()
 #include "systemcontainer.h"
 #include "websocketserver.h"
 
@@ -511,8 +512,6 @@ void WriteCurrentEffectIndexFile()
 #if ENABLE_AUDIO
     g_Analyzer.Pause();
 #endif
-
-    UserFS.remove(CURRENT_EFFECT_CONFIG_FILE);
 
     File file = UserFS.open(CURRENT_EFFECT_CONFIG_FILE, FILE_WRITE);
 

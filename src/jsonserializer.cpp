@@ -214,8 +214,6 @@ bool SaveToJSONFile(const String & fileName, IJSONSerializable& object)
 #if ENABLE_AUDIO
     g_Analyzer.Pause();
 #endif
-    UserFS.remove(fileName);
-
     File file = UserFS.open(fileName, FILE_WRITE);
 
     if (!file)
