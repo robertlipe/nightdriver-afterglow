@@ -46,6 +46,16 @@
    #endif
 #endif
 
+#ifdef ENABLE_WIFI_TEST_MODE
+    // Use short timeouts for testing
+    #define AUTO_MODE_SHORT_TIMEOUT_SECONDS 15
+    #define AUTO_MODE_LONG_TIMEOUT_SECONDS 30
+#else
+    // Production values
+    #define AUTO_MODE_SHORT_TIMEOUT_SECONDS 30
+    #define AUTO_MODE_LONG_TIMEOUT_SECONDS 900
+#endif
+
 // NOTE: Do not include "socketserver.h" here. It pulls in "ledbuffer.h" -> "gfxbase.h",
 // which uses debug macros defined by RemoteDebug. In Arduino v3, RemoteDebug includes
 // WiFi.h, which includes Network.h; adding socketserver.h here creates a cycle where
@@ -73,15 +83,28 @@ namespace nd_network
 
     // Connection Results & Sources
     enum class WiFiConnectResult { Connected, Disconnected, NoCredentials };
-    enum WifiCredSource { ImprovCreds = 0, CompileTimeCreds = 1 };
+    enum WifiCredSource { ImprovCreds = 0, CompileTimeCreds = 1, CaptivePortal = 2 };
+
 
     // Lifecycle & Loop
     void NetworkHandlingLoopEntry(void *);
     void InitNetworkCLI();
 
     // Configuration & Connection
+    enum class WiFiMode { Off, STA, AP, APSTA };
+
     WiFiConnectResult ConnectToWiFi(const String &ssid, const String &password);
     WiFiConnectResult ConnectToWiFi(const String *ssid = nullptr, const String *password = nullptr);
+    WiFiConnectResult LoadAndConnectToWiFiWithPriority();
+    bool SetWiFiMode(WiFiMode mode);
+    void StartCaptivePortal();
+    bool StartSoftAP(const String& ssid);
+    int ScanNetworks();
+    void RequestSystemReboot(uint32_t inMs = 3000);
+    bool IsRebootRequested();
+    unsigned long GetRebootTargetTime();
+
+
 
     String GetWiFiLocalIP();
     void   SetWiFiModeSTA();
@@ -144,6 +167,7 @@ namespace nd_network
 // Global compatibility aliases
 using nd_network::WiFiConnectResult;
 using nd_network::WifiCredSource;
+using nd_network::WiFiMode;
 using nd_network::ConnectToWiFi;
 using nd_network::UpdateNTPTime;
 using nd_network::ReadWiFiConfig;

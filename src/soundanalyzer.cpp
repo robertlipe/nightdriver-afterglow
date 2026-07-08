@@ -295,6 +295,63 @@ void SoundAnalyzerBase::SetPeakDecayRates(float r1, float r2)
     _peak2DecayRate = r2;
 }
 
+void SoundAnalyzerBase::Pause()
+{
+#if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
+    if (_adc_handle)
+    {
+        std::lock_guard<std::mutex> lock(_pauseMutex);
+        if (_pauseCount == 0)
+        {
+            debugI("Audio: Requesting pause of continuous ADC...");
+            _pauseRequested = true;
+            uint32_t start = millis();
+            while (!_isPaused)
+            {
+                if (millis() - start > 5000)
+                {
+                    debugE("Audio: FAILED to pause ADC after 5 seconds! Flash writes will CRASH!");
+                    throw std::runtime_error("Failed to pause audio DMA!");
+                }
+                delay(5);
+            }
+            debugI("Audio: Pause confirmed.");
+        }
+        _pauseCount++;
+    }
+#endif
+}
+
+void SoundAnalyzerBase::Resume()
+{
+#if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
+    if (_adc_handle)
+    {
+        std::lock_guard<std::mutex> lock(_pauseMutex);
+        if (_pauseCount > 0)
+        {
+            _pauseCount--;
+            if (_pauseCount == 0)
+            {
+                debugI("Audio: Requesting resume of continuous ADC...");
+                _pauseRequested = false;
+                uint32_t start = millis();
+                while (_isPaused)
+                {
+                    if (millis() - start > 5000)
+                    {
+                        debugE("Audio: FAILED to resume ADC after 5 seconds!");
+                        throw std::runtime_error("Failed to resume audio DMA!");
+                    }
+                    delay(5);
+                }
+                debugI("Audio: Resume confirmed.");
+            }
+        }
+    }
+#endif
+}
+
 // SetPeakDataFromRemote
 //
 // Accept externally provided peaks (e.g., over WiFi) and update internal state.
@@ -372,6 +429,28 @@ void SoundAnalyzerBase::SimulateBeatPass()
 // Uses local mic if no recent remote peaks; otherwise trusts remote and only updates VU.
 void SoundAnalyzerBase::RunSamplerPass()
 {
+#if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
+    if (_pauseRequested)
+    {
+        if (_adc_handle && !_isPaused)
+        {
+            debugI("Audio: Stopping continuous ADC from Audio Thread.");
+            adc_continuous_stop(_adc_handle);
+            _isPaused = true;
+        }
+        while (_pauseRequested)
+        {
+            delay(10);
+        }
+        if (_adc_handle && _isPaused)
+        {
+            debugI("Audio: Starting continuous ADC from Audio Thread.");
+            adc_continuous_start(_adc_handle);
+            _isPaused = false;
+        }
+    }
+#endif
+
     if (_simulateBeat)
     {
         SimulateBeatPass();
@@ -482,7 +561,11 @@ void SoundAnalyzerBase::InitADC_Modern()
     adc_continuous_config_t dig_cfg = {
         .sample_freq_hz = SAMPLING_FREQUENCY,
         .conv_mode = ADC_CONV_SINGLE_UNIT_1, // Using ADC1
+#if CONFIG_IDF_TARGET_ESP32
+        .format = ADC_DIGI_OUTPUT_FORMAT_TYPE1,
+#else
         .format = ADC_DIGI_OUTPUT_FORMAT_TYPE2,
+#endif
     };
 
     // Configure pattern: channel, attenuation, etc.

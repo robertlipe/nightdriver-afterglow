@@ -463,7 +463,7 @@ void setup()
             String family = "ESP32";
         #endif
 
-#if ENABLE_WIFI
+#if ENABLE_WIFI && !defined(ENABLE_WIFI_TEST_MODE)
         debugW("Starting ImprovSerial for %s", family.c_str());
         String name = "NDESP32" + nd_network::GetMacAddress().substring(6);
         g_pImprovSerial = make_unique_psram<ImprovSerial<typeof(Serial)>>();
@@ -616,22 +616,41 @@ void setup()
 
     InitEffectsManager();
 
+    // We must initialize lwIP/WiFi stack (via WiFi.mode) and set persistent(false)
+    // before starting the audio thread. The ESP32 Arduino WiFi driver touches NVS
+    // (disabling the cache) and also missing IRAM_ATTR in ADC DMA interrupts will
+    // cause panics. We manage credentials manually, so disable WiFi NVS persistence globally.
+    #if ENABLE_WIFI
+        WiFi.persistent(false);
+        #if defined(ENABLE_WIFI_TEST_MODE)
+            WiFi.mode(WIFI_STA);
+        #endif
+    #endif
+
     // Start things that do not depend on the network
 
     taskManager.StartDrawThread();
     taskManager.StartScreenThread();
-    taskManager.StartAudioThread();
     taskManager.StartRemoteThread();
 
-    #if ENABLE_WIFI
+    #if ENABLE_WIFI && !defined(ENABLE_WIFI_TEST_MODE)
         debugI("Making initial attempt to connect to WiFi.");
         nd_network::ConnectToWiFi(WiFi_ssid, WiFi_password);
     #endif
 
+    // Start Audio Thread AFTER initial WiFi NVS writes to prevent DMA Cache Panics
+    taskManager.StartAudioThread();
+
     // Start the network-dependent services.  These will be NOPs on a non-wifi build.
 
     taskManager.StartSerialThread();
-    taskManager.StartNetworkThread();
+    #if defined(ENABLE_WIFI_TEST_MODE)
+        // In test mode the WiFi test task owns the network thread lifecycle.
+        // It calls StartNetworkThread() itself after all test cases complete.
+        taskManager.StartWiFiTestThread();
+    #else
+        taskManager.StartNetworkThread();
+    #endif
     taskManager.StartColorDataThread();
     taskManager.StartSocketThread();
     taskManager.StartDebugThread();
@@ -663,12 +682,17 @@ void loop()
             ConsoleManager::Instance().FeedSerialByte((char)Serial.read());
         }
 
-        #if ENABLE_WIFI
+        #if ENABLE_WIFI && !defined(ENABLE_WIFI_TEST_MODE)
             EVERY_N_MILLIS(20)
             {
-#if ENABLE_WIFI
+                #if ENABLE_WEBSERVER
+                if (g_ptrSystem->HasWebServer() && !g_ptrSystem->GetWebServer().IsCaptivePortalActive())
+                {
+                    g_pImprovSerial->loop();
+                }
+                #else
                 g_pImprovSerial->loop();
-#endif
+                #endif
             }
         #endif
 

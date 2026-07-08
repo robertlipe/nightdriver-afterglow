@@ -36,22 +36,26 @@
 #include <esp_partition.h>
 #include <esp_system.h>
 #include <esp_timer.h>
+#if ENABLE_WIFI
+#include <WiFi.h>
+#endif
 #include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 
+#include <freertos/task.h>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
-#include "userfs.h"
 
 #include "console.h"
 #include "debug_cli.h"
 #include "deviceconfig.h"
 #include "effectmanager.h"
 #include "ledstripeffect.h"
+#include "nd_network.h"
 #include "soundanalyzer.h"
 #include "systemcontainer.h"
+#include "userfs.h"
 #include "values.h"
 
 namespace DebugCLI
@@ -741,7 +745,15 @@ static const command core_commands[] = {
      [](const cli_argv &) {
          g_ptrSystem->GetDeviceConfig().RemovePersisted();
          RemoveEffectManagerConfig(); // Helper from effectmanager.h
+         #if ENABLE_WIFI
+         nd_network::ClearWiFiConfig(nd_network::WifiCredSource::CompileTimeCreds);
+         nd_network::ClearWiFiConfig(nd_network::WifiCredSource::ImprovCreds);
+         nd_network::ClearWiFiConfig(nd_network::WifiCredSource::CaptivePortal);
+         nd_network::SetWiFiMode(nd_network::WiFiMode::Off);
+         nd_network::RequestSystemReboot(1000);
+         #endif
      }},
+
     {"color", "[on|off] | [r g b | hex] Set or show colors", "Global Color:",
      [](const cli_argv &argv) {
          if (argv.size() > 1)

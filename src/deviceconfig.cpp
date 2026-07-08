@@ -120,6 +120,10 @@ bool DeviceConfig::SerializeToJSON(JsonObject& jsonObject, bool includeSensitive
     jsonDoc[GlobalColorTag] = globalColor;
     jsonDoc[ApplyGlobalColorsTag] = applyGlobalColors;
     jsonDoc[SecondColorTag] = secondColor;
+    #if ENABLE_WIFI
+    jsonDoc[PortalTimeoutSecondsTag] = portalTimeoutSeconds;
+    #endif
+
 
     if (includeSensitive)
         jsonDoc[OpenWeatherApiKeyTag] = openWeatherApiKey;
@@ -157,6 +161,20 @@ bool DeviceConfig::DeserializeFromJSON(const JsonObjectConst& jsonObject, bool s
     SetIfPresentIn(jsonObject, globalColor, GlobalColorTag);
     SetIfPresentIn(jsonObject, applyGlobalColors, ApplyGlobalColorsTag);
     SetIfPresentIn(jsonObject, secondColor, SecondColorTag);
+    #if ENABLE_WIFI
+    bool portalTimeoutPresent = jsonObject[PortalTimeoutSecondsTag].is<uint32_t>();
+    SetIfPresentIn(jsonObject, portalTimeoutSeconds, PortalTimeoutSecondsTag);
+
+    if (!portalTimeoutPresent) {
+        String ssid, password;
+        if (nd_network::ReadWiFiConfig(WifiCredSource::CaptivePortal, ssid, password) ||
+            nd_network::ReadWiFiConfig(WifiCredSource::ImprovCreds, ssid, password) ||
+            nd_network::ReadWiFiConfig(WifiCredSource::CompileTimeCreds, ssid, password)) {
+            portalTimeoutSeconds = 0; // AUTO mode for migrated devices
+        }
+    }
+    #endif
+
 
     if (ntpServer.isEmpty())
         ntpServer = NTP_SERVER_DEFAULT;
@@ -303,6 +321,16 @@ const std::vector<std::reference_wrapper<SettingSpec>>& DeviceConfig::GetSetting
             "by some effects. Defaults to the <em>previous</em> global color if not explicitly set.",
             SettingSpec::SettingType::Color
         );
+
+        #if ENABLE_WIFI
+        settingSpecs.emplace_back(
+            PortalTimeoutSecondsTag,
+            "Portal Timeout",
+            "Timeout (seconds) before starting captive portal if connection to a configured WiFi AP fails. 0 enables AUTO mode (patient for outages, impatient for new locations).",
+            SettingSpec::SettingType::Integer
+        );
+        #endif
+
 
         settingSpecReferences.insert(settingSpecReferences.end(), settingSpecs.begin(), settingSpecs.end());
     }
@@ -560,3 +588,10 @@ void DeviceConfig::ApplyColorSettings(std::optional<CRGB> newGlobalColor, std::o
         g_ptrSystem->GetEffectManager().ApplyGlobalColor(finalGlobalColor);
     }
 }
+
+#if ENABLE_WIFI
+void DeviceConfig::SetPortalTimeoutSeconds(uint32_t newPortalTimeoutSeconds)
+{
+    SetAndSave(portalTimeoutSeconds, newPortalTimeoutSeconds);
+}
+#endif

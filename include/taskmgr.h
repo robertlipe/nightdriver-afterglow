@@ -159,6 +159,11 @@ void RemoteLoopEntry(void *);
 void JSONWriterTaskEntry(void *);
 void ColorDataTaskEntry(void *);
 
+#ifdef ENABLE_WIFI_TEST_MODE
+#include "wifi_test.h"
+#endif
+
+
 #define DELETE_TASK(handle) if (handle != nullptr) vTaskDelete(handle)
 
 class NightDriverTaskManager : public TaskManager
@@ -187,6 +192,10 @@ private:
     TaskHandle_t _taskSerial        = nullptr;
     TaskHandle_t _taskColorData     = nullptr;
     TaskHandle_t _taskJSONWriter    = nullptr;
+    #ifdef ENABLE_WIFI_TEST_MODE
+    TaskHandle_t _taskWiFiTest      = nullptr;
+    #endif
+
 
     std::vector<TaskHandle_t> _vEffectTasks;
 
@@ -206,6 +215,16 @@ public:
     void StartSocketThread();
     void StartRemoteThread();
     void StartJSONWriterThread();
+
+    #ifdef ENABLE_WIFI_TEST_MODE
+    void StartWiFiTestThread()
+    {
+        Serial.printf(">> Launching WiFi Test Thread.  Mem: %u, LargestBlk: %u, PSRAM Free: %u/%u, \n", ESP.getFreeHeap(), ESP.getMaxAllocHeap(), ESP.getFreePsram(), ESP.getFreePsram());
+        xTaskCreatePinnedToCore(WiFiTestLoopEntry, "WiFi Test Loop", NET_STACK_SIZE, nullptr, NET_PRIORITY, &_taskWiFiTest, NET_CORE);
+        CheckHeap();
+    }
+    #endif
+
 
 
     void NotifyJSONWriterThread();

@@ -44,13 +44,18 @@
 #if ENABLE_WEBSERVER
 
 #include <ArduinoJson.h>
+#include <atomic>
+#include <DNSServer.h>
 #include <ESPAsyncWebServer.h>
 #include <map>
+#include <memory>
+#include <vector>
 
 #include "deviceconfig.h"
 #include "jsonserializer.h"
 #include "logger.h"
 #include "nd_network.h"
+
 
 class LEDStripEffect;
 
@@ -115,6 +120,21 @@ class CWebServer
 
     AsyncWebServer _server;
     StaticStatistics _staticStats;
+
+    struct WifiNetwork {
+        String ssid;
+        int32_t rssi;
+    };
+    std::vector<WifiNetwork> _availableNetworks;
+
+    std::atomic<bool> _isInitialized{false};
+    std::atomic<bool> _captivePortalActive{false};
+    std::unique_ptr<DNSServer> _dnsServer;
+
+    void HandleWifiSave(AsyncWebServerRequest *request);
+    void SetupStationMode();
+    void SetupCaptivePortalMode();
+
 
     // Helper functions/templates
 
@@ -219,9 +239,15 @@ class CWebServer
     {}
 
     // begin - register page load handlers and start serving pages
-    void begin();
+    void begin(bool captivePortalMode = false);
+    void Stop();
+    void RegisterCaptivePortalHandlers();
+    void ProcessDnsRequests();
+    void SetCaptivePortalActive(bool active);
+    bool IsCaptivePortalActive() const;
 
     void AddWebSocket(AsyncWebSocket& webSocket)
+
     {
         _server.addHandler(&webSocket);
     }

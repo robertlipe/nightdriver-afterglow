@@ -139,7 +139,9 @@
 #if USE_CG_CLOCKS
     #include "effects/matrix/PatternCGBreakout.h"
     #include "effects/matrix/PatternCGInvade.h"
+#if (MATRIX_WIDTH >= 64 && MATRIX_HEIGHT >= 32)
     #include "effects/matrix/PatternCGKong.h"
+#endif
     #include "effects/matrix/PatternCGMunch.h"
     #include "effects/matrix/PatternCGTetris.h"
 #endif
@@ -381,7 +383,9 @@ void LoadEffectFactories()
 #if USE_CG_CLOCKS
             Effect<PatternCGBreakout>(),
             Effect<PatternCGInvade>(),
+#if (MATRIX_WIDTH >= 64 && MATRIX_HEIGHT >= 32)
             Effect<PatternCGKong>(),
+#endif
             Effect<PatternCGMunch>(),
             Effect<PatternCGTetris>(),
 #endif

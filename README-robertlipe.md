@@ -108,3 +108,36 @@ This file documents the custom reliability, diagnostic, and performance improvem
 - **Performance Boost** Now instaead of fetching and installing over 250 packages, packages are collected and installed ONE time up front and then reused on subsequent buidls. If you have to manage this yourself, run python3 `tools/setup_shared_libs_cli.py`.
 - **PSRAM Initialization Fix**: In ESP-IDF 5, `-DBOARD_HAS_PSRAM` is no longer sufficient. Explicitly configured `board_build.arduino.memory_type = qio_qspi` for the Adafruit MatrixPortal S3, and injected missing `build_flags` into `env:mesmerizer` to ensure 4MB WROVER PSRAM correctly initializes (preventing catastrophic `ESP_ERR_NO_MEM` crashes during WiFi startup).
 - **Target Cleanup**: Deactivated broken edge-case legacy environments (e.g. `ttgo`) and unified filesystem flags to default to LittleFS globally.
+
+---
+
+## 🌐 Network Reliability & Captive Portal
+
+### 1. Dedicated FreeRTOS Network Task
+- **Architecture**: The Wi-Fi connection state machine was decoupled from the main event loop and moved into its own dedicated background FreeRTOS task (`NetworkHandlingLoopEntry`).
+- **Responsiveness**: This ensures that heavy Wi-Fi blocking calls (like `WiFi.begin()` or channel scanning) never stutter the main thread or cause frame drops in LED rendering.
+
+### 2. Seamless Captive Portal
+- **Fallback**: If the device cannot connect to a configured network (or if credentials are intentionally cleared), it gracefully falls back into Access Point (AP) mode after a timeout.
+- **UI & UX**: The Captive Portal serves a sleek, mobile-friendly setup page (styled with modern CSS gradients, glassmorphism, and Apple-like typography). Features dynamic asynchronous scanning (`/scan.json`) that populates a dropdown of nearby networks, sorted by signal strength (RSSI) with visual signal bars (▇▆▅▄▃).
+- **Quality of Life**: Added a "Show Password" toggle to assist users typing complex Wi-Fi keys on mobile devices.
+
+### 3. Stability & Memory Leak Fixes
+- **Robust AP Fallback Timer**: Introduced an atomic `g_resetWifiTimeout` flag. The AP fallback timer is now explicitly relative to the *last credential change or network reset*, rather than a hard-coded absolute boot time. This ensures the captive portal always reliably starts if a connection fails, regardless of device uptime.
+- **Clean WebServer Teardown**: Implemented a proper `CWebServer::Stop()` method to cleanly halt the HTTP and DNS servers, and reset the `_captivePortalActive` state when transitioning from AP mode back to STA mode.
+- **Memory Leak Fixes**: Removed aggressive `WiFi.mode(WIFI_OFF)` transitions in the credential-cycling logic. Frequent mode switching was leaking heap memory in the ESP-IDF Wi-Fi driver stack.
+
+---
+
+## 🌐 Network Reliability & Captive Portal
+
+### 1. Dedicated Network & WiFi Thread
+- **Migration**: Extracted all WiFi state management, connection retries, and network background tasks from the main `loop()` into a dedicated FreeRTOS `NetworkHandlingLoopTask` on Core 0. This drastically reduces rendering jitter on Core 1 by decoupling blocking WiFi radio calls and delays from the graphics render path.
+
+### 2. Captive Portal Fallback
+- **Feature**: Replaced the rudimentary hardcoded AP-mode toggle with a fully automated Captive Portal. When the device fails to connect to WiFi after a set duration, it broadcasts a temporary `NightDriver_*` access point. Connecting clients are automatically redirected (via mDNS and a DNS interceptor) to an embedded setup page to configure WiFi credentials.
+- **Robust Hardware State Management**: The transition from `WIFI_STA` (Station mode) to `WIFI_AP` properly tears down the network stack and rebuilds it, resolving the persistent `LwIP` issues during mode switching.
+
+### 3. Audio Thread Flash Panic Fix
+- **Issue**: The `adc_continuous` DMA audio polling driver is prone to panic (`Cache disabled but cached memory region accessed`) when NVS or SPIFFS writes occur on the shared flash bus.
+- **Fix**: Wrapped the high-level `SaveJSON` config routines and the new `nvs_commit` operations inside `nd_network.cpp` with `g_Analyzer.Pause()` and `Resume()`. This guarantees the audio driver safely sleeps for the few milliseconds that flash writes disable the system cache, keeping CPU usage low without panicking the ESP32.

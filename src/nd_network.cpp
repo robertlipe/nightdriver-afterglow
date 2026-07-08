@@ -38,10 +38,13 @@
 #if ENABLE_WIFI
     #include <algorithm>
     #include <ArduinoOTA.h>
-    #include <ESPmDNS.h>
     #include <iterator>
+    #include <memory>
     #include <nvs.h>
+    #include <vector>
     #include <WiFi.h>
+
+    #include "soundanalyzer.h"
 #elif ENABLE_ESPNOW
     #include <WiFi.h>
 #endif
@@ -52,6 +55,7 @@
 #include "ledbuffer.h"
 #include "ledviewer.h"              // For the LEDViewer task and object
 #include "nd_network.h"
+
 #include "soundanalyzer.h"
 
 extern DRAM_ATTR std::mutex g_buffer_mutex;
@@ -84,6 +88,10 @@ namespace nd_network
 {
     // Private State
     static std::atomic<bool> l_bWifiDriverReady{false};
+    static std::atomic<bool> l_servicesStarted{false};
+    static std::atomic<bool> g_bRebootRequested{false};
+    static std::atomic<unsigned long> g_ulRebootAtMillis{0};
+
 
 #if ENABLE_WIFI
     static DRAM_ATTR WiFiUDP l_Udp;
@@ -153,14 +161,128 @@ namespace nd_network
 
 #if ENABLE_WIFI
 
+    // Safe NVS Wrappers
+    //
+    // The ESP-IDF adc_continuous driver is not IRAM-safe by default. Writing to flash
+    // (NVS or LittleFS) disables the system cache. If the ADC DMA interrupt fires while
+    // the cache is disabled, the system will panic with "Cache disabled but cached memory region accessed".
+    // We wrap all NVS write operations here to pause the audio driver temporarily.
+
+    esp_err_t safe_nvs_set_str(nvs_handle_t handle, const char* key, const char* value) {
+#if ENABLE_AUDIO
+        g_Analyzer.Pause();
+#endif
+        esp_err_t err = nvs_set_str(handle, key, value);
+#if ENABLE_AUDIO
+        g_Analyzer.Resume();
+#endif
+        return err;
+    }
+
+    esp_err_t safe_nvs_erase_key(nvs_handle_t handle, const char* key) {
+#if ENABLE_AUDIO
+        g_Analyzer.Pause();
+#endif
+        esp_err_t err = nvs_erase_key(handle, key);
+#if ENABLE_AUDIO
+        g_Analyzer.Resume();
+#endif
+        return err;
+    }
+
+    esp_err_t safe_nvs_commit(nvs_handle_t handle) {
+#if ENABLE_AUDIO
+        g_Analyzer.Pause();
+#endif
+        esp_err_t err = nvs_commit(handle);
+#if ENABLE_AUDIO
+        g_Analyzer.Resume();
+#endif
+        return err;
+    }
+
+    // Safe WiFi Wrapper
+    //
+    // Similar to NVS operations, ESP-IDF WiFi functions (begin, mode, disconnect, softAP)
+    // can touch NVS internally or disable interrupts during RF initialization, which conflicts
+    // with the continuous ADC audio sampler. We wrap these core WiFi lifecycle functions to
+    // guarantee the DMA sampler is paused.
+    namespace SafeWiFi {
+        void begin(const char* ssid, const char* passphrase) {
+#if ENABLE_AUDIO
+            g_Analyzer.Pause();
+#endif
+            WiFi.begin(ssid, passphrase);
+#if ENABLE_AUDIO
+            g_Analyzer.Resume();
+#endif
+        }
+
+        void disconnect(bool wifioff = false, bool eraseap = false) {
+#if ENABLE_AUDIO
+            g_Analyzer.Pause();
+#endif
+            WiFi.disconnect(wifioff, eraseap);
+#if ENABLE_AUDIO
+            g_Analyzer.Resume();
+#endif
+        }
+
+        bool softAPdisconnect(bool wifioff = false) {
+#if ENABLE_AUDIO
+            g_Analyzer.Pause();
+#endif
+            bool result = WiFi.softAPdisconnect(wifioff);
+#if ENABLE_AUDIO
+            g_Analyzer.Resume();
+#endif
+            return result;
+        }
+
+        bool mode(wifi_mode_t m) {
+#if ENABLE_AUDIO
+            g_Analyzer.Pause();
+#endif
+            bool result = WiFi.mode(m);
+#if ENABLE_AUDIO
+            g_Analyzer.Resume();
+#endif
+            return result;
+        }
+
+        bool softAP(const char* ssid, const char* passphrase = NULL, int channel = 1, int ssid_hidden = 0, int max_connection = 4) {
+#if ENABLE_AUDIO
+            g_Analyzer.Pause();
+#endif
+            bool result = WiFi.softAP(ssid, passphrase, channel, ssid_hidden, max_connection);
+#if ENABLE_AUDIO
+            g_Analyzer.Resume();
+#endif
+            return result;
+        }
+
+        int scanNetworks() {
+#if ENABLE_AUDIO
+            g_Analyzer.Pause();
+#endif
+            int result = WiFi.scanNetworks();
+#if ENABLE_AUDIO
+            g_Analyzer.Resume();
+#endif
+            return result;
+        }
+    }
+
     // WiFi-Specific Implementations
 
     bool IsWiFiConnected() { return WiFi.isConnected(); }
     int  GetWiFiStatus()    { return (int)WiFi.status(); }
     int  GetWiFiRSSI()      { return WiFi.RSSI(); }
-    void SetWiFiModeSTA()   { WiFi.mode(WIFI_STA); }
+    void SetWiFiModeSTA()   { SafeWiFi::mode(WIFI_STA); }
 
     String GetWiFiLocalIP() { return WiFi.localIP().toString(); }
+    bool StartSoftAP(const String& ssid) { return SafeWiFi::softAP(ssid.c_str()); }
+    int ScanNetworks() { return SafeWiFi::scanNetworks(); }
 
     bool GetWiFiHostByName(const char *hostname, IPAddress &ip)
     {
@@ -181,7 +303,184 @@ namespace nd_network
         return ConnectToWiFi(&ssid, &password);
     }
 
-    // ConnectToWiFi
+    static std::atomic<bool> g_isConnecting = false;
+    static String g_lastConnectedSsid;
+    static String g_lastConnectedPassword;
+    std::atomic<bool> g_resetWifiTimeout = false;
+
+    WiFiConnectResult LoadAndConnectToWiFiWithPriority()
+    {
+        if (WiFi.isConnected())
+        {
+            g_isConnecting = false;
+            return WiFiConnectResult::Connected;
+        }
+
+        String current_ssid;
+        String current_password;
+        bool creds_loaded = false;
+
+        // Priority 1: Captive Portal credentials
+        if (ReadWiFiConfig(WifiCredSource::CaptivePortal, current_ssid, current_password))
+        {
+            debugI("Using Captive Portal credentials for connection attempt.");
+            creds_loaded = true;
+        }
+        // Priority 2: Improv credentials
+        else if (ReadWiFiConfig(WifiCredSource::ImprovCreds, current_ssid, current_password))
+        {
+            debugI("Using Improv credentials for connection attempt.");
+            creds_loaded = true;
+        }
+        // Priority 3: Compile-time credentials
+        else if (ReadWiFiConfig(WifiCredSource::CompileTimeCreds, current_ssid, current_password))
+        {
+            debugI("Using compile-time credentials for connection attempt.");
+            creds_loaded = true;
+        }
+        else
+        {
+            debugE("No WiFi credentials found. Cannot connect.");
+            return WiFiConnectResult::NoCredentials;
+        }
+
+        bool newCredentials = (current_ssid != g_lastConnectedSsid || current_password != g_lastConnectedPassword);
+        if (!g_isConnecting || newCredentials)
+        {
+            debugI("Starting a new WiFi connection process.");
+            if (newCredentials)
+            {
+                debugI("Credentials have changed. Old: '%s', New: '%s'", g_lastConnectedSsid.c_str(), current_ssid.c_str());
+            }
+
+            g_lastConnectedSsid = current_ssid;
+            g_lastConnectedPassword = current_password;
+
+            extern std::atomic<bool> g_resetWifiTimeout;
+            g_resetWifiTimeout = true;
+
+            const String &hostname = g_ptrSystem->GetDeviceConfig().GetHostname();
+            if (hostname.length() > 0)
+            {
+                debugI("Setting host name to %s...", hostname.c_str());
+                WiFi.setHostname(hostname.c_str());
+            }
+
+            if (SetWiFiMode(WiFiMode::STA))
+            {
+                debugW("Attempting to connect to SSID: \"%s\"", current_ssid.c_str());
+                SafeWiFi::begin(current_ssid.c_str(), current_password.c_str());
+                g_isConnecting = true;
+            }
+            else
+            {
+                debugE("Failed to set WiFi mode to STA. Aborting connection attempt.");
+                return WiFiConnectResult::NoCredentials;
+            }
+        }
+        else
+        {
+            debugW("Not yet connected to WiFi, waiting for background process to complete...");
+        }
+
+        return WiFiConnectResult::Disconnected;
+    }
+
+    bool SetWiFiMode(WiFiMode mode)
+    {
+        wifi_mode_t frameworkMode = WIFI_OFF;
+        const char* modeStr = "WIFI_OFF";
+        switch (mode) {
+            case WiFiMode::Off:
+                frameworkMode = WIFI_OFF;
+                modeStr = "WIFI_OFF";
+                break;
+            case WiFiMode::STA:
+                frameworkMode = WIFI_STA;
+                modeStr = "WIFI_STA";
+                break;
+            case WiFiMode::AP:
+                frameworkMode = WIFI_AP;
+                modeStr = "WIFI_AP";
+                break;
+            case WiFiMode::APSTA:
+                frameworkMode = WIFI_AP_STA;
+                modeStr = "WIFI_AP_STA";
+                break;
+        }
+
+        debugI("Attempting to set WiFi mode to %s", modeStr);
+
+        SafeWiFi::disconnect(false, false);
+        SafeWiFi::softAPdisconnect(false); // Explicitly disconnect from any existing AP
+        delay(200);
+
+        bool success = SafeWiFi::mode(frameworkMode);
+        if (!success) {
+            debugE("Failed to set WiFi mode to %s", modeStr);
+            return false;
+        }
+
+        unsigned long startTime = millis();
+        // Wait up to 10 seconds for the mode to change
+        while (WiFi.getMode() != frameworkMode && (millis() - startTime < 10000)) {
+            delay(50);
+        }
+
+        if (WiFi.getMode() != frameworkMode) {
+            debugW("WiFi mode did not stabilize to %s within timeout.", modeStr);
+            return false;
+        }
+        debugI("Successfully set WiFi mode to %s", modeStr);
+        delay(1000); // delay after mode set for stabilization
+        return true;
+    }
+
+    void StartCaptivePortal()
+    {
+#if ENABLE_WEBSERVER
+        if (g_ptrSystem->HasWebServer() && g_ptrSystem->GetWebServer().IsCaptivePortalActive())
+        {
+            return;
+        }
+        if (g_ptrSystem->HasWebServer()) {
+            g_ptrSystem->GetWebServer().SetCaptivePortalActive(true);
+        }
+        l_servicesStarted = false; // Reset l_servicesStarted when entering captive portal
+
+        debugI("Stopping WiFi station mode to start Captive Portal.");
+        if (!SetWiFiMode(WiFiMode::AP))
+        {
+            debugE("Failed to robustly set WiFi mode to WIFI_AP for Captive Portal.");
+            if (g_ptrSystem->HasWebServer()) {
+                g_ptrSystem->GetWebServer().SetCaptivePortalActive(false);
+            }
+            return;
+        }
+
+        if (g_ptrSystem->HasWebServer()) {
+            g_ptrSystem->GetWebServer().begin(true);
+        }
+#endif
+    }
+
+    void RequestSystemReboot(uint32_t inMs)
+    {
+        g_bRebootRequested = true;
+        g_ulRebootAtMillis = millis() + inMs;
+    }
+
+    bool IsRebootRequested()
+    {
+        return g_bRebootRequested;
+    }
+
+    unsigned long GetRebootTargetTime()
+    {
+        return g_ulRebootAtMillis;
+    }
+
+    // ConnectToWiFi (kept as backward compatibility wrapper)
     //
     // Try to connect to WiFi using either the SSID and password pointed to by arguments, or the credentials
     // that were saved from an earlier call if no/nullptr arguments are passed.
@@ -220,6 +519,7 @@ namespace nd_network
         }
         else if (bPreviousConnection && WiFi.isConnected())
         {
+
             return WiFiConnectResult::Connected;
         }
 
@@ -239,15 +539,14 @@ namespace nd_network
             if (hostname.length() > 0)
                 WiFi.setHostname(hostname.c_str());
 
-            if (haveNewCredentials || WiFi.status() == WL_CONNECT_FAILED)
-                WiFi.disconnect();
-
+            // Let the ESP-IDF driver handle its own disconnect/reconnect logic internally.
             debugW("Connecting to Wifi SSID: \"%s\" - ESP32 Free Memory: %zu, PSRAM:%zu, PSRAM Free: %zu\n",
                    WiFi_ssid.c_str(), (size_t)ESP.getFreeHeap(), (size_t)ESP.getPsramSize(), (size_t)ESP.getFreePsram());
 
-            WiFi.begin(WiFi_ssid.c_str(), WiFi_password.c_str());
+            SafeWiFi::begin(WiFi_ssid.c_str(), WiFi_password.c_str());
 
             debugV("Done Wifi.begin, waiting for connection...");
+
         }
 
         if (WiFi.isConnected())
@@ -360,10 +659,20 @@ namespace nd_network
         nvs_handle_t nvsRWHandle;
         if (nvs_open("storage", NVS_READWRITE, &nvsRWHandle) != ESP_OK) return false;
 
-        bool success = (nvs_set_str(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_ssid").c_str(), WiFi_ssid.c_str()) == ESP_OK) &&
-                       (nvs_set_str(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_password").c_str(), WiFi_password.c_str()) == ESP_OK);
+        bool success = (safe_nvs_set_str(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_ssid").c_str(), WiFi_ssid.c_str()) == ESP_OK) &&
+                       (safe_nvs_set_str(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_password").c_str(), WiFi_password.c_str()) == ESP_OK);
 
-        if (success) nvs_commit(nvsRWHandle);
+        if (success)
+        {
+            safe_nvs_commit(nvsRWHandle);
+        }
+        if (success)
+        {
+            if (WiFi.isConnected() || WiFi.status() == WL_CONNECT_FAILED)
+            {
+                SafeWiFi::disconnect();
+            }
+        }
         nvs_close(nvsRWHandle);
         return success;
     }
@@ -382,17 +691,29 @@ namespace nd_network
         // Don't allow shortcut operation here. erase BOTH keys, even
         // if first one errors.
         bool success = true;
-        esp_err_t err = nvs_erase_key(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_ssid").c_str());
-        if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
+        esp_err_t err = safe_nvs_erase_key(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_ssid").c_str());
+        if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND)
+        {
             success = false;
         }
 
-        err = nvs_erase_key(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_password").c_str());
-        if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
+        err = safe_nvs_erase_key(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_password").c_str());
+        if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND)
+        {
             success = false;
         }
 
-        if (success) nvs_commit(nvsRWHandle);
+        if (success)
+        {
+            safe_nvs_commit(nvsRWHandle);
+        }
+        if (success)
+        {
+            if (WiFi.isConnected() || WiFi.status() == WL_CONNECT_FAILED)
+            {
+                SafeWiFi::disconnect();
+            }
+        }
         nvs_close(nvsRWHandle);
         return success;
     }
@@ -436,48 +757,101 @@ namespace nd_network
     void NetworkHandlingLoopEntry(void *)
     {
         static unsigned long lastConnected = millis();
-#if 0
-uint64_t mac = ESP.getEfuseMac();
-char name[32];
-snprintf(name, sizeof(name), "nightdriver-%02X%02X%02X",
-         (uint8_t)(mac >> 16),
-         (uint8_t)(mac >> 8),
-         (uint8_t)(mac));
-MDNS.begin(name);
-// dns-sd -B _http._tcp
-// dns-sd -L <instance-name> _http._tcp local
-#endif
-        if (!MDNS.begin("esp32")) Serial.println("Error starting mDNS");
-
-        MDNS.addService("http", "tcp", 80);
-        MDNS.addServiceTxt("http", "tcp", "name", "NightDriver");
 
         TickType_t notifyWait = 0;
         for (;;)
         {
+            if (g_bRebootRequested && millis() >= g_ulRebootAtMillis)
+            {
+                debugW("Rebooting system as requested...");
+                ESP.restart();
+            }
+
+            if (g_resetWifiTimeout.exchange(false))
+            {
+                lastConnected = millis();
+            }
+
+#if ENABLE_WEBSERVER
+            if (g_ptrSystem->HasWebServer() && g_ptrSystem->GetWebServer().IsCaptivePortalActive())
+            {
+                g_ptrSystem->GetWebServer().ProcessDnsRequests();
+                delay(50);
+                continue;
+            }
+#endif
             ulTaskNotifyTake(pdTRUE, notifyWait);
             EVERY_N_SECONDS(1)
             {
-                auto res = ConnectToWiFi();
+                auto res = LoadAndConnectToWiFiWithPriority();
                 if (res == WiFiConnectResult::Connected)
                 {
                     lastConnected = millis();
+                    if (!l_servicesStarted.exchange(true))
+                    {
+                        #if INCOMING_WIFI_ENABLED
+                            auto& socketServer = g_ptrSystem->GetSocketServer();
+                            debugI("Starting/restarting Socket Server...");
+                            socketServer.release();
+                            if (false == socketServer.begin())
+                                throw std::runtime_error("Could not start socket server!");
+                            debugI("Socket server started.");
+                        #endif
+
+                        #if ENABLE_OTA
+                            debugI("Publishing OTA...");
+                            SetupOTA(String(WiFi.getHostname()));
+                        #endif
+
+                        #if ENABLE_NTP
+                            debugI("Setting Clock...");
+                            NTPTimeClient::UpdateClockFromWeb(&l_Udp);
+                        #endif
+
+                        #if ENABLE_WEBSERVER
+                            debugI("Starting Web Server...");
+                            g_ptrSystem->GetWebServer().begin();
+                        #endif
+                    }
+
                     #if WEB_SOCKETS_ANY_ENABLED
                         g_ptrSystem->GetWebSocketServer().CleanupClients();
                     #endif
                 }
                 else
                 {
-                    #if WAIT_FOR_WIFI
-                        if (res != WiFiConnectResult::NoCredentials && (millis() - lastConnected) > WIFI_WAIT_MAX)
-                        {
-                            debugE("Rebooting due to no Wifi.");
-                            delay(5000);
-                            ESP.restart();
-                        }
-                    #endif
+                    // Smart / state-aware timeout logic
+                    unsigned long waitTime = millis() - lastConnected;
+                    uint32_t configuredTimeout = g_ptrSystem->GetDeviceConfig().GetPortalTimeoutSeconds();
+                    uint32_t actualTimeoutMs;
+
+                    wl_status_t currentWifiStatus = WiFi.status();
+
+                    // We use short timeout on fresh boot (!l_servicesStarted) so users don't wait 15 mins if they typo'd an SSID in the portal.
+                    if (res == WiFiConnectResult::NoCredentials ||
+                        currentWifiStatus == WL_CONNECT_FAILED ||
+                        currentWifiStatus == WL_NO_SSID_AVAIL ||
+                        !l_servicesStarted.load())
+                    {
+                        actualTimeoutMs = AUTO_MODE_SHORT_TIMEOUT_SECONDS * 1000;
+                    }
+                    else if (configuredTimeout == 0) // AUTO mode (long timeout)
+                    {
+                        actualTimeoutMs = AUTO_MODE_LONG_TIMEOUT_SECONDS * 1000;
+                    }
+                    else
+                    {
+                        actualTimeoutMs = configuredTimeout * 1000;
+                    }
+
+                    debugI("WiFi wait time: %lu ms, timeout: %u ms", waitTime, actualTimeoutMs);
+                    if (actualTimeoutMs > 0 && waitTime > actualTimeoutMs)
+                    {
+                        StartCaptivePortal();
+                    }
                 }
             }
+
 
             if (!g_ptrSystem->HasNetworkReader() || !WiFi.isConnected())
             {
@@ -554,10 +928,94 @@ MDNS.begin(name);
             #endif
             { "stats", "Display system statistics", "Displaying statistics",
                 DoStatsCommand
+            },
+            { "showwificreds", "Display stored WiFi credentials", "Displaying WiFi credentials...",
+                [](const DebugCLI::cli_argv &) {
+                    DebugCLI::cli_printf("--- WiFi Credentials in NVS ---");
+                    struct WifiCredSourceInfo {
+                        WifiCredSource source;
+                        const char* label;
+                    };
+                    static const WifiCredSourceInfo credSources[] = {
+                        { WifiCredSource::CaptivePortal, "CaptivePortal" },
+                        { WifiCredSource::ImprovCreds, "ImprovCreds" },
+                        { WifiCredSource::CompileTimeCreds, "Persisted CompileTimeCreds" }
+                    };
+                    String ssid, password;
+                    for (const auto& sourceInfo : credSources)
+                    {
+                        if (ReadWiFiConfig(sourceInfo.source, ssid, password))
+                        {
+                            DebugCLI::cli_printf("%s SSID: \"%s\"", sourceInfo.label, ssid.c_str());
+                        }
+                        else
+                        {
+                            DebugCLI::cli_printf("%s: No credentials found.", sourceInfo.label);
+                        }
+                    }
+                    DebugCLI::cli_printf("-----------------------------");
+                }
+            },
+            { "showwifistate", "Show current WiFi connection behavior", "Displaying state...",
+                [](const DebugCLI::cli_argv &) {
+                    uint32_t timeout = g_ptrSystem->GetDeviceConfig().GetPortalTimeoutSeconds();
+                    if (timeout == 0) {
+                        DebugCLI::cli_printf("WiFi Mode: AUTO timeout\n");
+                    } else {
+                        DebugCLI::cli_printf("WiFi Mode: Fixed timeout of %lu seconds\n", timeout);
+                    }
+                }
+            },
+            { "forcewifistate", "Set WiFi behavior (forcewifistate [auto|patient|impatient|seconds])", "Setting state...",
+                [](const DebugCLI::cli_argv &argv) {
+                    if (argv.size() > 1)
+                    {
+                        String mode(argv[1].data(), argv[1].size());
+                        mode.toLowerCase();
+                        if (mode == "auto")
+                        {
+                            g_ptrSystem->GetDeviceConfig().SetPortalTimeoutSeconds(0);
+                            DebugCLI::cli_printf("WiFi Mode set to AUTO (0s)");
+                        }
+                        else if (mode == "patient")
+                        {
+                            g_ptrSystem->GetDeviceConfig().SetPortalTimeoutSeconds(900);
+                            DebugCLI::cli_printf("WiFi Mode set to patient (900s)");
+                        }
+                        else if (mode == "impatient")
+                        {
+                            g_ptrSystem->GetDeviceConfig().SetPortalTimeoutSeconds(30);
+                            DebugCLI::cli_printf("WiFi Mode set to impatient (30s)");
+                        }
+                        else
+                        {
+                            uint32_t timeout = atoi(mode.c_str());
+                            if (g_ptrSystem->GetDeviceConfig().GetPortalTimeoutSeconds() != timeout)
+                            {
+                                g_ptrSystem->GetDeviceConfig().SetPortalTimeoutSeconds(timeout);
+                                if (timeout == 0) {
+                                    DebugCLI::cli_printf("WiFi Mode set to AUTO timeout\n");
+                                } else {
+                                    DebugCLI::cli_printf("WiFi Mode set to fixed timeout of %lu seconds\n", timeout);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        DebugCLI::cli_printf("Usage: forcewifistate [auto|patient|impatient|seconds]");
+                    }
+                }
+            },
+            { "startportal", "Immediately start the captive portal", "Starting portal...",
+                [](const DebugCLI::cli_argv &) {
+                    StartCaptivePortal();
+                }
             }
         };
         DebugCLI::RegisterCommands(cmds, std::size(cmds));
     }
+
 
 #else
 
@@ -572,16 +1030,16 @@ MDNS.begin(name);
 
     bool GetWiFiHostByName(const char *, IPAddress &) { return false; }
 
-    WiFiConnectResult ConnectToWiFi(const String &, const String &) { return WiFiConnectResult::NoCredentials; }
-    WiFiConnectResult ConnectToWiFi(const String *, const String *) { return WiFiConnectResult::NoCredentials; }
-
-    void UpdateNTPTime() {}
-    bool ReadWiFiConfig(WifiCredSource, String &, String &) { return false; }
-    bool WriteWiFiConfig(WifiCredSource, const String &, const String &) { return false; }
-    bool ClearWiFiConfig(WifiCredSource) { return false; }
+    WiFiConnectResult LoadAndConnectToWiFiWithPriority() { return WiFiConnectResult::NoCredentials; }
+    bool SetWiFiMode(WiFiMode) { return false; }
+    void StartCaptivePortal() {}
+    void RequestSystemReboot(uint32_t) {}
+    bool IsRebootRequested() { return false; }
+    unsigned long GetRebootTargetTime() { return 0; }
 
     void NetworkHandlingLoopEntry(void *) { for (;;) delay(1000); }
     void InitNetworkCLI() {}
+
 
 #endif // ENABLE_WIFI
 

@@ -41,6 +41,7 @@
 #include "gfxbase.h"
 #include "jsonserializer.h"
 #include "ledstripeffect.h"
+#include "soundanalyzer.h" // for g_Analyzer.Pause()
 #include "systemcontainer.h"
 #include "websocketserver.h"
 
@@ -508,13 +509,18 @@ void RemoveEffectManagerConfig()
 
 void WriteCurrentEffectIndexFile()
 {
-    UserFS.remove(CURRENT_EFFECT_CONFIG_FILE);
+#if ENABLE_AUDIO
+    g_Analyzer.Pause();
+#endif
 
     File file = UserFS.open(CURRENT_EFFECT_CONFIG_FILE, FILE_WRITE);
 
     if (!file)
     {
         debugE("Unable to open file %s for writing!", CURRENT_EFFECT_CONFIG_FILE);
+#if ENABLE_AUDIO
+        g_Analyzer.Resume();
+#endif
         return;
     }
 
@@ -529,6 +535,10 @@ void WriteCurrentEffectIndexFile()
         debugE("Unable to write to file %s!", CURRENT_EFFECT_CONFIG_FILE);
         UserFS.remove(CURRENT_EFFECT_CONFIG_FILE);
     }
+
+#if ENABLE_AUDIO
+    g_Analyzer.Resume();
+#endif
 }
 
 //
