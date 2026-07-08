@@ -993,7 +993,6 @@ namespace nd_network
                             if (g_ptrSystem->GetDeviceConfig().GetPortalTimeoutSeconds() != timeout)
                             {
                                 g_ptrSystem->GetDeviceConfig().SetPortalTimeoutSeconds(timeout);
-                                g_ptrSystem->GetDeviceConfig().Save();
                                 if (timeout == 0) {
                                     DebugCLI::cli_printf("WiFi Mode set to AUTO timeout\n");
                                 } else {
