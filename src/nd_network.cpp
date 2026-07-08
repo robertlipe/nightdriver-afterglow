@@ -243,7 +243,7 @@ namespace nd_network
 
             g_lastConnectedSsid = current_ssid;
             g_lastConnectedPassword = current_password;
-            
+
             extern std::atomic<bool> g_resetWifiTimeout;
             g_resetWifiTimeout = true;
 
@@ -303,8 +303,8 @@ namespace nd_network
         }
 
         debugI("Attempting to set WiFi mode to %s", modeStr);
-        
-        WiFi.disconnect(false, false); 
+
+        WiFi.disconnect(false, false);
         WiFi.softAPdisconnect(false); // Explicitly disconnect from any existing AP
         delay(200);
 
@@ -316,7 +316,7 @@ namespace nd_network
 
         unsigned long startTime = millis();
         // Wait up to 10 seconds for the mode to change
-        while (WiFi.getMode() != frameworkMode && (millis() - startTime < 10000)) { 
+        while (WiFi.getMode() != frameworkMode && (millis() - startTime < 10000)) {
             delay(50);
         }
 

@@ -239,10 +239,10 @@ window.onload = scan_ssids;
     <label for="ssid_select">SSID</label>
     <select id="ssid_select" class="input-field" onchange="set_ssid_text(this.value)"></select>
     <input type="text" id="ssid_text" class="input-field" name="ssid" placeholder="Or type SSID manually">
-    
+
     <label for="password">Password</label>
     <input type="password" id="password" class="input-field" name="password" placeholder="Enter password" style="margin-bottom: 8px;">
-    
+
     <div style="display: flex; align-items: center; margin-bottom: 20px;">
         <input type="checkbox" id="show_password" onclick="toggle_password()" style="margin-right: 8px; cursor: pointer;">
         <label for="show_password" style="margin-bottom: 0; color: #ccc; text-transform: none; font-size: 14px; font-weight: normal; cursor: pointer;">Show Password</label>
