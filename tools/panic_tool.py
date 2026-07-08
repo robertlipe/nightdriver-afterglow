@@ -45,6 +45,10 @@ def find_tool(tool_name, arch_info):
         os.path.join(PIO_PACKAGES_DIR, "toolchain-xtensa-esp-elf", "bin")
     ]
     
+    if tool_name == "gdb":
+        # Newer PIO versions split GDB into a separate package
+        gdb_pkg = "tool-" + prefix.replace("esp32-", "esp-").replace("esp32s2-", "esp-").replace("esp32s3-", "esp-").strip("-")
+        search_paths.append(os.path.join(PIO_PACKAGES_DIR, gdb_pkg, "bin"))
     full_tool_name = prefix + tool_name
     exe_suffix = ".exe" if os.name == "nt" else ""
     for path in search_paths:
@@ -173,8 +177,26 @@ def analyze_binary_dump(elf_path, dump_file, arch="esp32c6", interactive=False):
     print(f"Analyzing binary dump {dump_file} using {tool_path} ({mode})...")
     
     try:
-        python_exe = [get_working_python(tool_path)] if tool_path.endswith(".py") else []
-        cmd = python_exe + [tool_path, "--chip", arch, mode]
+        wrapper = """
+import sys, runpy
+try:
+    from esp_coredump.corefile.loader import EspCoreDumpLoader, ESPCoreDumpLoaderError
+    orig = EspCoreDumpLoader._extract_elf_corefile
+    def patched(self, *args, **kwargs):
+        try: orig(self, *args, **kwargs)
+        except ESPCoreDumpLoaderError as e:
+            if 'Invalid application image' in str(e): print(f"Bypassing mismatch: {e}")
+            else: raise
+    EspCoreDumpLoader._extract_elf_corefile = patched
+except Exception: pass
+sys.argv = sys.argv[1:]
+runpy.run_path(sys.argv[0], run_name='__main__')
+"""
+        if tool_path.endswith(".py"):
+            cmd = [get_working_python(tool_path), "-c", wrapper, tool_path, "--chip", arch, mode]
+        else:
+            cmd = [tool_path, "--chip", arch, mode]
+
         if gdb_path and os.path.exists(gdb_path): cmd += ["--gdb", gdb_path]
         if rom_elf: cmd += ["--rom-elf", rom_elf]
         cmd += ["--core-format", "raw", "--core", dump_file, elf_path]
@@ -200,10 +222,11 @@ def analyze_binary_dump(elf_path, dump_file, arch="esp32c6", interactive=False):
             if pc_match:
                 disassemble_around_address(elf_path, pc_match.group(1), arch_info)
             
-            print("\n--- Automatic Address Decoding ---")
-            code_addresses = sorted(list(set(re.findall(r'0x[4][0-9a-fA-F]{7}', result.stdout))))
-            if code_addresses:
-                decode_backtrace(elf_path, " ".join(code_addresses), arch)
+            if not re.search(r'#0\s+0x', result.stdout):
+                print("\n--- Automatic Address Decoding (GDB missing) ---")
+                code_addresses = sorted(list(set(re.findall(r'0x[4][0-9a-fA-F]{7}', result.stdout))))
+                if code_addresses:
+                    decode_backtrace(elf_path, " ".join(code_addresses), arch)
         else:
             print(f"Error: espcoredump failed (exit code {result.returncode})")
             print(result.stderr)
