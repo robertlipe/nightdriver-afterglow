@@ -8,8 +8,8 @@
 //
 // Description:
 //
-//   Provides a generic base class for HUB75 DMA LED panel drivers, 
-//   containing shared logic for power estimation, brightness bounding, 
+//   Provides a generic base class for HUB75 DMA LED panel drivers,
+//   containing shared logic for power estimation, brightness bounding,
 //   and primitive hardware effects.
 //
 //---------------------------------------------------------------------------

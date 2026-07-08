@@ -229,6 +229,9 @@ void ConfirmUpdate();
 
 #if USE_WS281X
 #include "ws281xgfx.h"
+#if HEXAGON
+#include "gfxhex.h"
+#endif
 #endif
 
 
@@ -635,7 +638,7 @@ void setup()
 
     #if ENABLE_WIFI && !defined(ENABLE_WIFI_TEST_MODE)
         debugI("Making initial attempt to connect to WiFi.");
-        nd_network::ConnectToWiFi(WiFi_ssid, WiFi_password);
+        nd_network::LoadAndConnectToWiFiWithPriority();
     #endif
 
     // Start Audio Thread AFTER initial WiFi NVS writes to prevent DMA Cache Panics

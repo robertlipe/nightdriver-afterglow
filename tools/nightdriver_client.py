@@ -167,7 +167,7 @@ class ColorClient:
     """
     MAX_INVALID_HEADER_MESSAGES = 3 # Limit the number of invalid header messages
 
-    def __init__(self, host, port=12000, verbose=False):
+    def __init__(self, host, port=12000, verbose=False, is_hex_display=False, gain=1.0):
         """
         Initializes the ColorClient.
 
@@ -175,9 +175,12 @@ class ColorClient:
             host: The IP address or hostname of the NightDriver device.
             port: The port of the ColorServer (default 12000).
             verbose: Enable verbose output for debugging.
+            is_hex_display: Whether to calculate num_leds using hex logic.
         """
         self.host = host
         self.port = port
+        self.is_hex_display = is_hex_display
+        self.gain = gain
         self.sock = None
         self.data_queue = queue.Queue()
         self.stop_event = threading.Event()
@@ -325,7 +328,11 @@ class ColorClient:
             if self.verbose: print(f"capture_frames: Initial header invalid: {header:08x}")
             return []
 
-        num_leds = width * height
+        if self.is_hex_display:
+            hex_rings = (width + 1) // 2
+            num_leds = 3 * hex_rings * (hex_rings - 1) + 1
+        else:
+            num_leds = width * height
         pixel_data_size = num_leds * 3 # 3 bytes per RGB pixel
         if self.verbose: print(f"capture_frames: Initial frame dimensions: {width}x{height}, pixel data size: {pixel_data_size}")
 
@@ -363,7 +370,12 @@ class ColorClient:
                     self.frames_in_error += 1
                     break # Incomplete frame
 
-                pixels = [(pixel_data[i], pixel_data[i+1], pixel_data[i+2]) for i in range(0, pixel_data_size, 3)]
+                pixels = []
+                for i in range(0, pixel_data_size, 3):
+                    r_val = min(255, int(pixel_data[i] * self.gain))
+                    g_val = min(255, int(pixel_data[i+1] * self.gain))
+                    b_val = min(255, int(pixel_data[i+2] * self.gain))
+                    pixels.append((r_val, g_val, b_val))
                 frames.append({"width": width, "height": height, "pixels": pixels})
                 self.frames_captured += 1
                 if self.verbose: print(f"capture_frames: Frame {self.frames_captured} captured. Total frames in error: {self.frames_in_error}")
@@ -621,8 +633,10 @@ def live_view(host, layout="flat", verbose=False, gain=1.0, scale=None, mapping=
 
     PIXEL_GAP = 1
     DEFAULT_PIXEL_SCALE = scale if scale is not None else 10
+    
+    is_hex_display = (layout != "none")
 
-    with ColorClient(host, verbose=verbose) as client:
+    with ColorClient(host, verbose=verbose, is_hex_display=is_hex_display) as client:
         # Get the first frame to determine the matrix size
         print("Waiting for first frame to determine matrix size...")
         frames = client.capture_frames(duration_seconds=1) # Capture a short moment to get a frame
@@ -634,8 +648,6 @@ def live_view(host, layout="flat", verbose=False, gain=1.0, scale=None, mapping=
         matrix_width = first_frame['width']
         matrix_height = first_frame['height']
         print(f"Detected matrix size: {matrix_width}x{matrix_height}")
-
-        is_hex_display = (matrix_width * matrix_height == 271)
         hex_n = 10 # For 271 pixels, the hexagon side length is 10
 
         pygame.init()
@@ -1054,7 +1066,7 @@ def main():
             print(f"Capturing effect {effect_to_capture} for {args.duration} seconds...")
             print(f"Outputs: {', '.join(outputs)}")
             client.set_current_effect(effect_to_capture, width=16, height=16)
-            with ColorClient(args.host, verbose=args.verbose) as color_client:
+            with ColorClient(args.host, verbose=args.verbose, is_hex_display=(args.hex_layout != "none"), gain=args.preview_gain) as color_client:
                 frames = color_client.capture_frames(args.duration)
 
             if frames:
@@ -1086,7 +1098,7 @@ def main():
                 print(f"Outputs: {', '.join(outputs)}")
                 client.set_current_effect(i, width=16, height=16)
 
-                with ColorClient(args.host, verbose=args.verbose) as color_client:
+                with ColorClient(args.host, verbose=args.verbose, is_hex_display=(args.hex_layout != "none"), gain=args.preview_gain) as color_client:
                     frames = color_client.capture_frames(args.duration)
 
                 if frames:

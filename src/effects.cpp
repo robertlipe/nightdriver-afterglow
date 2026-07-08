@@ -81,6 +81,10 @@
     #include "ws281xgfx.h"
 #endif
 
+#if defined(EFFECTS_HEXAGON)
+    #include "effects/matrix/PatternHexMath.h"
+#endif
+
 #if USE_MATRIX
 
     #if ENABLE_WIFI
@@ -99,6 +103,7 @@
     #include "effects/matrix/PatternBounce.h"
     #include "effects/matrix/PatternCircuit.h"
     #include "effects/matrix/PatternCube.h"
+//    #include "effects/matrix/PatternHexMath.h"
     #include "effects/matrix/PatternLife.h"
     #include "effects/matrix/PatternMandala.h"
     #include "effects/matrix/PatternMaze.h"
@@ -157,6 +162,10 @@
 #if USE_MATRIX && ENABLE_WIFI
     INIT_EFFECT_SETTING_SPECS(PatternSubscribers, mySettingSpecs);
     INIT_EFFECT_SETTING_SPECS(PatternStocks, mySettingSpecs);
+#endif
+
+#if HEXAGON
+    INIT_EFFECT_SETTING_SPECS(PatternHexMath, mySettingSpecs);
 #endif
 
 // Apple5x7 font definition - needed for WiFi-enabled matrix patterns using Adafruit-style fonts
@@ -582,7 +591,8 @@ void LoadEffectFactories()
 
         // Hexagon effect set
         RegisterAll(*g_ptrEffectFactories,
-            Effect<OuterHexRingEffect>()
+            Effect<OuterHexRingEffect>(),
+            Effect<PatternHexMath>()
         );
 
     #endif
