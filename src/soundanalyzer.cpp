@@ -298,34 +298,57 @@ void SoundAnalyzerBase::SetPeakDecayRates(float r1, float r2)
 void SoundAnalyzerBase::Pause()
 {
 #if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
-    debugI("Audio: Requesting pause of continuous ADC...");
-    _pauseRequested = true;
     if (_adc_handle)
     {
-        uint32_t start = millis();
-        while (!_isPaused && (millis() - start < 200))
+        std::lock_guard<std::mutex> lock(_pauseMutex);
+        if (_pauseCount == 0)
         {
-            delay(5);
+            debugI("Audio: Requesting pause of continuous ADC...");
+            _pauseRequested = true;
+            uint32_t start = millis();
+            while (!_isPaused)
+            {
+                if (millis() - start > 5000)
+                {
+                    debugE("Audio: FAILED to pause ADC after 5 seconds! Flash writes will CRASH!");
+                    throw std::runtime_error("Failed to pause audio DMA!");
+                }
+                delay(5);
+            }
+            debugI("Audio: Pause confirmed.");
         }
+        _pauseCount++;
     }
-    debugI("Audio: Pause confirmed.");
 #endif
 }
 
 void SoundAnalyzerBase::Resume()
 {
 #if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
-    debugI("Audio: Requesting resume of continuous ADC...");
-    _pauseRequested = false;
     if (_adc_handle)
     {
-        uint32_t start = millis();
-        while (_isPaused && (millis() - start < 200))
+        std::lock_guard<std::mutex> lock(_pauseMutex);
+        if (_pauseCount > 0)
         {
-            delay(5);
+            _pauseCount--;
+            if (_pauseCount == 0)
+            {
+                debugI("Audio: Requesting resume of continuous ADC...");
+                _pauseRequested = false;
+                uint32_t start = millis();
+                while (_isPaused)
+                {
+                    if (millis() - start > 5000)
+                    {
+                        debugE("Audio: FAILED to resume ADC after 5 seconds!");
+                        throw std::runtime_error("Failed to resume audio DMA!");
+                    }
+                    delay(5);
+                }
+                debugI("Audio: Resume confirmed.");
+            }
         }
     }
-    debugI("Audio: Resume confirmed.");
 #endif
 }
 

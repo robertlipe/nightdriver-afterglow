@@ -578,6 +578,8 @@ class SoundAnalyzerBase : public ISoundAnalyzer
 #endif
 
     ArduinoFFT<float> _FFT;
+    std::mutex _pauseMutex;
+    int _pauseCount = 0;
     std::atomic<bool> _pauseRequested{false};
     std::atomic<bool> _isPaused{false};
 

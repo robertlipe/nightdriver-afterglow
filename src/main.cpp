@@ -616,28 +616,30 @@ void setup()
 
     InitEffectsManager();
 
-    // In test mode, initialize the lwIP/WiFi stack (via WiFi.mode) before starting
-    // the audio thread. WiFi.mode() must run before any socket is opened (Debug thread)
-    // and before ADC DMA starts — because on this Arduino3 prebuilt, WiFi.mode()
-    // briefly disables the flash cache, and adc_hal_get_reading_result() is missing
-    // IRAM_ATTR so it will fault if called while the cache is disabled.
-    // The normal path achieves this ordering via nd_network::ConnectToWiFi() below.
-    #if ENABLE_WIFI && defined(ENABLE_WIFI_TEST_MODE)
+    // We must initialize lwIP/WiFi stack (via WiFi.mode) and set persistent(false)
+    // before starting the audio thread. The ESP32 Arduino WiFi driver touches NVS
+    // (disabling the cache) and also missing IRAM_ATTR in ADC DMA interrupts will
+    // cause panics. We manage credentials manually, so disable WiFi NVS persistence globally.
+    #if ENABLE_WIFI
         WiFi.persistent(false);
-        WiFi.mode(WIFI_STA);
+        #if defined(ENABLE_WIFI_TEST_MODE)
+            WiFi.mode(WIFI_STA);
+        #endif
     #endif
 
     // Start things that do not depend on the network
 
     taskManager.StartDrawThread();
     taskManager.StartScreenThread();
-    taskManager.StartAudioThread();
     taskManager.StartRemoteThread();
 
     #if ENABLE_WIFI && !defined(ENABLE_WIFI_TEST_MODE)
         debugI("Making initial attempt to connect to WiFi.");
         nd_network::ConnectToWiFi(WiFi_ssid, WiFi_password);
     #endif
+
+    // Start Audio Thread AFTER initial WiFi NVS writes to prevent DMA Cache Panics
+    taskManager.StartAudioThread();
 
     // Start the network-dependent services.  These will be NOPs on a non-wifi build.
 

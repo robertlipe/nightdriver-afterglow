@@ -27,10 +27,11 @@
 #include "globals.h"
 
 #include <Arduino.h>
-#include <WiFi.h>
 
 // Define a test mode to enable/disable the WiFi test framework
 #ifdef ENABLE_WIFI_TEST_MODE
+
+#include <WiFi.h>
 
 // Forward declarations
 void WiFiTestLoopEntry(void* pvParameters);

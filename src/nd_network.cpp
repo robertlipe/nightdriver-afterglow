@@ -39,8 +39,12 @@
     #include <algorithm>
     #include <ArduinoOTA.h>
     #include <iterator>
+    #include <memory>
     #include <nvs.h>
+    #include <vector>
     #include <WiFi.h>
+    
+    #include "soundanalyzer.h"
 #elif ENABLE_ESPNOW
     #include <WiFi.h>
 #endif
@@ -157,6 +161,107 @@ namespace nd_network
 
 #if ENABLE_WIFI
 
+    // Safe NVS Wrappers
+    //
+    // The ESP-IDF adc_continuous driver is not IRAM-safe by default. Writing to flash
+    // (NVS or LittleFS) disables the system cache. If the ADC DMA interrupt fires while
+    // the cache is disabled, the system will panic with "Cache disabled but cached memory region accessed".
+    // We wrap all NVS write operations here to pause the audio driver temporarily.
+    
+    esp_err_t safe_nvs_set_str(nvs_handle_t handle, const char* key, const char* value) {
+#if ENABLE_AUDIO
+        g_Analyzer.Pause();
+#endif
+        esp_err_t err = nvs_set_str(handle, key, value);
+#if ENABLE_AUDIO
+        g_Analyzer.Resume();
+#endif
+        return err;
+    }
+
+    esp_err_t safe_nvs_erase_key(nvs_handle_t handle, const char* key) {
+#if ENABLE_AUDIO
+        g_Analyzer.Pause();
+#endif
+        esp_err_t err = nvs_erase_key(handle, key);
+#if ENABLE_AUDIO
+        g_Analyzer.Resume();
+#endif
+        return err;
+    }
+
+    esp_err_t safe_nvs_commit(nvs_handle_t handle) {
+#if ENABLE_AUDIO
+        g_Analyzer.Pause();
+#endif
+        esp_err_t err = nvs_commit(handle);
+#if ENABLE_AUDIO
+        g_Analyzer.Resume();
+#endif
+        return err;
+    }
+
+    // Safe WiFi Wrapper
+    //
+    // Similar to NVS operations, ESP-IDF WiFi functions (begin, mode, disconnect, softAP)
+    // can touch NVS internally or disable interrupts during RF initialization, which conflicts
+    // with the continuous ADC audio sampler. We wrap these core WiFi lifecycle functions to
+    // guarantee the DMA sampler is paused.
+    namespace SafeWiFi {
+        void begin(const char* ssid, const char* passphrase) {
+#if ENABLE_AUDIO
+            g_Analyzer.Pause();
+#endif
+            WiFi.begin(ssid, passphrase);
+#if ENABLE_AUDIO
+            g_Analyzer.Resume();
+#endif
+        }
+
+        void disconnect(bool wifioff = false, bool eraseap = false) {
+#if ENABLE_AUDIO
+            g_Analyzer.Pause();
+#endif
+            WiFi.disconnect(wifioff, eraseap);
+#if ENABLE_AUDIO
+            g_Analyzer.Resume();
+#endif
+        }
+
+        bool softAPdisconnect(bool wifioff = false) {
+#if ENABLE_AUDIO
+            g_Analyzer.Pause();
+#endif
+            bool result = WiFi.softAPdisconnect(wifioff);
+#if ENABLE_AUDIO
+            g_Analyzer.Resume();
+#endif
+            return result;
+        }
+
+        bool mode(wifi_mode_t m) {
+#if ENABLE_AUDIO
+            g_Analyzer.Pause();
+#endif
+            bool result = WiFi.mode(m);
+#if ENABLE_AUDIO
+            g_Analyzer.Resume();
+#endif
+            return result;
+        }
+
+        bool softAP(const char* ssid, const char* passphrase = NULL, int channel = 1, int ssid_hidden = 0, int max_connection = 4) {
+#if ENABLE_AUDIO
+            g_Analyzer.Pause();
+#endif
+            bool result = WiFi.softAP(ssid, passphrase, channel, ssid_hidden, max_connection);
+#if ENABLE_AUDIO
+            g_Analyzer.Resume();
+#endif
+            return result;
+        }
+    }
+
     // WiFi-Specific Implementations
 
     bool IsWiFiConnected() { return WiFi.isConnected(); }
@@ -188,7 +293,6 @@ namespace nd_network
     static std::atomic<bool> g_isConnecting = false;
     static String g_lastConnectedSsid;
     static String g_lastConnectedPassword;
-    static bool g_adcPausedForWifi = false;
     std::atomic<bool> g_resetWifiTimeout = false;
 
     WiFiConnectResult LoadAndConnectToWiFiWithPriority()
@@ -196,11 +300,6 @@ namespace nd_network
         if (WiFi.isConnected())
         {
             g_isConnecting = false;
-            if (g_adcPausedForWifi)
-            {
-                g_Analyzer.Resume();
-                g_adcPausedForWifi = false;
-            }
             return WiFiConnectResult::Connected;
         }
 
@@ -257,12 +356,7 @@ namespace nd_network
             if (SetWiFiMode(WiFiMode::STA))
             {
                 debugW("Attempting to connect to SSID: \"%s\"", current_ssid.c_str());
-                if (!g_adcPausedForWifi)
-                {
-                    g_Analyzer.Pause();
-                    g_adcPausedForWifi = true;
-                }
-                WiFi.begin(current_ssid.c_str(), current_password.c_str());
+                SafeWiFi::begin(current_ssid.c_str(), current_password.c_str());
                 g_isConnecting = true;
             }
             else
@@ -304,11 +398,11 @@ namespace nd_network
 
         debugI("Attempting to set WiFi mode to %s", modeStr);
 
-        WiFi.disconnect(false, false);
-        WiFi.softAPdisconnect(false); // Explicitly disconnect from any existing AP
+        SafeWiFi::disconnect(false, false);
+        SafeWiFi::softAPdisconnect(false); // Explicitly disconnect from any existing AP
         delay(200);
 
-        bool success = WiFi.mode(frameworkMode);
+        bool success = SafeWiFi::mode(frameworkMode);
         if (!success) {
             debugE("Failed to set WiFi mode to %s", modeStr);
             return false;
@@ -331,11 +425,6 @@ namespace nd_network
 
     void StartCaptivePortal()
     {
-        if (g_adcPausedForWifi)
-        {
-            g_Analyzer.Resume();
-            g_adcPausedForWifi = false;
-        }
 #if ENABLE_WEBSERVER
         if (g_ptrSystem->HasWebServer() && g_ptrSystem->GetWebServer().IsCaptivePortalActive())
         {
@@ -421,11 +510,7 @@ namespace nd_network
         }
         else if (bPreviousConnection && WiFi.isConnected())
         {
-            if (g_adcPausedForWifi)
-            {
-                g_Analyzer.Resume();
-                g_adcPausedForWifi = false;
-            }
+
             return WiFiConnectResult::Connected;
         }
 
@@ -445,18 +530,11 @@ namespace nd_network
             if (hostname.length() > 0)
                 WiFi.setHostname(hostname.c_str());
 
-            if (haveNewCredentials || WiFi.status() == WL_CONNECT_FAILED)
-                WiFi.disconnect();
-
+            // Let the ESP-IDF driver handle its own disconnect/reconnect logic internally.
             debugW("Connecting to Wifi SSID: \"%s\" - ESP32 Free Memory: %zu, PSRAM:%zu, PSRAM Free: %zu\n",
                    WiFi_ssid.c_str(), (size_t)ESP.getFreeHeap(), (size_t)ESP.getPsramSize(), (size_t)ESP.getFreePsram());
 
-            if (!g_adcPausedForWifi)
-            {
-                g_Analyzer.Pause();
-                g_adcPausedForWifi = true;
-            }
-            WiFi.begin(WiFi_ssid.c_str(), WiFi_password.c_str());
+            SafeWiFi::begin(WiFi_ssid.c_str(), WiFi_password.c_str());
 
             debugV("Done Wifi.begin, waiting for connection...");
 
@@ -572,15 +650,18 @@ namespace nd_network
         nvs_handle_t nvsRWHandle;
         if (nvs_open("storage", NVS_READWRITE, &nvsRWHandle) != ESP_OK) return false;
 
-        bool success = (nvs_set_str(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_ssid").c_str(), WiFi_ssid.c_str()) == ESP_OK) &&
-                       (nvs_set_str(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_password").c_str(), WiFi_password.c_str()) == ESP_OK);
+        bool success = (safe_nvs_set_str(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_ssid").c_str(), WiFi_ssid.c_str()) == ESP_OK) &&
+                       (safe_nvs_set_str(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_password").c_str(), WiFi_password.c_str()) == ESP_OK);
 
         if (success)
         {
-            nvs_commit(nvsRWHandle);
+            safe_nvs_commit(nvsRWHandle);
+        }
+        if (success)
+        {
             if (WiFi.isConnected() || WiFi.status() == WL_CONNECT_FAILED)
             {
-                WiFi.disconnect();
+                SafeWiFi::disconnect();
             }
         }
         nvs_close(nvsRWHandle);
@@ -601,13 +682,13 @@ namespace nd_network
         // Don't allow shortcut operation here. erase BOTH keys, even
         // if first one errors.
         bool success = true;
-        esp_err_t err = nvs_erase_key(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_ssid").c_str());
+        esp_err_t err = safe_nvs_erase_key(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_ssid").c_str());
         if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND)
         {
             success = false;
         }
 
-        err = nvs_erase_key(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_password").c_str());
+        err = safe_nvs_erase_key(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_password").c_str());
         if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND)
         {
             success = false;
@@ -615,7 +696,10 @@ namespace nd_network
 
         if (success)
         {
-            nvs_commit(nvsRWHandle);
+            safe_nvs_commit(nvsRWHandle);
+        }
+        if (success)
+        {
             if (WiFi.isConnected() || WiFi.status() == WL_CONNECT_FAILED)
             {
                 WiFi.disconnect();
@@ -734,10 +818,11 @@ namespace nd_network
 
                     wl_status_t currentWifiStatus = WiFi.status();
 
-                    // Short timeout (30s) if no credentials or if wrong password (WL_CONNECT_FAILED is 4).
-                    // We DO NOT use short timeout just because we are disconnected or on fresh boot, because
-                    // in a simultaneous power outage the router takes longer to boot than the ESP32.
-                    if (res == WiFiConnectResult::NoCredentials || currentWifiStatus == 4 /* WL_CONNECT_FAILED */)
+                    // We use short timeout on fresh boot (!l_servicesStarted) so users don't wait 15 mins if they typo'd an SSID in the portal.
+                    if (res == WiFiConnectResult::NoCredentials || 
+                        currentWifiStatus == 4 /* WL_CONNECT_FAILED */ || 
+                        currentWifiStatus == 1 /* WL_NO_SSID_AVAIL */ ||
+                        !l_servicesStarted.load())
                     {
                         actualTimeoutMs = AUTO_MODE_SHORT_TIMEOUT_SECONDS * 1000;
                     }
