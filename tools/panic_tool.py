@@ -56,8 +56,8 @@ def find_tool(tool_name, arch_info):
     system_path = shutil.which(full_tool_name)
     return system_path if system_path else full_tool_name
 
-def get_working_python():
-    """Find a python executable that has the required dependencies (future, construct)."""
+def get_working_python(tool_path=None):
+    """Find a python executable that can run the given tool_path."""
     import glob
     candidates = [sys.executable, "python", "python3"]
     if os.name == "nt":
@@ -69,8 +69,11 @@ def get_working_python():
     
     for py in candidates:
         try:
-            # We need both future and construct for espcoredump
-            res = subprocess.run([py, "-c", "import future; import construct"], capture_output=True)
+            if tool_path:
+                res = subprocess.run([py, tool_path, "--help"], capture_output=True)
+            else:
+                res = subprocess.run([py, "-c", "import future; import construct"], capture_output=True)
+            
             if res.returncode == 0:
                 return py
         except Exception:
@@ -138,10 +141,14 @@ def analyze_binary_dump(elf_path, dump_file, arch="esp32c6", interactive=False):
     """Use espcoredump.py to analyze a binary dump."""
     tool_path = shutil.which("espcoredump")
     if not tool_path:
-        search_paths = [
+        import glob
+        search_paths = []
+        espressif_tools = glob.glob(os.path.expanduser("~/.espressif/*/esp-idf/components/espcoredump/espcoredump.py"))
+        search_paths.extend(sorted(espressif_tools, reverse=True))
+        search_paths.extend([
             os.path.expanduser("~/esp/esp-idf/components/espcoredump/espcoredump.py"),
             "/usr/local/bin/espcoredump.py"
-        ]
+        ])
         for p in search_paths:
             if os.path.exists(p):
                 tool_path = p
@@ -166,7 +173,7 @@ def analyze_binary_dump(elf_path, dump_file, arch="esp32c6", interactive=False):
     print(f"Analyzing binary dump {dump_file} using {tool_path} ({mode})...")
     
     try:
-        python_exe = [get_working_python()] if tool_path.endswith(".py") else []
+        python_exe = [get_working_python(tool_path)] if tool_path.endswith(".py") else []
         cmd = python_exe + [tool_path, "--chip", arch, mode]
         if gdb_path and os.path.exists(gdb_path): cmd += ["--gdb", gdb_path]
         if rom_elf: cmd += ["--rom-elf", rom_elf]

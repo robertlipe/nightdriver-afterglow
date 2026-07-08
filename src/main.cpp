@@ -463,7 +463,7 @@ void setup()
             String family = "ESP32";
         #endif
 
-#if ENABLE_WIFI
+#if ENABLE_WIFI && !defined(ENABLE_WIFI_TEST_MODE)
         debugW("Starting ImprovSerial for %s", family.c_str());
         String name = "NDESP32" + nd_network::GetMacAddress().substring(6);
         g_pImprovSerial = make_unique_psram<ImprovSerial<typeof(Serial)>>();
@@ -616,6 +616,17 @@ void setup()
 
     InitEffectsManager();
 
+    // In test mode, initialize the lwIP/WiFi stack (via WiFi.mode) before starting
+    // the audio thread. WiFi.mode() must run before any socket is opened (Debug thread)
+    // and before ADC DMA starts — because on this Arduino3 prebuilt, WiFi.mode()
+    // briefly disables the flash cache, and adc_hal_get_reading_result() is missing
+    // IRAM_ATTR so it will fault if called while the cache is disabled.
+    // The normal path achieves this ordering via nd_network::ConnectToWiFi() below.
+    #if ENABLE_WIFI && defined(ENABLE_WIFI_TEST_MODE)
+        WiFi.persistent(false);
+        WiFi.mode(WIFI_STA);
+    #endif
+
     // Start things that do not depend on the network
 
     taskManager.StartDrawThread();
@@ -623,7 +634,7 @@ void setup()
     taskManager.StartAudioThread();
     taskManager.StartRemoteThread();
 
-    #if ENABLE_WIFI
+    #if ENABLE_WIFI && !defined(ENABLE_WIFI_TEST_MODE)
         debugI("Making initial attempt to connect to WiFi.");
         nd_network::ConnectToWiFi(WiFi_ssid, WiFi_password);
     #endif
@@ -631,7 +642,13 @@ void setup()
     // Start the network-dependent services.  These will be NOPs on a non-wifi build.
 
     taskManager.StartSerialThread();
-    taskManager.StartNetworkThread();
+    #if defined(ENABLE_WIFI_TEST_MODE)
+        // In test mode the WiFi test task owns the network thread lifecycle.
+        // It calls StartNetworkThread() itself after all test cases complete.
+        taskManager.StartWiFiTestThread();
+    #else
+        taskManager.StartNetworkThread();
+    #endif
     taskManager.StartColorDataThread();
     taskManager.StartSocketThread();
     taskManager.StartDebugThread();
@@ -663,12 +680,17 @@ void loop()
             ConsoleManager::Instance().FeedSerialByte((char)Serial.read());
         }
 
-        #if ENABLE_WIFI
+        #if ENABLE_WIFI && !defined(ENABLE_WIFI_TEST_MODE)
             EVERY_N_MILLIS(20)
             {
-#if ENABLE_WIFI
+                #if ENABLE_WEBSERVER
+                if (g_ptrSystem->HasWebServer() && !g_ptrSystem->GetWebServer().IsCaptivePortalActive())
+                {
+                    g_pImprovSerial->loop();
+                }
+                #else
                 g_pImprovSerial->loop();
-#endif
+                #endif
             }
         #endif
 

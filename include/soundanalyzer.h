@@ -39,6 +39,7 @@
 #include <Arduino.h>
 #include <arduinoFFT.h>
 #include <array>
+#include <atomic>
 #include <memory>
 
 #include <esp_idf_version.h>
@@ -217,6 +218,9 @@ class ISoundAnalyzer
     virtual void SetSimulateBPM(int) = 0;
     virtual bool GetSimulateBeat() const = 0;
     virtual int GetSimulateBPM() const = 0;
+    virtual void Pause() {}
+    virtual void Resume() {}
+    virtual bool IsADCHandleValid() const { return false; }
 };
 
 #if !ENABLE_AUDIO
@@ -379,6 +383,19 @@ class SoundAnalyzerBase : public ISoundAnalyzer
     void RunSamplerPass() override;
     void SimulateBeatPass() override;
     void SetPeakDecayRates(float r1, float r2) override;
+    void Pause() override;
+    void Resume() override;
+
+    // Returns true once the audio task has initialized the ADC handle.
+    // Used by the WiFi test thread to know when it is safe to call Pause().
+    bool IsADCHandleValid() const override
+    {
+#if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
+        return _adc_handle != nullptr;
+#else
+        return false;
+#endif
+    }
 
     // Measured audio processing frames-per-second.
     // For diagnostics/telemetry; not critical to effects logic.
@@ -560,9 +577,9 @@ class SoundAnalyzerBase : public ISoundAnalyzer
     adc_continuous_handle_t _adc_handle = nullptr;
 #endif
 
-    // The FFT object is now a member variable to avoid ctor/dtor overhead per frame.
-    // Declaration order ensures _vReal and _vImaginary address are stable when _FFT is initialized.
     ArduinoFFT<float> _FFT;
+    std::atomic<bool> _pauseRequested{false};
+    std::atomic<bool> _isPaused{false};
 
     void Reset();
     void FFT();

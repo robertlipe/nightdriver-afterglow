@@ -51,6 +51,213 @@
 
 // Static member initializers
 
+#if ENABLE_WIFI
+const char captivePortalHtml[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML>
+<html>
+<head>
+<title>NightDriver WiFi Setup</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body {
+    background: linear-gradient(135deg, #1f1c2c, #928dab);
+    color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .container {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    padding: 32px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  }
+  h1 {
+    font-size: 24px;
+    margin-top: 0;
+    margin-bottom: 8px;
+    font-weight: 700;
+    text-align: center;
+    background: linear-gradient(45deg, #ff7b00, #ffae00);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  p {
+    font-size: 14px;
+    color: #ccc;
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #aaa;
+  }
+  .input-field {
+    width: 100%;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 15px;
+    margin-bottom: 20px;
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+  }
+  .input-field:focus {
+    outline: none;
+    border-color: #ffae00;
+    background: rgba(255, 255, 255, 0.15);
+  }
+  select.input-field {
+    cursor: pointer;
+  }
+  .btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(45deg, #ff7b00, #ffae00);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(255, 123, 0, 0.4);
+  }
+  .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 123, 0, 0.6);
+  }
+  .btn:disabled {
+    background: #555;
+    box-shadow: none;
+    cursor: not-allowed;
+    transform: none;
+  }
+</style>
+<script>
+function get_strength_bar(rssi) {
+    if (rssi > -55) return '▇';
+    if (rssi > -65) return '▆';
+    if (rssi > -75) return '▅';
+    if (rssi > -85) return '▄';
+    return '▃';
+}
+function toggle_password() {
+    var pwd = document.getElementById("password");
+    if (pwd.type === "password") {
+        pwd.type = "text";
+    } else {
+        pwd.type = "password";
+    }
+}
+function scan_ssids() {
+    var sel = document.getElementById('ssid_select');
+    sel.innerHTML = '';
+    var opt = document.createElement('option');
+    opt.innerHTML = 'Scanning networks...';
+    opt.disabled = true;
+    sel.appendChild(opt);
+    fetch('/scan.json')
+    .then(response => response.json())
+    .then(data => {
+        data.sort((a, b) => b.rssi - a.rssi);
+        sel.innerHTML = '';
+        var opt = document.createElement('option');
+        opt.innerHTML = 'Select a Network';
+        opt.disabled = true;
+        opt.selected = true;
+        sel.appendChild(opt);
+        for (var i = 0; i < data.length; i++) {
+            var opt = document.createElement('option');
+            opt.value = data[i].ssid;
+            opt.innerHTML = get_strength_bar(data[i].rssi) + ' ' + data[i].ssid;
+            sel.appendChild(opt);
+        }
+    });
+}
+function set_ssid_text(value) {
+    document.getElementById('ssid_text').value = value;
+}
+function handle_submit(event) {
+    event.preventDefault();
+    const form = event.target;
+    const data = new FormData(form);
+    const ssid = data.get('ssid');
+    const password = data.get('password');
+
+    document.getElementById('submit_btn').disabled = true;
+    document.getElementById('submit_btn').value = 'Saving...';
+
+    fetch('/wifi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ ssid, password }).toString()
+    }).then(response => {
+        if (response.ok) {
+            response.text().then(html => {
+                document.open();
+                document.write(html);
+                document.close();
+            });
+        } else {
+            response.text().then(text => {
+                alert('Failed to save credentials: ' + text + '\nPlease try again.');
+                document.getElementById('submit_btn').disabled = false;
+                document.getElementById('submit_btn').value = 'Save';
+            });
+        }
+    }).catch(error => {
+        alert('An error occurred: ' + error + '\nPlease check your connection and try again.');
+        document.getElementById('submit_btn').disabled = false;
+        document.getElementById('submit_btn').value = 'Save';
+    });
+}
+window.onload = scan_ssids;
+</script>
+</head>
+<body>
+<div class="container">
+  <h1>NightDriver Setup</h1>
+  <p>Configure device WiFi connection details</p>
+  <form method="POST" action="/wifi" onsubmit="handle_submit(event)">
+    <label for="ssid_select">SSID</label>
+    <select id="ssid_select" class="input-field" onchange="set_ssid_text(this.value)"></select>
+    <input type="text" id="ssid_text" class="input-field" name="ssid" placeholder="Or type SSID manually">
+    
+    <label for="password">Password</label>
+    <input type="password" id="password" class="input-field" name="password" placeholder="Enter password" style="margin-bottom: 8px;">
+    
+    <div style="display: flex; align-items: center; margin-bottom: 20px;">
+        <input type="checkbox" id="show_password" onclick="toggle_password()" style="margin-right: 8px; cursor: pointer;">
+        <label for="show_password" style="margin-bottom: 0; color: #ccc; text-transform: none; font-size: 14px; font-weight: normal; cursor: pointer;">Show Password</label>
+    </div>
+    <input type="submit" id="submit_btn" class="btn" value="Save Credentials">
+  </form>
+</div>
+</body>
+</html>
+)rawliteral";
+#endif
+
+// Static member initializers
+
+
 // Maps settings for which a validator is available to the invocation thereof
 const std::map<String, CWebServer::ValueValidator> CWebServer::settingValidators
 {
@@ -115,7 +322,8 @@ void CWebServer::AddCORSHeaderAndSendResponse<AsyncJsonResponse>(AsyncWebServerR
 // Member function implementations
 
 // begin - register page load handlers and start serving pages
-void CWebServer::begin()
+void CWebServer::SetupStationMode()
+
 {
     [[maybe_unused]] extern const uint8_t html_start[] asm("_binary_site_dist_index_html_gz_start");
     [[maybe_unused]] extern const uint8_t html_end[] asm("_binary_site_dist_index_html_gz_end");
@@ -247,6 +455,234 @@ void CWebServer::begin()
 
     debugI("HTTP server started");
 }
+
+void CWebServer::begin(bool captivePortalMode)
+{
+    debugI("CWebServer::begin() - _isInitialized: %d, captivePortalMode: %d", _isInitialized.load(), captivePortalMode);
+
+    if (_isInitialized.exchange(true))
+    {
+        _server.begin(); // Ensure the server is listening even if already configured
+        debugI("CWebServer::begin() - Server already initialized, ensuring listen.");
+        return;
+    }
+
+    if (captivePortalMode)
+    {
+        SetupCaptivePortalMode();
+    }
+    else
+    {
+        SetupStationMode();
+    }
+
+    _server.begin();
+    debugI("HTTP server started");
+}
+
+void CWebServer::Stop()
+{
+    if (_isInitialized.exchange(false))
+    {
+        debugI("CWebServer::Stop() - Stopping HTTP server and DNS server.");
+        _server.end();
+        if (_dnsServer) {
+            _dnsServer->stop();
+            _dnsServer.reset();
+        }
+#if ENABLE_WIFI
+        _captivePortalActive = false;
+#endif
+    }
+}
+
+#if ENABLE_WIFI
+void CWebServer::SetupCaptivePortalMode()
+{
+    debugW("Starting Captive Portal AP setup.");
+
+    WiFi.persistent(false);
+
+    // Use the robust function to set AP mode
+    bool setModeSuccess = nd_network::SetWiFiMode(nd_network::WiFiMode::AP);
+    if (!setModeSuccess)
+    {
+        debugE("Failed to robustly set WiFi mode to WIFI_AP for Captive Portal setup.");
+        SetCaptivePortalActive(false);
+        return;
+    }
+
+    String mac = WiFi.macAddress();
+    mac.replace(":", "");
+    String unique_id = mac.substring(mac.length() - 6);
+    unique_id.toUpperCase();
+    String ap_name = "NightDriver-Setup-" + unique_id;
+
+    debugW("Calling softAP() for '%s'...", ap_name.c_str());
+    bool softAPSuccess = WiFi.softAP(ap_name.c_str());
+    if (!softAPSuccess)
+    {
+        debugE("Failed to start softAP (returned false)");
+        SetCaptivePortalActive(false);
+        return;
+    }
+    debugW("softAP() call succeeded.");
+    delay(200); // Small delay for AP to stabilize
+
+    IPAddress apIP = WiFi.softAPIP();
+    debugW("AP IP address: %s", apIP.toString().c_str());
+
+    debugW("Scanning for networks...");
+    int n = WiFi.scanNetworks();
+    _availableNetworks.clear();
+    _availableNetworks.reserve(n);
+    for (int i = 0; i < n; ++i)
+    {
+        _availableNetworks.push_back({WiFi.SSID(i), WiFi.RSSI(i)});
+    }
+    debugW("Found %d networks.", n);
+    WiFi.scanDelete(); // Free memory allocated by scanNetworks()
+
+    if (WiFi.getMode() != WIFI_AP) {
+        debugW("CWebServer::SetupCaptivePortalMode: WiFi mode changed during scan, resetting to WIFI_AP.");
+        WiFi.mode(WIFI_AP);
+    }
+
+    if (_dnsServer) {
+        _dnsServer->stop();
+    }
+    _dnsServer = std::make_unique<DNSServer>();
+    _dnsServer->start(53, "*", apIP);
+    debugW("DNS server started.");
+
+    RegisterCaptivePortalHandlers();
+}
+
+void CWebServer::RegisterCaptivePortalHandlers()
+{
+    _server.on("/scan.json", HTTP_GET, [this](AsyncWebServerRequest *request)
+    {
+        String json = "[";
+        for (size_t i = 0; i < _availableNetworks.size(); ++i)
+        {
+            if (i) json += ",";
+            json += "{\"ssid\":\"" + _availableNetworks[i].ssid + "\",\"rssi\":" + String(_availableNetworks[i].rssi) + "}";
+        }
+        json += "]";
+
+        request->send(200, "application/json", json);
+    });
+
+    _server.on("/wifi", HTTP_POST, [this](AsyncWebServerRequest *request)
+    {
+        HandleWifiSave(request);
+    });
+
+    _server.onNotFound([](AsyncWebServerRequest *request)
+    {
+        AsyncWebServerResponse *response = request->beginResponse(200, "text/html", captivePortalHtml);
+        response->addHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+        response->addHeader("Pragma", "no-cache");
+        response->addHeader("Expires", "Fri, 01 Jan 1990 00:00:00 GMT");
+        request->send(response);
+    });
+}
+
+void CWebServer::HandleWifiSave(AsyncWebServerRequest *request)
+{
+    debugI("Received POST on /wifi from MAC: %s", get_mac_address_pretty().c_str());
+    const int params = request->params();
+    for (int i = 0; i < params; ++i)
+    {
+        const auto* p = request->getParam(i);
+        if (p->isFile())
+        {
+            debugI("PARAM[FILE][%s]: %s, size: %u", p->name().c_str(), p->value().c_str(), p->size());
+        }
+        else
+        {
+            if (strcmp(p->name().c_str(), "password") == 0)
+            {
+                debugI("PARAM[POST][%s]: ********", p->name().c_str());
+            }
+            else
+            {
+                debugI("PARAM[POST][%s]: %s", p->name().c_str(), p->value().c_str());
+            }
+        }
+    }
+
+    String ssid = request->hasParam("ssid", true) ? request->getParam("ssid", true)->value() : String();
+    String password = request->hasParam("password", true) ? request->getParam("password", true)->value() : String();
+
+    if (ssid.length() > 0)
+    {
+        debugI("Captive portal received new WiFi credentials for SSID: %s", ssid.c_str());
+
+        g_Analyzer.Pause();
+        // Clear old credentials to make space
+        ClearWiFiConfig(WifiCredSource::CompileTimeCreds);
+        ClearWiFiConfig(WifiCredSource::ImprovCreds);
+        ClearWiFiConfig(WifiCredSource::CaptivePortal);
+
+        if (WriteWiFiConfig(WifiCredSource::CaptivePortal, ssid, password))
+        {
+            String hostname = g_ptrSystem->GetDeviceConfig().GetHostname();
+            if (hostname.isEmpty())
+            {
+                String mac = WiFi.macAddress();
+                mac.replace(":", "");
+                hostname = "NightDriver-" + mac.substring(mac.length() - 6);
+                hostname.toUpperCase();
+            }
+
+            AsyncResponseStream *response = request->beginResponseStream("text/html");
+            response->print(F("<html><head><title>Rebooting...</title>"));
+            response->print(F("</head><body style=\"font-family: sans-serif;\">"));
+            response->print(F("<h1>Credentials Saved. Rebooting...</h1>"));
+            response->printf(PSTR("<p>Your device is now rebooting and will attempt to connect to the <b>%s</b> network.</p>"), ssid.c_str());
+            response->printf(PSTR("<p>Please reconnect your client device (phone/computer) to the <b>%s</b> network.</p>"), ssid.c_str());
+            response->print(F("<p>Check your router's connected devices list to find the IP address of your NightDriver device.</p>"));
+            response->print(F("</body></html>"));
+
+            response->addHeader("Connection", "close");
+            request->send(response);
+
+            // Trigger global system reboot request
+            nd_network::RequestSystemReboot(3000);
+        }
+        else
+        {
+            g_Analyzer.Resume();
+            debugE("Failed to write WiFi credentials to NVS.");
+            request->send(500, "text/plain", "Failed to save credentials. NVS full?");
+        }
+    }
+    else
+    {
+        debugE("Received empty SSID in /wifi POST.");
+        request->send(400, "text/plain", "SSID cannot be empty.");
+    }
+}
+
+void CWebServer::ProcessDnsRequests()
+{
+    if (_dnsServer)
+    {
+        _dnsServer->processNextRequest();
+    }
+}
+
+void CWebServer::SetCaptivePortalActive(bool active)
+{
+    _captivePortalActive = active;
+}
+
+bool CWebServer::IsCaptivePortalActive() const
+{
+    return _captivePortalActive;
+}
+#endif // ENABLE_WIFI
 
 bool CWebServer::IsPostParamTrue(AsyncWebServerRequest * pRequest, const String & paramName)
 {
@@ -565,6 +1001,10 @@ void CWebServer::SetSettingsIfPresent(AsyncWebServerRequest * pRequest)
     PushPostParamIfPresent<bool>(pRequest, DeviceConfig::RememberCurrentEffectTag, SET_VALUE(deviceConfig.SetRememberCurrentEffect(value)));
     PushPostParamIfPresent<int>(pRequest, DeviceConfig::PowerLimitTag, SET_VALUE(deviceConfig.SetPowerLimit(value)));
     PushPostParamIfPresent<int>(pRequest, DeviceConfig::BrightnessTag, SET_VALUE(deviceConfig.SetBrightness(value)));
+    #if ENABLE_WIFI
+    PushPostParamIfPresent<size_t>(pRequest, DeviceConfig::PortalTimeoutSecondsTag, SET_VALUE(deviceConfig.SetPortalTimeoutSeconds(value)));
+    #endif
+
 
     #if SHOW_VU_METER
     PushPostParamIfPresent<bool>(pRequest, DeviceConfig::ShowVUMeterTag, SET_VALUE(effectManager.ShowVU(value)));

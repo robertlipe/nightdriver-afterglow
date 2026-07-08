@@ -36,6 +36,8 @@
 #include <vector>
 
 #include "interfaces.h"
+#include "nd_network.h"
+
 
 #if ENABLE_WIFI
 // Make sure we have a secrets.h and that it contains everything we need.
@@ -142,6 +144,11 @@ class DeviceConfig : public IJSONSerializable
     bool    applyGlobalColors = false;
     CRGB    secondColor = CRGB::Red;
 
+    #if ENABLE_WIFI
+    uint32_t portalTimeoutSeconds = 0; // 0 for AUTO mode, otherwise fixed seconds
+    #endif
+
+
     std::vector<SettingSpec, psram_allocator<SettingSpec>> settingSpecs;
     std::vector<std::reference_wrapper<SettingSpec>> settingSpecReferences;
     size_t writerIndex;
@@ -191,6 +198,10 @@ class DeviceConfig : public IJSONSerializable
     static constexpr const char * GlobalColorTag = NAME_OF(globalColor);
     static constexpr const char * ApplyGlobalColorsTag = NAME_OF(applyGlobalColors);
     static constexpr const char * SecondColorTag = NAME_OF(secondColor);
+    #if ENABLE_WIFI
+    static constexpr const char * PortalTimeoutSecondsTag = NAME_OF(portalTimeoutSeconds);
+    #endif
+
 
     DeviceConfig();
 
@@ -257,4 +268,10 @@ class DeviceConfig : public IJSONSerializable
 
     void SetColorSettings(const CRGB& globalColor, const CRGB& secondColor);
     void ApplyColorSettings(std::optional<CRGB> globalColor, std::optional<CRGB> secondColor, bool clearGlobalColor, bool applyGlobalColor);
+
+    #if ENABLE_WIFI
+    uint32_t GetPortalTimeoutSeconds() const { return portalTimeoutSeconds; }
+    void SetPortalTimeoutSeconds(uint32_t newPortalTimeoutSeconds);
+    #endif
 };
+

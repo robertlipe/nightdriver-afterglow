@@ -73,15 +73,26 @@ namespace nd_network
 
     // Connection Results & Sources
     enum class WiFiConnectResult { Connected, Disconnected, NoCredentials };
-    enum WifiCredSource { ImprovCreds = 0, CompileTimeCreds = 1 };
+    enum WifiCredSource { ImprovCreds = 0, CompileTimeCreds = 1, CaptivePortal = 2 };
+
 
     // Lifecycle & Loop
     void NetworkHandlingLoopEntry(void *);
     void InitNetworkCLI();
 
     // Configuration & Connection
+    enum class WiFiMode { Off, STA, AP, APSTA };
+
     WiFiConnectResult ConnectToWiFi(const String &ssid, const String &password);
     WiFiConnectResult ConnectToWiFi(const String *ssid = nullptr, const String *password = nullptr);
+    WiFiConnectResult LoadAndConnectToWiFiWithPriority();
+    bool SetWiFiMode(WiFiMode mode);
+    void StartCaptivePortal();
+    void RequestSystemReboot(uint32_t inMs = 3000);
+    bool IsRebootRequested();
+    unsigned long GetRebootTargetTime();
+
+
 
     String GetWiFiLocalIP();
     void   SetWiFiModeSTA();
@@ -144,6 +155,7 @@ namespace nd_network
 // Global compatibility aliases
 using nd_network::WiFiConnectResult;
 using nd_network::WifiCredSource;
+using nd_network::WiFiMode;
 using nd_network::ConnectToWiFi;
 using nd_network::UpdateNTPTime;
 using nd_network::ReadWiFiConfig;
