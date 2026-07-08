@@ -32,8 +32,10 @@
 
 #if ENABLE_WEBSERVER
 
+#include "nd_network.h"
 #include "webserver.h"
 
+#include <ArduinoJson.h>
 #include <AsyncJson.h>
 #include <esp_partition.h>
 
@@ -512,8 +514,7 @@ void CWebServer::SetupCaptivePortalMode()
         return;
     }
 
-    String mac = WiFi.macAddress();
-    mac.replace(":", "");
+    String mac = get_mac_address();
     String unique_id = mac.substring(mac.length() - 6);
     unique_id.toUpperCase();
     String ap_name = "NightDriver-Setup-" + unique_id;
@@ -535,12 +536,19 @@ void CWebServer::SetupCaptivePortalMode()
     debugW("Scanning for networks...");
     int n = WiFi.scanNetworks();
     _availableNetworks.clear();
-    _availableNetworks.reserve(n);
-    for (int i = 0; i < n; ++i)
+    if (n > 0)
     {
-        _availableNetworks.push_back({WiFi.SSID(i), WiFi.RSSI(i)});
+        _availableNetworks.reserve(n);
+        for (int i = 0; i < n; ++i)
+        {
+            _availableNetworks.push_back({WiFi.SSID(i), WiFi.RSSI(i)});
+        }
+        debugW("Found %d networks.", n);
     }
-    debugW("Found %d networks.", n);
+    else
+    {
+        debugW("WiFi scan failed or found 0 networks. Result: %d", n);
+    }
     WiFi.scanDelete(); // Free memory allocated by scanNetworks()
 
     if (WiFi.getMode() != WIFI_AP) {
@@ -562,13 +570,16 @@ void CWebServer::RegisterCaptivePortalHandlers()
 {
     _server.on("/scan.json", HTTP_GET, [this](AsyncWebServerRequest *request)
     {
-        String json = "[";
-        for (size_t i = 0; i < _availableNetworks.size(); ++i)
+        JsonDocument doc;
+        JsonArray array = doc.to<JsonArray>();
+        for (const auto& net : _availableNetworks)
         {
-            if (i) json += ",";
-            json += "{\"ssid\":\"" + _availableNetworks[i].ssid + "\",\"rssi\":" + String(_availableNetworks[i].rssi) + "}";
+            JsonObject obj = array.add<JsonObject>();
+            obj["ssid"] = net.ssid;
+            obj["rssi"] = net.rssi;
         }
-        json += "]";
+        String json;
+        serializeJson(doc, json);
 
         request->send(200, "application/json", json);
     });
@@ -590,7 +601,6 @@ void CWebServer::RegisterCaptivePortalHandlers()
 
 void CWebServer::HandleWifiSave(AsyncWebServerRequest *request)
 {
-    debugI("Received POST on /wifi from MAC: %s", get_mac_address_pretty().c_str());
     const int params = request->params();
     for (int i = 0; i < params; ++i)
     {
@@ -630,8 +640,7 @@ void CWebServer::HandleWifiSave(AsyncWebServerRequest *request)
             String hostname = g_ptrSystem->GetDeviceConfig().GetHostname();
             if (hostname.isEmpty())
             {
-                String mac = WiFi.macAddress();
-                mac.replace(":", "");
+                String mac = get_mac_address();
                 hostname = "NightDriver-" + mac.substring(mac.length() - 6);
                 hostname.toUpperCase();
             }

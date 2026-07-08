@@ -298,34 +298,34 @@ void SoundAnalyzerBase::SetPeakDecayRates(float r1, float r2)
 void SoundAnalyzerBase::Pause()
 {
 #if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
+    debugI("Audio: Requesting pause of continuous ADC...");
+    _pauseRequested = true;
     if (_adc_handle)
     {
-        debugI("Audio: Requesting pause of continuous ADC...");
-        _pauseRequested = true;
         uint32_t start = millis();
         while (!_isPaused && (millis() - start < 200))
         {
             delay(5);
         }
-        debugI("Audio: Pause confirmed.");
     }
+    debugI("Audio: Pause confirmed.");
 #endif
 }
 
 void SoundAnalyzerBase::Resume()
 {
 #if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
+    debugI("Audio: Requesting resume of continuous ADC...");
+    _pauseRequested = false;
     if (_adc_handle)
     {
-        debugI("Audio: Requesting resume of continuous ADC...");
-        _pauseRequested = false;
         uint32_t start = millis();
         while (_isPaused && (millis() - start < 200))
         {
             delay(5);
         }
-        debugI("Audio: Resume confirmed.");
     }
+    debugI("Audio: Resume confirmed.");
 #endif
 }
 

@@ -575,7 +575,14 @@ namespace nd_network
         bool success = (nvs_set_str(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_ssid").c_str(), WiFi_ssid.c_str()) == ESP_OK) &&
                        (nvs_set_str(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_password").c_str(), WiFi_password.c_str()) == ESP_OK);
 
-        if (success) nvs_commit(nvsRWHandle);
+        if (success)
+        {
+            nvs_commit(nvsRWHandle);
+            if (WiFi.isConnected() || WiFi.status() == WL_CONNECT_FAILED)
+            {
+                WiFi.disconnect();
+            }
+        }
         nvs_close(nvsRWHandle);
         return success;
     }
@@ -595,16 +602,25 @@ namespace nd_network
         // if first one errors.
         bool success = true;
         esp_err_t err = nvs_erase_key(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_ssid").c_str());
-        if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
+        if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND)
+        {
             success = false;
         }
 
         err = nvs_erase_key(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_password").c_str());
-        if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
+        if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND)
+        {
             success = false;
         }
 
-        if (success) nvs_commit(nvsRWHandle);
+        if (success)
+        {
+            nvs_commit(nvsRWHandle);
+            if (WiFi.isConnected() || WiFi.status() == WL_CONNECT_FAILED)
+            {
+                WiFi.disconnect();
+            }
+        }
         nvs_close(nvsRWHandle);
         return success;
     }
@@ -718,9 +734,10 @@ namespace nd_network
 
                     wl_status_t currentWifiStatus = WiFi.status();
 
-                    // Short timeout (30s) if no credentials, WRONG_PASSWORD, or if we have never successfully connected in this boot cycle
-                    // WL_NO_SSID_AVAIL is 1, WL_CONNECT_FAILED is 4
-                    if (res == WiFiConnectResult::NoCredentials || !l_servicesStarted.load() || currentWifiStatus == 1 || currentWifiStatus == 4)
+                    // Short timeout (30s) if no credentials or if wrong password (WL_CONNECT_FAILED is 4).
+                    // We DO NOT use short timeout just because we are disconnected or on fresh boot, because
+                    // in a simultaneous power outage the router takes longer to boot than the ESP32.
+                    if (res == WiFiConnectResult::NoCredentials || currentWifiStatus == 4 /* WL_CONNECT_FAILED */)
                     {
                         actualTimeoutMs = AUTO_MODE_SHORT_TIMEOUT_SECONDS * 1000;
                     }
