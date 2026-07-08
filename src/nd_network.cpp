@@ -51,7 +51,7 @@
 #include "ledbuffer.h"
 #include "ledviewer.h"              // For the LEDViewer task and object
 #include "nd_network.h"
-#include "network_config.h"
+
 #include "soundanalyzer.h"
 
 extern DRAM_ATTR std::mutex g_buffer_mutex;

@@ -46,6 +46,16 @@
    #endif
 #endif
 
+#ifdef ENABLE_WIFI_TEST_MODE
+    // Use short timeouts for testing
+    #define AUTO_MODE_SHORT_TIMEOUT_SECONDS 15
+    #define AUTO_MODE_LONG_TIMEOUT_SECONDS 30
+#else
+    // Production values
+    #define AUTO_MODE_SHORT_TIMEOUT_SECONDS 30
+    #define AUTO_MODE_LONG_TIMEOUT_SECONDS 900
+#endif
+
 // NOTE: Do not include "socketserver.h" here. It pulls in "ledbuffer.h" -> "gfxbase.h",
 // which uses debug macros defined by RemoteDebug. In Arduino v3, RemoteDebug includes
 // WiFi.h, which includes Network.h; adding socketserver.h here creates a cycle where
