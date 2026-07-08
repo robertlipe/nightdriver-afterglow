@@ -122,7 +122,7 @@ bool expectStaConnection(const char* ssid, const char* password, uint32_t timeou
     // Ensure previous connections are cleared for a clean test without tearing down the radio
     WiFi.disconnect(false, true);
     WiFi.softAPdisconnect(false);
-    
+
     // Switch directly to STA mode to avoid Arduino core memory leak when turning radio completely off
     bool success = nd_network::SetWiFiMode(nd_network::WiFiMode::STA);
     if (!success) {
@@ -201,7 +201,7 @@ bool disableAPMode() {
     }
     WiFi.disconnect(false, true);
     WiFi.softAPdisconnect(false);
-    
+
     // Instead of completely leaving it off, ensure it's in STA mode
     if (nd_network::SetWiFiMode(nd_network::WiFiMode::STA)) { // Attempt to switch to STA to disable AP
         debugI("TEST: AP mode successfully disabled (switched to STA).");
@@ -214,7 +214,7 @@ bool disableAPMode() {
 // Wait for Human Captive Portal Submission
 bool waitForCaptivePortalSubmission(uint32_t timeoutMs) {
     debugI("TEST: Waiting for human to submit credentials via Captive Portal... timeout: %u ms", timeoutMs);
-    
+
     // Check if new credentials appear in NVS
     String newSsid, newPass;
     unsigned long reportInterval = timeoutMs / 10;
@@ -229,11 +229,11 @@ bool waitForCaptivePortalSubmission(uint32_t timeoutMs) {
                 return true;
             }
         }
-        
+
         debugI("TEST: Waiting for human captive portal interaction... %lu/%u ms. Please connect to 'NightDriver_%s' and enter credentials.", elapsed, timeoutMs, nd_network::GetMacAddress("").substring(6).c_str());
         delay(reportInterval);
     }
-    
+
     debugE("TEST: Timed out waiting for human interaction on Captive Portal.");
     return false;
 }
@@ -421,7 +421,7 @@ void WiFiTestLoopEntry(void* pvParameters) {
                     // The next test phase would start after reboot.
                     esp_restart();
                     break;
-                    
+
                 case WiFiTestCommand::WAIT_FOR_CAPTIVE_PORTAL_SUBMISSION:
                     stepPassed = waitForCaptivePortalSubmission(step.timeoutMs);
                     break;

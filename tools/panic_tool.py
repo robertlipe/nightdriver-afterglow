@@ -38,13 +38,13 @@ def find_tool(tool_name, arch_info):
     """Find the specified tool in the PlatformIO packages."""
     prefix = arch_info["prefix"]
     pkg_name = arch_info["pkg"]
-    
+
     # Try common PIO package locations
     search_paths = [
         os.path.join(PIO_PACKAGES_DIR, pkg_name, "bin"),
         os.path.join(PIO_PACKAGES_DIR, "toolchain-xtensa-esp-elf", "bin")
     ]
-    
+
     if tool_name == "gdb":
         # Newer PIO versions split GDB into a separate package
         gdb_pkg = "tool-" + prefix.replace("esp32-", "esp-").replace("esp32s2-", "esp-").replace("esp32s3-", "esp-").strip("-")
@@ -55,7 +55,7 @@ def find_tool(tool_name, arch_info):
         tool_path = os.path.join(path, full_tool_name + exe_suffix)
         if os.path.exists(tool_path):
             return tool_path
-            
+
     # Fallback to system path
     system_path = shutil.which(full_tool_name)
     return system_path if system_path else full_tool_name
@@ -70,14 +70,14 @@ def get_working_python(tool_path=None):
         espressif_envs = glob.glob(os.path.expanduser("~/.espressif/python_env/*/bin/python"))
     # Sort backwards so we check newer IDF envs first if possible
     candidates.extend(sorted(espressif_envs, reverse=True))
-    
+
     for py in candidates:
         try:
             if tool_path:
                 res = subprocess.run([py, tool_path, "--help"], capture_output=True)
             else:
                 res = subprocess.run([py, "-c", "import future; import construct"], capture_output=True)
-            
+
             if res.returncode == 0:
                 return py
         except Exception:
@@ -89,7 +89,7 @@ def find_rom_elf(arch):
     rom_pkg_dir = os.path.join(PIO_PACKAGES_DIR, "tool-esp-rom-elfs")
     if not os.path.exists(rom_pkg_dir):
         return None
-        
+
     for f in os.listdir(rom_pkg_dir):
         if f.startswith(arch) and f.endswith("rom.elf"):
             return os.path.join(rom_pkg_dir, f)
@@ -105,7 +105,7 @@ def disassemble_around_address(elf_path, addr, arch_info):
         val = int(addr, 16)
         start = val - 32
         stop = val + 32
-        
+
         print(f"\n--- Context Disassembly around {addr} ---")
         cmd = [objdump, "-d", f"--start-address={hex(start)}", f"--stop-address={hex(stop)}", elf_path]
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -157,7 +157,7 @@ def analyze_binary_dump(elf_path, dump_file, arch="esp32c6", interactive=False):
             if os.path.exists(p):
                 tool_path = p
                 break
-            
+
     if not tool_path:
         print("\nBinary dump detected, but espcoredump not found.")
         print(f"Manual command: espcoredump info_corefile -t raw -c {dump_file} --elf {elf_path}")
@@ -175,7 +175,7 @@ def analyze_binary_dump(elf_path, dump_file, arch="esp32c6", interactive=False):
 
     mode = "dbg_corefile" if interactive else "info_corefile"
     print(f"Analyzing binary dump {dump_file} using {tool_path} ({mode})...")
-    
+
     try:
         wrapper = """
 import sys, runpy
@@ -200,12 +200,12 @@ runpy.run_path(sys.argv[0], run_name='__main__')
         if gdb_path and os.path.exists(gdb_path): cmd += ["--gdb", gdb_path]
         if rom_elf: cmd += ["--rom-elf", rom_elf]
         cmd += ["--core-format", "raw", "--core", dump_file, elf_path]
-        
+
         env = os.environ.copy()
         if "IDF_PATH" not in env and "esp-idf" in tool_path:
             # e.g., tool_path = ~/esp/esp-idf/components/espcoredump/espcoredump.py
             env["IDF_PATH"] = tool_path.split("components")[0].rstrip("/")
-            
+
         if arch_info:
             toolchain_bin = os.path.join(PIO_PACKAGES_DIR, arch_info["pkg"], "bin")
             if os.path.exists(toolchain_bin):
@@ -221,7 +221,7 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             pc_match = re.search(r'pc\s+(0x[0-9a-fA-F]+)', result.stdout)
             if pc_match:
                 disassemble_around_address(elf_path, pc_match.group(1), arch_info)
-            
+
             if not re.search(r'#0\s+0x', result.stdout):
                 print("\n--- Automatic Address Decoding (GDB missing) ---")
                 code_addresses = sorted(list(set(re.findall(r'0x[4][0-9a-fA-F]{7}', result.stdout))))
@@ -266,7 +266,7 @@ def auto_detect_arch(elf_path):
             machine = int.from_bytes(f.read(2), 'little')
             f.seek(24)
             entry = int.from_bytes(f.read(4), 'little')
-        
+
         entry_high = entry >> 16
         if machine == 0xF3: # RISC-V
             if entry_high in (0x4038, 0x4037):
@@ -290,7 +290,7 @@ def main():
     parser = argparse.ArgumentParser(description="NightDriver Panic & Coredump Tool")
     parser.add_argument("--ip", help="IP address to fetch from")
     parser.add_argument("--elf", default=DEFAULT_ELF_PATH, help="Path to ELF")
-    
+
     valid_archs = ["auto"] + list(TOOLCHAINS.keys())
     parser.add_argument("--arch", default="auto", choices=valid_archs,
                         help=f"Architecture. Valid options: {', '.join(valid_archs)}")
@@ -324,7 +324,7 @@ def main():
                 content = f.read()
                 match = re.search(r'Backtrace:(.*)', content)
                 if match: decode_backtrace(elf_path, match.group(1), args.arch)
-                else: 
+                else:
                     if not decode_backtrace(elf_path, content, args.arch):
                         analyze_binary_dump(elf_path, args.file, args.arch, args.gdb)
 

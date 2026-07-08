@@ -43,7 +43,7 @@
     #include <nvs.h>
     #include <vector>
     #include <WiFi.h>
-    
+
     #include "soundanalyzer.h"
 #elif ENABLE_ESPNOW
     #include <WiFi.h>
@@ -167,7 +167,7 @@ namespace nd_network
     // (NVS or LittleFS) disables the system cache. If the ADC DMA interrupt fires while
     // the cache is disabled, the system will panic with "Cache disabled but cached memory region accessed".
     // We wrap all NVS write operations here to pause the audio driver temporarily.
-    
+
     esp_err_t safe_nvs_set_str(nvs_handle_t handle, const char* key, const char* value) {
 #if ENABLE_AUDIO
         g_Analyzer.Pause();
@@ -819,8 +819,8 @@ namespace nd_network
                     wl_status_t currentWifiStatus = WiFi.status();
 
                     // We use short timeout on fresh boot (!l_servicesStarted) so users don't wait 15 mins if they typo'd an SSID in the portal.
-                    if (res == WiFiConnectResult::NoCredentials || 
-                        currentWifiStatus == 4 /* WL_CONNECT_FAILED */ || 
+                    if (res == WiFiConnectResult::NoCredentials ||
+                        currentWifiStatus == 4 /* WL_CONNECT_FAILED */ ||
                         currentWifiStatus == 1 /* WL_NO_SSID_AVAIL */ ||
                         !l_servicesStarted.load())
                     {
