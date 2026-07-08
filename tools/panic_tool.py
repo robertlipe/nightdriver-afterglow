@@ -4,7 +4,6 @@ import os
 import subprocess
 import sys
 import re
-import requests
 import shutil
 
 # Default paths and configurations
@@ -13,9 +12,17 @@ DEFAULT_ELF_PATH = ".pio/build/kitch/firmware.elf"
 
 # Toolchain mapping
 TOOLCHAINS = {
+    "esp32c3": {
+        "prefix": "riscv32-esp-elf-",
+        "pkg": "toolchain-riscv32-esp"
+    },
     "esp32c6": {
         "prefix": "riscv32-esp-elf-",
         "pkg": "toolchain-riscv32-esp"
+    },
+    "esp32s2": {
+        "prefix": "xtensa-esp32s2-elf-",
+        "pkg": "toolchain-xtensa-esp32s2"
     },
     "esp32": {
         "prefix": "xtensa-esp32-elf-",
@@ -39,19 +46,24 @@ def find_tool(tool_name, arch_info):
     ]
     
     full_tool_name = prefix + tool_name
+    exe_suffix = ".exe" if os.name == "nt" else ""
     for path in search_paths:
-        tool_path = os.path.join(path, full_tool_name)
+        tool_path = os.path.join(path, full_tool_name + exe_suffix)
         if os.path.exists(tool_path):
             return tool_path
             
     # Fallback to system path
-    return full_tool_name
+    system_path = shutil.which(full_tool_name)
+    return system_path if system_path else full_tool_name
 
 def get_working_python():
     """Find a python executable that has the required dependencies (future, construct)."""
     import glob
     candidates = [sys.executable, "python", "python3"]
-    espressif_envs = glob.glob(os.path.expanduser("~/.espressif/python_env/*/bin/python"))
+    if os.name == "nt":
+        espressif_envs = glob.glob(os.path.expanduser("~/.espressif/python_env/*/Scripts/python.exe"))
+    else:
+        espressif_envs = glob.glob(os.path.expanduser("~/.espressif/python_env/*/bin/python"))
     # Sort backwards so we check newer IDF envs first if possible
     candidates.extend(sorted(espressif_envs, reverse=True))
     
@@ -200,6 +212,7 @@ def is_binary(file_path):
         return b'\0' in chunk or non_printable > len(chunk) * 0.1
 
 def fetch_coredump(ip):
+    import requests
     url = f"http://{ip}/coredump"
     print(f"Fetching coredump from {url}...")
     try:
