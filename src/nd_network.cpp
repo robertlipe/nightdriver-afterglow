@@ -260,6 +260,17 @@ namespace nd_network
 #endif
             return result;
         }
+
+        int scanNetworks() {
+#if ENABLE_AUDIO
+            g_Analyzer.Pause();
+#endif
+            int result = WiFi.scanNetworks();
+#if ENABLE_AUDIO
+            g_Analyzer.Resume();
+#endif
+            return result;
+        }
     }
 
     // WiFi-Specific Implementations
@@ -267,9 +278,11 @@ namespace nd_network
     bool IsWiFiConnected() { return WiFi.isConnected(); }
     int  GetWiFiStatus()    { return (int)WiFi.status(); }
     int  GetWiFiRSSI()      { return WiFi.RSSI(); }
-    void SetWiFiModeSTA()   { WiFi.mode(WIFI_STA); }
+    void SetWiFiModeSTA()   { SafeWiFi::mode(WIFI_STA); }
 
     String GetWiFiLocalIP() { return WiFi.localIP().toString(); }
+    bool StartSoftAP(const String& ssid) { return SafeWiFi::softAP(ssid.c_str()); }
+    int ScanNetworks() { return SafeWiFi::scanNetworks(); }
 
     bool GetWiFiHostByName(const char *hostname, IPAddress &ip)
     {
@@ -433,22 +446,18 @@ namespace nd_network
         if (g_ptrSystem->HasWebServer()) {
             g_ptrSystem->GetWebServer().SetCaptivePortalActive(true);
         }
-#endif
         l_servicesStarted = false; // Reset l_servicesStarted when entering captive portal
 
         debugI("Stopping WiFi station mode to start Captive Portal.");
         if (!SetWiFiMode(WiFiMode::AP))
         {
             debugE("Failed to robustly set WiFi mode to WIFI_AP for Captive Portal.");
-#if ENABLE_WEBSERVER
             if (g_ptrSystem->HasWebServer()) {
                 g_ptrSystem->GetWebServer().SetCaptivePortalActive(false);
             }
-#endif
             return;
         }
 
-#if ENABLE_WEBSERVER
         if (g_ptrSystem->HasWebServer()) {
             g_ptrSystem->GetWebServer().begin(true);
         }
@@ -702,7 +711,7 @@ namespace nd_network
         {
             if (WiFi.isConnected() || WiFi.status() == WL_CONNECT_FAILED)
             {
-                WiFi.disconnect();
+                SafeWiFi::disconnect();
             }
         }
         nvs_close(nvsRWHandle);
@@ -820,8 +829,8 @@ namespace nd_network
 
                     // We use short timeout on fresh boot (!l_servicesStarted) so users don't wait 15 mins if they typo'd an SSID in the portal.
                     if (res == WiFiConnectResult::NoCredentials ||
-                        currentWifiStatus == 4 /* WL_CONNECT_FAILED */ ||
-                        currentWifiStatus == 1 /* WL_NO_SSID_AVAIL */ ||
+                        currentWifiStatus == WL_CONNECT_FAILED ||
+                        currentWifiStatus == WL_NO_SSID_AVAIL ||
                         !l_servicesStarted.load())
                     {
                         actualTimeoutMs = AUTO_MODE_SHORT_TIMEOUT_SECONDS * 1000;
@@ -950,13 +959,10 @@ namespace nd_network
             { "showwifistate", "Show current WiFi connection behavior", "Displaying state...",
                 [](const DebugCLI::cli_argv &) {
                     uint32_t timeout = g_ptrSystem->GetDeviceConfig().GetPortalTimeoutSeconds();
-                    if (timeout == 0)
-                    {
-                        DebugCLI::cli_printf("WiFi Mode: AUTO");
-                    }
-                    else
-                    {
-                        DebugCLI::cli_printf("WiFi Mode: Fixed timeout of %u seconds", timeout);
+                    if (timeout == 0) {
+                        DebugCLI::cli_printf("WiFi Mode: AUTO timeout\n");
+                    } else {
+                        DebugCLI::cli_printf("WiFi Mode: Fixed timeout of %lu seconds\n", timeout);
                     }
                 }
             },
@@ -984,8 +990,16 @@ namespace nd_network
                         else
                         {
                             uint32_t timeout = atoi(mode.c_str());
-                            g_ptrSystem->GetDeviceConfig().SetPortalTimeoutSeconds(timeout);
-                            DebugCLI::cli_printf("WiFi Mode set to fixed timeout of %u seconds", timeout);
+                            if (g_ptrSystem->GetDeviceConfig().GetPortalTimeoutSeconds() != timeout)
+                            {
+                                g_ptrSystem->GetDeviceConfig().SetPortalTimeoutSeconds(timeout);
+                                g_ptrSystem->GetDeviceConfig().Save();
+                                if (timeout == 0) {
+                                    DebugCLI::cli_printf("WiFi Mode set to AUTO timeout\n");
+                                } else {
+                                    DebugCLI::cli_printf("WiFi Mode set to fixed timeout of %lu seconds\n", timeout);
+                                }
+                            }
                         }
                     }
                     else

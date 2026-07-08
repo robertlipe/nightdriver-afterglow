@@ -749,8 +749,7 @@ static const command core_commands[] = {
          nd_network::ClearWiFiConfig(nd_network::WifiCredSource::CompileTimeCreds);
          nd_network::ClearWiFiConfig(nd_network::WifiCredSource::ImprovCreds);
          nd_network::ClearWiFiConfig(nd_network::WifiCredSource::CaptivePortal);
-         WiFi.mode(WIFI_OFF);
-         WiFi.disconnect(true, true);
+         nd_network::SetWiFiMode(nd_network::WiFiMode::Off);
          nd_network::RequestSystemReboot(1000);
          #endif
      }},

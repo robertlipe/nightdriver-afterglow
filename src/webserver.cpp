@@ -520,7 +520,7 @@ void CWebServer::SetupCaptivePortalMode()
     String ap_name = "NightDriver-Setup-" + unique_id;
 
     debugW("Calling softAP() for '%s'...", ap_name.c_str());
-    bool softAPSuccess = WiFi.softAP(ap_name.c_str());
+    bool softAPSuccess = nd_network::StartSoftAP(ap_name);
     if (!softAPSuccess)
     {
         debugE("Failed to start softAP (returned false)");
@@ -534,7 +534,7 @@ void CWebServer::SetupCaptivePortalMode()
     debugW("AP IP address: %s", apIP.toString().c_str());
 
     debugW("Scanning for networks...");
-    int n = WiFi.scanNetworks();
+    int n = nd_network::ScanNetworks();
     _availableNetworks.clear();
     if (n > 0)
     {
@@ -553,7 +553,7 @@ void CWebServer::SetupCaptivePortalMode()
 
     if (WiFi.getMode() != WIFI_AP) {
         debugW("CWebServer::SetupCaptivePortalMode: WiFi mode changed during scan, resetting to WIFI_AP.");
-        WiFi.mode(WIFI_AP);
+        nd_network::SetWiFiMode(nd_network::WiFiMode::AP);
     }
 
     if (_dnsServer) {

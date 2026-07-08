@@ -98,6 +98,8 @@ namespace nd_network
     WiFiConnectResult LoadAndConnectToWiFiWithPriority();
     bool SetWiFiMode(WiFiMode mode);
     void StartCaptivePortal();
+    bool StartSoftAP(const String& ssid);
+    int ScanNetworks();
     void RequestSystemReboot(uint32_t inMs = 3000);
     bool IsRebootRequested();
     unsigned long GetRebootTargetTime();
