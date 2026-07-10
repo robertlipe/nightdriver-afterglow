@@ -1,0 +1,99 @@
+#pragma once
+
+#include "globals.h"
+
+#if HEXAGON
+#include "ledstripeffect.h"
+#include "gfxhex.h"
+#include "systemcontainer.h"
+
+#include <algorithm>
+#include <cmath>
+#include <vector>
+
+class PatternHexFlowField : public EffectWithId<PatternHexFlowField>
+{
+private:
+    int speed = 30;
+    float scale = 0.3f;
+    float time = 0.0f;
+    uint8_t hueOffset = 0;
+
+public:
+    PatternHexFlowField() : EffectWithId<PatternHexFlowField>("Hex: Flow Field") {}
+    PatternHexFlowField(const JsonObjectConst& jsonObject) : EffectWithId<PatternHexFlowField>(jsonObject) {
+        if (jsonObject["speed"].is<int>()) speed = jsonObject["speed"].as<int>();
+        if (jsonObject["scale"].is<float>()) scale = jsonObject["scale"].as<float>();
+    }
+    virtual ~PatternHexFlowField() {}
+
+    DECLARE_EFFECT_SETTING_SPECS(mySettingSpecs);
+    EffectSettingSpecs* FillSettingSpecs() override
+    {
+        if (mySettingSpecs.size() == 0)
+        {
+            mySettingSpecs.emplace_back("speed", "Speed", SettingSpec::SettingType::Integer, 10.0, 100.0);
+            mySettingSpecs.emplace_back("scale", "Scale", SettingSpec::SettingType::Float, 0.1, 1.0);
+        }
+        return &mySettingSpecs;
+    }
+
+    bool SerializeSettingsToJSON(JsonObject& jsonObject) override
+    {
+        auto jsonDoc = CreateJsonDocument();
+        JsonObject root = jsonDoc.to<JsonObject>();
+        LEDStripEffect::SerializeSettingsToJSON(root);
+
+        jsonDoc["speed"] = speed;
+        jsonDoc["scale"] = scale;
+
+        return SetIfNotOverflowed(jsonDoc, jsonObject, __PRETTY_FUNCTION__);
+    }
+
+    bool SetSetting(const String& name, const String& value) override
+    {
+        RETURN_IF_SET(name, "speed", speed, value);
+        RETURN_IF_SET(name, "scale", scale, value);
+        return LEDStripEffect::SetSetting(name, value);
+    }
+
+    float noise(float x, float y, float t)
+    {
+        // Simple pseudo-noise function
+        return sinf(x * scale + t) * cosf(y * scale + t) + sinf((x + y) * scale * 0.5f + t * 0.5f);
+    }
+
+    void Draw() override
+    {
+        auto hexGfx = hg();
+        if (!hexGfx) return;
+
+        g()->DimAll(210);
+        hueOffset += speed / 25;
+        time += speed / 500.0f;
+
+        for (int r = -(HEX_RINGS - 1); r <= (HEX_RINGS - 1); ++r) {
+            int q1 = std::max(-(HEX_RINGS - 1), -r - (HEX_RINGS - 1));
+            int q2 = std::min(HEX_RINGS - 1, -r + (HEX_RINGS - 1));
+            for (int q = q1; q <= q2; ++q) {
+                HexCoord hex(q, r);
+
+                // Get pixel coordinates for noise sampling
+                PixelCoord pixel = hexGfx->hexToPixelFlatTop(hex, 1.0f, {0.0f, 0.0f});
+
+                // Sample noise
+                float n = noise(pixel.x, pixel.y, time);
+
+                // Map noise to color
+                uint8_t hue = (hueOffset + static_cast<uint8_t>((n + 1.0f) * 127.5f)) % 256;
+                uint8_t brightness = static_cast<uint8_t>((n + 1.0f) * 127.5f);
+
+                if (brightness > 30) {
+                    CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, brightness, LINEARBLEND);
+                    hexGfx->drawHexPixel(hex, color);
+                }
+            }
+        }
+    }
+};
+#endif
