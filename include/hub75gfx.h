@@ -22,8 +22,6 @@
 #include "gfxbase.h"
 #include "types.h"
 
-#define COLOR_DEPTH 24
-
 class HUB75GFX : public GFXBase
 {
 public:
