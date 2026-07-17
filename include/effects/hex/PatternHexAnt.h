@@ -1,0 +1,141 @@
+#pragma once
+
+#include "globals.h"
+
+#if HEXAGON
+#include "ledstripeffect.h"
+#include "gfxhex.h"
+#include "systemcontainer.h"
+
+#include <vector>
+
+class PatternHexAnt : public EffectWithId<PatternHexAnt>
+{
+private:
+    int speed = 50;
+    
+    struct Ant {
+        HexCoord pos;
+        int dir;
+        uint8_t hue;
+    };
+    
+    std::vector<Ant> ants;
+    std::vector<uint8_t> gridState; // 0 to numColors-1
+    int numColors = 4;
+    int rules[4] = {1, -1, -2, 2}; // L60, R60, R120, L120
+    unsigned long lastUpdate = 0;
+
+public:
+    PatternHexAnt() : EffectWithId<PatternHexAnt>("Hex: Langton's Ant") {}
+    PatternHexAnt(const JsonObjectConst& jsonObject) : EffectWithId<PatternHexAnt>(jsonObject) {
+        if (jsonObject["speed"].is<int>()) speed = jsonObject["speed"].as<int>();
+    }
+    virtual ~PatternHexAnt() {}
+
+    DECLARE_EFFECT_SETTING_SPECS(mySettingSpecs);
+    EffectSettingSpecs* FillSettingSpecs() override
+    {
+        if (mySettingSpecs.size() == 0)
+        {
+            mySettingSpecs.emplace_back("speed", "Speed", SettingSpec::SettingType::Integer, 10.0, 100.0);
+        }
+        return &mySettingSpecs;
+    }
+
+    bool SerializeSettingsToJSON(JsonObject& jsonObject) override
+    {
+        auto jsonDoc = CreateJsonDocument();
+        JsonObject root = jsonDoc.to<JsonObject>();
+        LEDStripEffect::SerializeSettingsToJSON(root);
+        jsonDoc["speed"] = speed;
+        return SetIfNotOverflowed(jsonDoc, jsonObject, __PRETTY_FUNCTION__);
+    }
+
+    bool SetSetting(const String& name, const String& value) override
+    {
+        RETURN_IF_SET(name, "speed", speed, value);
+        return LEDStripEffect::SetSetting(name, value);
+    }
+
+    void Reset() {
+        gridState.assign(TOTAL_LEDS_IN_HEX, 0);
+        ants.clear();
+        
+        // Spawn 3 ants
+        for (int i = 0; i < 3; i++) {
+            Ant a;
+            a.pos = HexCoord(0,0);
+            a.dir = i * 2; // Spaced out
+            a.hue = i * 85;
+            ants.push_back(a);
+        }
+        
+        // Randomize rules slightly for variety
+        for (int i = 0; i < numColors; i++) {
+            rules[i] = random(1, 3) * (random(0, 2) == 0 ? 1 : -1);
+        }
+    }
+
+    void Draw() override
+    {
+        auto hexGfx = hg();
+        if (!hexGfx) return;
+
+        if (gridState.size() != TOTAL_LEDS_IN_HEX) {
+            Reset();
+        }
+
+        // Multiple steps per frame based on speed
+        int stepsPerFrame = std::max(1, speed / 10);
+        
+        for (int step = 0; step < stepsPerFrame; step++) {
+            for (auto& ant : ants) {
+                auto idx = hexGfx->hexToIndex(ant.pos);
+                if (idx) {
+                    int currentState = gridState[*idx];
+                    
+                    // 1. Turn
+                    ant.dir = (ant.dir + rules[currentState] + 6) % 6;
+                    
+                    // 2. Flip color
+                    gridState[*idx] = (currentState + 1) % numColors;
+                    
+                    // 3. Move forward
+                    ant.pos = hexGfx->hexAdd(ant.pos, hexGfx->getHexDirection(ant.dir));
+                    
+                    // Wrap or bounce if out of bounds
+                    if (hexGfx->hexDistance(ant.pos, HexCoord(0,0)) > (HEX_RINGS - 1)) {
+                        ant.pos = HexCoord(0,0); // Teleport to center to keep it going
+                    }
+                } else {
+                    ant.pos = HexCoord(0,0);
+                }
+            }
+        }
+
+        // Draw grid
+        for (int i = 0; i < TOTAL_LEDS_IN_HEX; i++) {
+            if (gridState[i] > 0) {
+                HexCoord hex = hexGfx->indexToHexCoord(i);
+                uint8_t brightness = 50 + gridState[i] * 50;
+                // Base color changes slowly over time, plus state offset
+                uint8_t hue = (millis() / 50) + gridState[i] * (256 / numColors);
+                CRGB color = CHSV(hue, 200, brightness);
+                hexGfx->drawHexPixel(hex, color);
+            } else {
+                HexCoord hex = hexGfx->indexToHexCoord(i);
+                hexGfx->drawHexPixel(hex, CRGB::Black);
+            }
+        }
+        
+        // Draw ants as bright sparks
+        for (const auto& ant : ants) {
+            hexGfx->drawHexPixel(ant.pos, CRGB::White);
+        }
+        
+        // Reset occasionally
+        if (random(0, 5000) == 0) Reset();
+    }
+};
+#endif

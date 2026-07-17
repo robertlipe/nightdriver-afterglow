@@ -82,6 +82,8 @@
 #endif
 
 #if defined(EFFECTS_HEXAGON)
+    #include "effects/hex/PatternHex3D.h"
+    #include "effects/hex/PatternHexAnt.h"
     #include "effects/hex/PatternHexAudio.h"
     #include "effects/hex/PatternHexBlackHole.h"
     #include "effects/hex/PatternHexBoids.h"
@@ -99,9 +101,12 @@
     #include "effects/hex/PatternHexRadar.h"
     #include "effects/hex/PatternHexRipple.h"
     #include "effects/hex/PatternHexSnake.h"
+    #include "effects/hex/PatternHexSnowflake.h"
+    #include "effects/hex/PatternHexSpiderweb.h"
     #include "effects/hex/PatternHexSpiral.h"
     #include "effects/hex/PatternHexTerrain.h"
     #include "effects/hex/PatternHexTesla.h"
+    #include "effects/hex/PatternHexVoronoi.h"
 #endif
 
 #if USE_MATRIX
@@ -195,14 +200,19 @@
     #if ENABLE_AUDIO
     INIT_EFFECT_SETTING_SPECS(PatternHexAudio, mySettingSpecs);
     #endif
+    INIT_EFFECT_SETTING_SPECS(PatternHex3D, mySettingSpecs);
+    INIT_EFFECT_SETTING_SPECS(PatternHexAnt, mySettingSpecs);
     INIT_EFFECT_SETTING_SPECS(PatternHexBlackHole, mySettingSpecs);
     INIT_EFFECT_SETTING_SPECS(PatternHexClock, mySettingSpecs);
     INIT_EFFECT_SETTING_SPECS(PatternHexBoids, mySettingSpecs);
     INIT_EFFECT_SETTING_SPECS(PatternHexMaze, mySettingSpecs);
     INIT_EFFECT_SETTING_SPECS(PatternHexRipple, mySettingSpecs);
     INIT_EFFECT_SETTING_SPECS(PatternHexSnake, mySettingSpecs);
+    INIT_EFFECT_SETTING_SPECS(PatternHexSnowflake, mySettingSpecs);
+    INIT_EFFECT_SETTING_SPECS(PatternHexSpiderweb, mySettingSpecs);
     INIT_EFFECT_SETTING_SPECS(PatternHexTerrain, mySettingSpecs);
     INIT_EFFECT_SETTING_SPECS(PatternHexTesla, mySettingSpecs);
+    INIT_EFFECT_SETTING_SPECS(PatternHexVoronoi, mySettingSpecs);
 #endif
 
 // Apple5x7 font definition - needed for WiFi-enabled matrix patterns using Adafruit-style fonts
@@ -643,14 +653,19 @@ void LoadEffectFactories()
         #if ENABLE_AUDIO
             ,Effect<PatternHexAudio>()
         #endif
+            ,Effect<PatternHex3D>()
+            ,Effect<PatternHexAnt>()
             ,Effect<PatternHexBlackHole>(),
             Effect<PatternHexClock>(),
             Effect<PatternHexBoids>(),
             Effect<PatternHexMaze>(),
             Effect<PatternHexRipple>(),
             Effect<PatternHexSnake>(),
+            Effect<PatternHexSnowflake>(),
+            Effect<PatternHexSpiderweb>(),
             Effect<PatternHexTerrain>(),
-            Effect<PatternHexTesla>()
+            Effect<PatternHexTesla>(),
+            Effect<PatternHexVoronoi>()
         );
 
     #endif
