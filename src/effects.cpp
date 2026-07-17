@@ -101,6 +101,7 @@
     #include "effects/hex/PatternHexSnake.h"
     #include "effects/hex/PatternHexSpiral.h"
     #include "effects/hex/PatternHexTerrain.h"
+    #include "effects/hex/PatternHexTesla.h"
 #endif
 
 #if USE_MATRIX
@@ -201,6 +202,7 @@
     INIT_EFFECT_SETTING_SPECS(PatternHexRipple, mySettingSpecs);
     INIT_EFFECT_SETTING_SPECS(PatternHexSnake, mySettingSpecs);
     INIT_EFFECT_SETTING_SPECS(PatternHexTerrain, mySettingSpecs);
+    INIT_EFFECT_SETTING_SPECS(PatternHexTesla, mySettingSpecs);
 #endif
 
 // Apple5x7 font definition - needed for WiFi-enabled matrix patterns using Adafruit-style fonts
@@ -647,7 +649,8 @@ void LoadEffectFactories()
             Effect<PatternHexMaze>(),
             Effect<PatternHexRipple>(),
             Effect<PatternHexSnake>(),
-            Effect<PatternHexTerrain>()
+            Effect<PatternHexTerrain>(),
+            Effect<PatternHexTesla>()
         );
 
     #endif
