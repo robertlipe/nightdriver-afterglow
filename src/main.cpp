@@ -353,6 +353,7 @@ void setup()
 
     // Initialize Serial output
     Serial.begin(115200);
+    delay(3000);
 
     // Route all ESP-IDF log output through ConsoleManager so CRLF translation
     // and Serial.flush() are applied on every log line.
@@ -609,7 +610,9 @@ void setup()
         #endif
     #endif
 
-    g_ptrSystem->SetupBufferManagers();
+    #if INCOMING_WIFI_ENABLED
+        g_ptrSystem->SetupBufferManagers();
+    #endif
 
     // Show splash effect on matrix
     #if USE_HUB75
