@@ -16,6 +16,7 @@ private:
     int speed = 50;
     std::vector<HexCoord> snake;
     HexCoord direction;
+    int currentDirIndex = 0;
     HexCoord food;
     uint8_t hueOffset = 0;
     int maxRadius = HEX_RINGS - 1;
@@ -63,8 +64,15 @@ public:
         if (!hexGfx) return;
 
         snake.clear();
-        snake.push_back(HexCoord(0, 0));
-        direction = hexGfx->getHexDirection(random(0, 6));
+        currentDirIndex = random(0, 6);
+        direction = hexGfx->getHexDirection(currentDirIndex);
+
+        // Start with a small body
+        HexCoord start(0, 0);
+        for(int i = 0; i < 4; i++) {
+            snake.push_back(start);
+            start = hexGfx->hexAdd(start, direction);
+        }
         SpawnFood();
     }
 
@@ -100,48 +108,63 @@ public:
             lastMove = now;
             moveInterval = 400 - speed * 3; // Higher speed = lower interval
 
-            // Calculate new head position
-            HexCoord newHead = hexGfx->hexAdd(snake.back(), direction);
+            // AI Pathfinding to food
+            int bestDir = -1;
+            float minDistance = 999999.0f;
+            std::vector<int> validDirs;
 
-            // Check bounds
-            if (hexGfx->hexDistance(newHead, HexCoord(0, 0)) > maxRadius) {
-                // Hit wall - reset
-                ResetGame();
-            } else {
+            for (int i = 0; i < 6; i++) {
+                // Don't reverse direction 180 degrees
+                if (i == (currentDirIndex + 3) % 6 && snake.size() > 1) continue;
+
+                HexCoord candidateHead = hexGfx->hexAdd(snake.back(), hexGfx->getHexDirection(i));
+
+                // Check bounds
+                if (hexGfx->hexDistance(candidateHead, HexCoord(0, 0)) > maxRadius) continue;
+
                 // Check self collision
                 bool collision = false;
-                for (const auto& segment : snake) {
-                    if (segment.q == newHead.q && segment.r == newHead.r) {
+                // Exclude the very tip of the tail since it will move out of the way
+                for (size_t s = 1; s < snake.size(); s++) {
+                    if (snake[s].q == candidateHead.q && snake[s].r == candidateHead.r) {
                         collision = true;
                         break;
                     }
                 }
+                if (collision) continue;
 
-                if (collision) {
-                    ResetGame();
-                } else {
-                    snake.push_back(newHead);
-
-                    // Check if ate food
-                    if (newHead.q == food.q && newHead.r == food.r) {
-                        // Ate food - don't remove tail, spawn new food
-                        SpawnFood();
-                    } else {
-                        // Didn't eat - remove tail
-                        if (snake.size() > maxLength) {
-                            snake.erase(snake.begin());
-                        } else {
-                            snake.erase(snake.begin());
-                        }
-                    }
+                validDirs.push_back(i);
+                float dist = hexGfx->hexDistance(candidateHead, food);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    bestDir = i;
                 }
             }
 
-            // Random direction change occasionally
-            if (random(0, 100) < 20) {
-                int turn = random(0, 2) == 0 ? -1 : 1;
-                int newDir = (random(0, 6) + turn + 6) % 6;
-                direction = hexGfx->getHexDirection(newDir);
+            if (!validDirs.empty()) {
+                // 15% chance to take a random valid turn instead of optimal to make it slither
+                if (bestDir == -1 || random(0, 100) < 15) {
+                     currentDirIndex = validDirs[random(0, validDirs.size())];
+                } else {
+                     currentDirIndex = bestDir;
+                }
+                direction = hexGfx->getHexDirection(currentDirIndex);
+
+                HexCoord newHead = hexGfx->hexAdd(snake.back(), direction);
+                snake.push_back(newHead);
+
+                if (newHead.q == food.q && newHead.r == food.r) {
+                    SpawnFood();
+                    // Optional: limit max length
+                    if (snake.size() > maxLength) {
+                        snake.erase(snake.begin());
+                    }
+                } else {
+                    snake.erase(snake.begin());
+                }
+            } else {
+                // Trapped!
+                ResetGame();
             }
         }
 

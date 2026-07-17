@@ -91,10 +91,10 @@ public:
     bool Init(std::vector<std::shared_ptr<GFXBase>>& gfx) override
     {
         LEDStripEffect::Init(gfx);
-        
+
         totalHexes = TOTAL_LEDS_IN_HEX;
         world = make_unique_psram<HexCell[]>(totalHexes);
-        
+
         return true;
     }
 
@@ -155,17 +155,18 @@ public:
                     world[idx].brightness *= 0.75;
 
                 int count = countNeighbors(hex);
-                if (count == 3 && world[idx].prev == 0) {
+                // B2/S23 Hex Life Rules
+                if (count == 2 && world[idx].prev == 0) {
                     world[idx].alive = 1;
                     world[idx].hue += 1;
                     world[idx].brightness = 255;
-                    world[idx].age = 0; // New cell starts at age 0
+                    world[idx].age = 0;
                 } else if ((count < 2 || count > 3) && world[idx].prev == 1) {
                     world[idx].alive = 0;
                     world[idx].brightness = 0;
-                    world[idx].age = 0; // Dead cell resets age
+                    world[idx].age = 0;
                 } else if (world[idx].prev == 1 && world[idx].alive == 1) {
-                    world[idx].age++; // Surviving cell ages
+                    world[idx].age++;
                     if (world[idx].age > 255) world[idx].age = 255;
                 }
             }

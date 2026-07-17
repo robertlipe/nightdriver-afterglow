@@ -14,9 +14,9 @@
 class PatternHexKaleidoscope : public EffectWithId<PatternHexKaleidoscope>
 {
 private:
-    int speed = 25;
+    int speed = 8;
     int segments = 6;
-    uint8_t hueOffset = 0;
+    float fHueOffset = 0.0f;
     float phase = 0.0f;
 
 public:
@@ -32,7 +32,7 @@ public:
     {
         if (mySettingSpecs.size() == 0)
         {
-            mySettingSpecs.emplace_back("speed", "Speed", SettingSpec::SettingType::Integer, 10.0, 100.0);
+            mySettingSpecs.emplace_back("speed", "Speed", SettingSpec::SettingType::Integer, 1.0, 100.0);
             mySettingSpecs.emplace_back("segments", "Segments", SettingSpec::SettingType::Integer, 3.0, 6.0);
         }
         return &mySettingSpecs;
@@ -62,36 +62,51 @@ public:
         auto hexGfx = hg();
         if (!hexGfx) return;
 
-        g()->DimAll(230);
-        hueOffset += speed / 15;
+        // Use float math for smooth speed control down to 1
+        fHueOffset += speed / 15.0f;
         phase += speed / 300.0f;
+        
+        uint8_t hueOffset = static_cast<uint8_t>(fHueOffset) % 256;
 
-        HexCoord center(0, 0);
-        int maxRadius = HEX_RINGS - 1;
+        constexpr float sqrt3 = std::numbers::sqrt3_v<float>;
+        constexpr float pi = std::numbers::pi_v<float>;
 
-        // Draw one segment, then mirror it
-        int segmentAngle = 6 / segments;
-
-        for (int seg = 0; seg < segments; seg++) {
-            int baseDir = seg * segmentAngle;
-
-            // Create pattern in this segment
-            for (int r = 1; r <= maxRadius; r++) {
-                for (int d = 0; d < segmentAngle; d++) {
-                    int dir = (baseDir + d) % 6;
-                    HexCoord hex = hexGfx->hexAdd(center, hexGfx->hexScale(hexGfx->getHexDirection(dir), r));
-
-                    // Calculate pattern value
-                    float pattern = sinf(r * 0.5f + phase) * cosf(d * 1.0f + phase);
-                    uint8_t brightness = static_cast<uint8_t>((pattern + 1.0f) * 127.5f);
-
-                    if (brightness > 50) {
-                        uint8_t hue = (hueOffset + r * 10 + d * 20) % 256;
-                        CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, brightness, LINEARBLEND);
-                        hexGfx->drawHexPixel(hex, color);
-                    }
-                }
+        for (int index = 0; index < TOTAL_LEDS_IN_HEX; index++) {
+            HexCoord hex = hexGfx->indexToHexCoord(index);
+            if (hex.q == 0 && hex.r == 0) {
+                 CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset, 255, LINEARBLEND);
+                 hexGfx->drawHexPixel(hex, color);
+                 continue;
             }
+
+            HexCoord mapped = hex;
+            int rotationStep = 6 / segments;
+            if (rotationStep < 1) rotationStep = 1;
+
+            for (int rot = 0; rot < 6; rot += rotationStep) {
+                float mx = sqrt3 * mapped.q + (sqrt3/2.0f) * mapped.r;
+                float my = 1.5f * mapped.r;
+                float mAngle = atan2f(my, mx);
+                if (mAngle < 0.0f) mAngle += 2.0f * pi;
+
+                if (mAngle <= (2.0f * pi / segments)) {
+                    break;
+                }
+                mapped = hexGfx->hexRotate(mapped, rotationStep);
+            }
+
+            float x = sqrt3 * mapped.q + (sqrt3/2.0f) * mapped.r;
+            float y = 1.5f * mapped.r;
+
+            float pattern = sinf(x * 0.5f + phase) * cosf(y * 0.5f - phase*0.8f);
+            float dist = sqrtf(x*x + y*y);
+            pattern += sinf(dist * 0.8f - phase * 2.0f) * 0.5f;
+
+            uint8_t finalPattern = static_cast<uint8_t>(std::clamp((pattern + 1.5f) * 85.0f, 0.0f, 255.0f));
+            uint8_t hue = hueOffset + finalPattern;
+            CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, 255, LINEARBLEND);
+
+            hexGfx->drawHexPixel(hex, color);
         }
     }
 };

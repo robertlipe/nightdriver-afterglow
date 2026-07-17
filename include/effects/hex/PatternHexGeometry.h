@@ -16,6 +16,7 @@ class PatternHexGeometry : public EffectWithId<PatternHexGeometry>
 private:
     int speed = 30;
     int shapeType = 0;
+    const int maxShapeType = 4;
     int rotation = 0;
     uint8_t hueOffset = 0;
 
@@ -141,6 +142,9 @@ public:
                     }
                 }
                 break;
+        }
+        EVERY_N_SECONDS(5) {
+            shapeType = (shapeType + 1) % maxShapeType;
         }
     }
 };

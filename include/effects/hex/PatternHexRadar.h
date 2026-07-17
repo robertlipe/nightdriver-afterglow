@@ -58,36 +58,80 @@ public:
         auto hexGfx = hg();
         if (!hexGfx) return;
 
-        g()->DimAll(200);
+        // Fade existing pixels to create a trail
+        g()->DimAll(220);
         hueOffset += speed / 30;
-        angle += speed / 200.0f;
 
-        HexCoord center(0, 0);
+        // Rotate the radar beam
+        angle += speed / 400.0f;
+        if (angle > 2.0f * 3.14159265f) {
+            angle -= 2.0f * 3.14159265f;
+        }
 
-        // Convert angle to hex direction (0-5)
-        int direction = static_cast<int>((angle / (2.0f * 3.14159f)) * 6.0f) % 6;
+        // Beam width in radians
+        float beamWidth = 1.0f;
 
-        // Draw scanning wedge
-        int wedgeSize = 2; // Size of wedge in directions
-        int startDir = direction - wedgeSize;
-        int endDir = direction + wedgeSize;
+        // Iterate over all hexes and draw the sweep
+        for (int index = 0; index < TOTAL_LEDS_IN_HEX; index++) {
+            HexCoord hex = hexGfx->indexToHexCoord(index);
 
-        hexGfx->drawHexWedge(center, startDir, endDir, maxRadius,
-            ColorFromPalette(g()->GetCurrentPalette(), hueOffset, 128, LINEARBLEND));
+            if (hex.q == 0 && hex.r == 0) {
+                // Center blip
+                CRGB centerColor = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + 128, 255, LINEARBLEND);
+                hexGfx->drawHexPixel(hex, centerColor);
+                continue;
+            }
 
-        // Draw range rings
-        for (int r = 2; r <= maxRadius; r += 2) {
-            // Use precomputed ring data - no allocation
-            auto ring = hexGfx->getHexRing(r);
-            CRGB ringColor = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + r * 10, 64, LINEARBLEND);
-            for (const auto& hex : ring) {
-                hexGfx->drawHexPixel(hex, ringColor);
+            // Map axial coordinates to cartesian to find exact angle
+            // Flat-top orientation math
+            float x = std::numbers::sqrt3_v<float> * hex.q + (std::numbers::sqrt3_v<float> / 2.0f) * hex.r;
+            float y = 1.5f * hex.r;
+
+            float pixelAngle = atan2f(y, x);
+            if (pixelAngle < 0.0f) {
+                pixelAngle += 2.0f * std::numbers::pi_v<float>;
+            }
+
+            // Calculate angular difference
+            float angleDiff = angle - pixelAngle;
+            // Wrap the difference so the beam smoothly crosses the 0/2PI boundary
+            if (angleDiff < 0.0f) angleDiff += 2.0f * std::numbers::pi_v<float>;
+
+            if (angleDiff <= beamWidth) {
+                // Calculate brightness (1.0 at leading edge, 0.0 at trailing edge of beamWidth)
+                float intensity = 1.0f - (angleDiff / beamWidth);
+                uint8_t brightness = static_cast<uint8_t>(intensity * 255.0f);
+
+                // Add distance-based variation to hue
+                float dist = sqrtf(x*x + y*y);
+                uint8_t hue = hueOffset + static_cast<uint8_t>(dist * 5.0f);
+
+                CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, brightness, LINEARBLEND);
+
+                // Additive blending for the sweeping beam
+                CRGB existing = g()->getPixel(index);
+                hexGfx->drawHexPixel(hex, existing + color);
             }
         }
 
-        // Draw center blip
-        CRGB centerColor = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + 128, 255, LINEARBLEND);
-        hexGfx->drawHexPixel(center, centerColor);
+        // Draw occasional range rings pulsing outward
+        static float ringPulse = 0.0f;
+        ringPulse += speed / 500.0f;
+        if (ringPulse > maxRadius) ringPulse -= maxRadius;
+
+        // Find hexes close to the pulsing ring radius
+        for (int index = 0; index < TOTAL_LEDS_IN_HEX; index++) {
+            HexCoord hex = hexGfx->indexToHexCoord(index);
+            float dist = hexGfx->hexDistance(hex, HexCoord(0,0));
+            float distDiff = fabsf(dist - ringPulse);
+
+            if (distDiff < 0.8f) {
+                uint8_t ringBright = static_cast<uint8_t>((1.0f - distDiff / 0.8f) * 80.0f);
+                CRGB existing = g()->getPixel(index);
+                CRGB ringColor = CRGB(ringBright, ringBright, ringBright);
+                hexGfx->drawHexPixel(hex, existing + ringColor);
+            }
+        }
     }
 };
 #endif

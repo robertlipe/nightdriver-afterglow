@@ -7,6 +7,7 @@
 #include "systemcontainer.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <vector>
 
@@ -14,6 +15,7 @@ class PatternHexMath : public EffectWithId<PatternHexMath>
 {
 private:
     int patternType = 0;
+    const int maxPatternType = 4;
     int scale = 3;
     int speed = 20;
 
@@ -92,6 +94,10 @@ public:
                     case 4: // Concentric Rings
                         index = std::max({std::abs(q), std::abs(r), std::abs(s)}) * scale * 5 - ms / 5;
                         break;
+                    default:
+                        // put the train back on the rails.
+                        patternType = 0;
+                        break;
                 }
 
                 CRGB color = ColorFromPalette(g()->GetCurrentPalette(), index, 255, LINEARBLEND);
@@ -101,6 +107,10 @@ public:
 
         // Optional small blur to smooth out movement.
         blur1d(g()->leds, TOTAL_LEDS_IN_HEX, 16);
+
+        EVERY_N_SECONDS(5) {
+            patternType = (patternType + 1) % maxPatternType;
+        }
     }
 };
 #endif

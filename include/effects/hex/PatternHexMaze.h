@@ -15,11 +15,13 @@ class PatternHexMaze : public EffectWithId<PatternHexMaze>
 private:
     int speed = 20;
     std::vector<HexCoord> path;
+    std::vector<HexCoord> visitedList;
+    std::vector<bool> visitedMap;
     HexCoord currentPos;
-    HexCoord targetPos;
     uint8_t hueOffset = 0;
     int maxRadius = HEX_RINGS - 1;
     bool generating = true;
+    unsigned long waitStart = 0;
 
 public:
     PatternHexMaze() : EffectWithId<PatternHexMaze>("Hex: Maze") {}
@@ -61,10 +63,16 @@ public:
         if (!hexGfx) return;
 
         path.clear();
+        visitedList.clear();
+        visitedMap.assign(TOTAL_LEDS_IN_HEX + 1, false);
         currentPos = HexCoord(0, 0);
-        targetPos = HexCoord(0, 0);
         generating = true;
+        waitStart = 0;
+        
         path.push_back(currentPos);
+        visitedList.push_back(currentPos);
+        auto idx = hexGfx->hexToIndex(currentPos);
+        if (idx) visitedMap[*idx] = true;
     }
 
     void Draw() override
@@ -75,70 +83,81 @@ public:
         g()->DimAll(235);
         hueOffset += speed / 30;
 
-        if (path.empty()) {
+        if (path.empty() && visitedList.empty()) {
             ResetMaze();
         }
 
-        // Draw existing path
-        for (size_t i = 0; i < path.size(); i++) {
-            uint8_t hue = (hueOffset + i * 5) % 256;
-            CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, 200, LINEARBLEND);
-            hexGfx->drawHexPixel(path[i], color);
+        // Draw visited maze
+        for (size_t i = 0; i < visitedList.size(); i++) {
+            uint8_t hue = (hueOffset + i * 2) % 256;
+            CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, 180, LINEARBLEND);
+            hexGfx->drawHexPixel(visitedList[i], color);
         }
 
         // Generate new path segment
         if (generating) {
-            // Pick a random neighbor that's not already in path
-            // Manually iterate neighbors to avoid vector allocation
-            std::vector<HexCoord> validNeighbors;
-            validNeighbors.reserve(6); // Max 6 neighbors
+            // How many steps to advance per frame
+            int steps = std::max(1, speed / 20);
 
-            for (int i = 0; i < 6; i++) {
-                HexCoord neighbor = hexGfx->getHexNeighbor(currentPos, i);
-                // Check if neighbor is in bounds and not in path
-                if (hexGfx->hexDistance(neighbor, HexCoord(0, 0)) <= maxRadius) {
-                    bool inPath = false;
-                    for (const auto& p : path) {
-                        if (p.q == neighbor.q && p.r == neighbor.r) {
-                            inPath = true;
-                            break;
+            for (int s = 0; s < steps && generating; s++) {
+                std::vector<HexCoord> validNeighbors;
+                validNeighbors.reserve(6);
+
+                for (int i = 0; i < 6; i++) {
+                    HexCoord neighbor = hexGfx->getHexNeighbor(currentPos, i);
+                    if (hexGfx->hexDistance(neighbor, HexCoord(0, 0)) <= maxRadius) {
+                        auto idx = hexGfx->hexToIndex(neighbor);
+                        if (idx && !visitedMap[*idx]) {
+                            validNeighbors.push_back(neighbor);
                         }
                     }
-                    if (!inPath) {
-                        validNeighbors.push_back(neighbor);
+                }
+
+                if (!validNeighbors.empty()) {
+                    // Move to random unvisited neighbor
+                    currentPos = validNeighbors[random(0, validNeighbors.size())];
+                    path.push_back(currentPos);
+                    visitedList.push_back(currentPos);
+                    auto idx = hexGfx->hexToIndex(currentPos);
+                    if (idx) visitedMap[*idx] = true;
+                } else {
+                    // Backtrack efficiently: skip dead nodes in one frame
+                    bool foundBranch = false;
+                    while (path.size() > 1) {
+                        path.pop_back();
+                        currentPos = path.back();
+                        
+                        // Check if this new pos has unvisited neighbors
+                        for (int i = 0; i < 6; i++) {
+                            HexCoord neighbor = hexGfx->getHexNeighbor(currentPos, i);
+                            if (hexGfx->hexDistance(neighbor, HexCoord(0, 0)) <= maxRadius) {
+                                auto idx = hexGfx->hexToIndex(neighbor);
+                                if (idx && !visitedMap[*idx]) {
+                                    foundBranch = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (foundBranch) break;
+                    }
+
+                    if (!foundBranch && path.size() <= 1) {
+                        // Maze fully generated
+                        generating = false;
+                        waitStart = millis();
                     }
                 }
             }
 
-            if (!validNeighbors.empty()) {
-                // Move to random valid neighbor
-                currentPos = validNeighbors[random(0, validNeighbors.size())];
-                path.push_back(currentPos);
-
-                // Check if we've reached the edge
-                if (hexGfx->hexDistance(currentPos, HexCoord(0, 0)) >= maxRadius) {
-                    generating = false;
-                }
-            } else {
-                // Backtrack - remove last position
-                if (path.size() > 1) {
-                    path.pop_back();
-                    currentPos = path.back();
-                } else {
-                    // Restart if stuck at center
-                    ResetMaze();
-                }
-            }
-
-            // Limit path length
-            if (path.size() > 100) {
-                generating = false;
+            // Draw current path active head
+            CRGB headColor = CRGB::White;
+            hexGfx->drawHexPixel(currentPos, headColor);
+        } else {
+            // Finished generation. Wait a few seconds then reset.
+            if (millis() - waitStart > 3000) {
+                ResetMaze();
             }
         }
-
-        // Draw current position head
-        CRGB headColor = CRGB::White;
-        hexGfx->drawHexPixel(currentPos, headColor);
     }
 };
 #endif

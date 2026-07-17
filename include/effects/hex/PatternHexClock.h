@@ -54,33 +54,44 @@ public:
 
     // Map a 12-hour time (0.0 to 12.0) to a coordinate on the hex perimeter
     HexCoord getClockHex(float time_12h, int radius) {
-        float T = fmod(time_12h, 12.0f);
-        if (T < 0) T += 12.0f;
+        auto hexGfx = hg();
+        if (!hexGfx || radius < 1) return HexCoord(0,0);
+
+        // time_12h goes from 0.0 to 12.0
+        // 0.0 (12:00) should be straight UP (y < 0 in our coords)
+        // 3.0 (3:00) should be straight RIGHT (x > 0)
+        float angle = (time_12h / 12.0f) * 2.0f * std::numbers::pi_v<float>;
         
-        int segment;
-        float frac;
-        if (T >= 1.0f && T < 3.0f) { segment = 1; frac = (T - 1.0f) / 2.0f; }      // 1:00 to 3:00 (C1 to C0)
-        else if (T >= 3.0f && T < 5.0f) { segment = 0; frac = (T - 3.0f) / 2.0f; } // 3:00 to 5:00 (C0 to C5)
-        else if (T >= 5.0f && T < 7.0f) { segment = 5; frac = (T - 5.0f) / 2.0f; } // 5:00 to 7:00 (C5 to C4)
-        else if (T >= 7.0f && T < 9.0f) { segment = 4; frac = (T - 7.0f) / 2.0f; } // 7:00 to 9:00 (C4 to C3)
-        else if (T >= 9.0f && T < 11.0f) { segment = 3; frac = (T - 9.0f) / 2.0f; } // 9:00 to 11:00 (C3 to C2)
-        else { 
-            segment = 2; // 11:00 to 1:00 (C2 to C1)
-            if (T >= 11.0f) frac = (T - 11.0f) / 2.0f;
-            else frac = (T + 1.0f) / 2.0f;
+        // Target cartesian vector
+        float targetX = std::sin(angle);
+        float targetY = -std::cos(angle);
+        float targetAtan = std::atan2(targetY, targetX);
+        
+        // Find the hex in the exact ring that minimizes the angular difference
+        std::vector<HexCoord> ring = hexGfx->getHexRing(HexCoord(0,0), radius);
+        HexCoord bestHex(0,0);
+        float bestDiff = 999.0f;
+        
+        for (const auto& hex : ring) {
+            // Convert HexCoord to Cartesian (flat-top)
+            float x = std::numbers::sqrt3_v<float> * hex.q + (std::numbers::sqrt3_v<float> / 2.0f) * hex.r;
+            float y = 1.5f * hex.r;
+
+            // Get angle of this pixel (0 is straight right, PI/2 is straight down)
+            float hAtan = atan2f(y, x);
+            
+            float diff = std::abs(targetAtan - hAtan);
+            if (diff > std::numbers::pi_v<float>) {
+                diff = 2.0f * std::numbers::pi_v<float> - diff;
+            }
+            
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                bestHex = hex;
+            }
         }
         
-        int startCorner = segment;
-        int endCorner = (segment + 5) % 6; // Moving clockwise -> mathematically -1 mod 6 for our axes
-        
-        HexCoord cStart = HexagonGFX::hexScale(HexagonGFX::getHexDirection(startCorner), radius);
-        HexCoord cEnd = HexagonGFX::hexScale(HexagonGFX::getHexDirection(endCorner), radius);
-        
-        return HexagonGFX::hexRound(
-            cStart.q + frac * (cEnd.q - cStart.q),
-            cStart.r + frac * (cEnd.r - cStart.r),
-            cStart.s + frac * (cEnd.s - cStart.s)
-        );
+        return bestHex;
     }
 
     void Draw() override

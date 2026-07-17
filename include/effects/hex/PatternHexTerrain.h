@@ -35,7 +35,7 @@ private:
     {
         // Terrain levels: water, sand, grass, forest, rock, snow
         CRGB color;
-        
+
         if (height < 0.25f) {
             // Deep water to shallow water
             uint8_t waterHue = (160 + hueShift) % 256;
@@ -56,7 +56,7 @@ private:
             // Snow
             color = CHSV(0, 0, 200 + (height - 0.85f) * 350);
         }
-        
+
         return color;
     }
 
@@ -115,16 +115,16 @@ public:
             int q2 = std::min(HEX_RINGS - 1, -r + (HEX_RINGS - 1));
             for (int q = q1; q <= q2; ++q) {
                 HexCoord hex(q, r);
-                
+
                 // Get pixel coordinates for noise sampling
                 PixelCoord pixel = hexGfx->hexToPixelFlatTop(hex, 1.0f, {0.0f, 0.0f});
-                
+
                 // Sample noise at this position with time for animation
                 float height = noise(pixel.x * scale, pixel.y * scale, time);
-                
+
                 // Get terrain color based on height
                 CRGB color = getTerrainColor(height, hueOffset);
-                
+
                 hexGfx->drawHexPixel(hex, color);
             }
         }

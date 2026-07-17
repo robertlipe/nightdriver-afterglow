@@ -66,28 +66,18 @@ public:
         auto hexGfx = hg();
         if (!hexGfx) return;
 
-        HexCoord center(0, 0);
         boids.clear();
 
         for (int i = 0; i < numBoids; i++) {
             HexBoid b;
-            // Pick random LED index and convert to HexCoord - no allocation
-            int randomIndex = random(1, TOTAL_LEDS_IN_HEX);  // Skip center (index 0)
-            HexCoord pos = hexGfx->indexToHexCoord(randomIndex);
-
-            // Verify position is within bounds
-            if (hexGfx->hexDistance(pos, center) > maxRadius - 2) {
-                b.position = center;
-            } else {
-                b.position = pos;
-            }
-
-            // Random velocity
-            int dir = random(0, 6);
-            b.velocity = hexGfx->getHexDirection(dir);
+            int randomIndex = random(1, TOTAL_LEDS_IN_HEX);
+            b.position = hexGfx->indexToHexCoord(randomIndex);
+            
+            // Start with random velocity
+            b.velocity = hexGfx->getHexDirection(random(0, 6));
 
             b.color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + i * 20, 255, LINEARBLEND);
-            b.trail.clear(); // Initialize empty trail
+            b.trail.clear();
             boids.push_back(b);
         }
     }
@@ -106,56 +96,124 @@ public:
 
         HexCoord center(0, 0);
 
+        // Flocking parameters
+        float desiredSeparation = 2.0f;
+        float neighborDist = 4.0f;
+
         // Update and draw boids
-        for (auto& boid : boids) {
+        std::vector<HexBoid> nextBoids = boids;
+
+        for (size_t i = 0; i < boids.size(); i++) {
+            auto& boid = boids[i];
+            auto& nextBoid = nextBoids[i];
+
             // Add current position to trail
-            boid.trail.push_back(boid.position);
-            if (boid.trail.size() > HexBoid::TRAIL_LENGTH) {
-                boid.trail.erase(boid.trail.begin());
+            nextBoid.trail.push_back(nextBoid.position);
+            if (nextBoid.trail.size() > HexBoid::TRAIL_LENGTH) {
+                nextBoid.trail.erase(nextBoid.trail.begin());
             }
 
-            // Simple flocking: move towards center with some randomness
-            float dist = hexGfx->hexDistance(boid.position, center);
+            // Calculate Flocking Forces
+            float sepQ = 0, sepR = 0, sepS = 0;
+            float aliQ = 0, aliR = 0, aliS = 0;
+            float cohQ = 0, cohR = 0, cohS = 0;
+            int sepCount = 0, aliCount = 0, cohCount = 0;
 
-            if (dist > maxRadius - 2) {
-                // Steer towards center
-                HexCoord toCenter = hexGfx->hexSubtract(center, boid.position);
-                if (toCenter.q != 0 || toCenter.r != 0) {
-                    // Normalize and apply
-                    if (toCenter.q > 0) boid.velocity.q = 1;
-                    else if (toCenter.q < 0) boid.velocity.q = -1;
-                    else boid.velocity.q = 0;
+            for (size_t j = 0; j < boids.size(); j++) {
+                if (i == j) continue;
+                auto& other = boids[j];
+                float d = hexGfx->hexDistance(boid.position, other.position);
 
-                    if (toCenter.r > 0) boid.velocity.r = 1;
-                    else if (toCenter.r < 0) boid.velocity.r = -1;
-                    else boid.velocity.r = 0;
+                if (d > 0 && d < desiredSeparation) {
+                    sepQ += (boid.position.q - other.position.q) / d;
+                    sepR += (boid.position.r - other.position.r) / d;
+                    sepS += (boid.position.s - other.position.s) / d;
+                    sepCount++;
                 }
-            } else {
-                // Random direction change occasionally
-                if (random(0, 100) < 10) {
-                    int newDir = random(0, 6);
-                    boid.velocity = hexGfx->getHexDirection(newDir);
+                if (d > 0 && d < neighborDist) {
+                    aliQ += other.velocity.q;
+                    aliR += other.velocity.r;
+                    aliS += other.velocity.s;
+                    aliCount++;
+
+                    cohQ += other.position.q;
+                    cohR += other.position.r;
+                    cohS += other.position.s;
+                    cohCount++;
                 }
             }
 
-            // Move
-            boid.position = hexGfx->hexAdd(boid.position, boid.velocity);
+            float vQ = boid.velocity.q;
+            float vR = boid.velocity.r;
+            float vS = boid.velocity.s;
 
-            // Keep in bounds
-            if (hexGfx->hexDistance(boid.position, center) > maxRadius) {
-                boid.position = center;
-                boid.trail.clear(); // Clear trail when resetting position
+            // Apply Separation
+            if (sepCount > 0) {
+                vQ += (sepQ / sepCount) * 1.5f;
+                vR += (sepR / sepCount) * 1.5f;
+                vS += (sepS / sepCount) * 1.5f;
+            }
+            // Apply Alignment
+            if (aliCount > 0) {
+                vQ += (aliQ / aliCount) * 1.0f;
+                vR += (aliR / aliCount) * 1.0f;
+                vS += (aliS / aliCount) * 1.0f;
+            }
+            // Apply Cohesion
+            if (cohCount > 0) {
+                vQ += ((cohQ / cohCount) - boid.position.q) * 1.0f;
+                vR += ((cohR / cohCount) - boid.position.r) * 1.0f;
+                vS += ((cohS / cohCount) - boid.position.s) * 1.0f;
             }
 
-            // Draw trail with fading brightness
+            // Boundary avoidance (steer to center if too far)
+            float distToCenter = hexGfx->hexDistance(boid.position, center);
+            if (distToCenter > maxRadius - 2) {
+                vQ += (center.q - boid.position.q) * 2.0f;
+                vR += (center.r - boid.position.r) * 2.0f;
+                vS += (center.s - boid.position.s) * 2.0f;
+            }
+
+            // Occasionally add random noise to prevent locking up
+            if (random(0, 100) < 15) {
+                HexCoord randDir = hexGfx->getHexDirection(random(0, 6));
+                vQ += randDir.q * 1.5f;
+                vR += randDir.r * 1.5f;
+                vS += randDir.s * 1.5f;
+            }
+
+            // Convert accumulated float vectors to nearest hex direction
+            int bestDir = 0;
+            float bestDot = -9999.0f;
+            for (int dir = 0; dir < 6; dir++) {
+                HexCoord hDir = hexGfx->getHexDirection(dir);
+                float dot = (vQ * hDir.q) + (vR * hDir.r) + (vS * hDir.s);
+                if (dot > bestDot) {
+                    bestDot = dot;
+                    bestDir = dir;
+                }
+            }
+
+            nextBoid.velocity = hexGfx->getHexDirection(bestDir);
+            nextBoid.position = hexGfx->hexAdd(nextBoid.position, nextBoid.velocity);
+
+            // Bounds failsafe
+            if (hexGfx->hexDistance(nextBoid.position, center) > maxRadius) {
+                nextBoid.position = center;
+                nextBoid.trail.clear();
+            }
+        }
+
+        boids = nextBoids;
+
+        // Draw phase
+        for (auto& boid : boids) {
             for (size_t i = 0; i < boid.trail.size(); i++) {
                 uint8_t brightness = (i + 1) * 255 / boid.trail.size();
                 CRGB trailColor = boid.color;
-                trailColor.nscale8(brightness / 2); // Dim trail
+                trailColor.nscale8(brightness / 2);
                 hexGfx->drawHexPixel(boid.trail[i], trailColor);
             }
-
-            // Draw boid head (brighter)
             hexGfx->drawHexPixel(boid.position, boid.color);
         }
     }

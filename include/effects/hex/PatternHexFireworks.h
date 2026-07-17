@@ -15,8 +15,8 @@ struct HexParticle {
     HexCoord position;
     HexCoord velocity;
     CRGB color;
-    uint8_t life;
-    uint8_t maxLife;
+    int life;
+    int maxLife;
 };
 
 class PatternHexFireworks : public EffectWithId<PatternHexFireworks>
