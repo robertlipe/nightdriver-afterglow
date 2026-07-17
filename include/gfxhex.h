@@ -3,6 +3,7 @@
 #include "globals.h"
 #include <array>
 #include <optional>
+#include <vector>
 #include "ws281xgfx.h"
 
 
@@ -16,7 +17,14 @@ struct HexCoord {
     int r;
     int s; // s = -q - r
 
-    HexCoord(int q_val, int r_val) : q(q_val), r(r_val), s(-q_val - r_val) {}
+    constexpr HexCoord(int q_val, int r_val) : q(q_val), r(r_val), s(-q_val - r_val) {}
+    constexpr HexCoord() : q(0), r(0), s(0) {}
+};
+
+// Hex direction vectors (flat-top)
+constexpr std::array<HexCoord, 6> HEX_DIRECTIONS = {
+    HexCoord(1, 0), HexCoord(1, -1), HexCoord(0, -1),
+    HexCoord(-1, 0), HexCoord(-1, 1), HexCoord(0, 1)
 };
 
 struct OffsetCoord {
@@ -63,6 +71,10 @@ public:
     // Override XY mapping to use hexagonal offset logic
     virtual uint16_t xy(uint16_t x, uint16_t y) const noexcept override;
 
+    virtual bool isValidPixel(uint x, uint y) const noexcept override {
+        return xy(x, y) < _ledcount;
+    }
+
     // Native Hex drawing primitives
     std::optional<int> hexToIndex(HexCoord hex) const;
     void drawHexPixel(int q, int r, CRGB color);
@@ -78,7 +90,62 @@ public:
     HexCoord pixelToHex(PixelCoord pixel, float hex_size, PixelCoord origin_offset_pixels) const;
     PixelCoord hexToPixelFlatTop(HexCoord hex, float hex_size, PixelCoord origin_offset_pixels) const;
 
+    // Direction and neighbor operations
+    static HexCoord getHexDirection(int direction);
+    static HexCoord getHexNeighbor(HexCoord hex, int direction);
+    static std::array<HexCoord, 6> getHexNeighbors(HexCoord hex);
+    static HexCoord hexAdd(HexCoord a, HexCoord b);
+    static HexCoord hexSubtract(HexCoord a, HexCoord b);
+    static HexCoord hexScale(HexCoord hex, int factor);
+
+    // Shape drawing
+    // WARNING: fillHexagon and drawHexSpiral allocate internally. Use sparingly in hot paths.
+    void fillHexagon(HexCoord center, int radius, CRGB color);
+    void drawHexLine(HexCoord start, HexCoord end, CRGB color);
+    void drawHexSpiral(HexCoord center, int maxRadius, CRGB color);
+    void drawHexCone(HexCoord center, int direction, int length, CRGB color);
+    void drawHexWedge(HexCoord center, int startDir, int endDir, int radius, CRGB color);
+
+    // Range and area operations
+    // Precomputed data for performance - returns lightweight views into static data
+    // These are centered at (0,0) and cover the entire hex grid
+    struct HexCoordView {
+        const HexCoord* data;
+        int size;
+
+        const HexCoord* begin() const { return data; }
+        const HexCoord* end() const { return data + size; }
+    };
+
+    static HexCoordView getHexRing(int radius);
+    static HexCoordView getHexSpiral();
+    static HexCoord indexToHexCoord(int index);  // Convert LED index to HexCoord
+
+    // Legacy allocating versions - avoid using these in hot paths
+    // These support arbitrary centers and radii
+    std::vector<HexCoord> getHexRing(HexCoord center, int radius);
+    std::vector<HexCoord> getHexSpiral(HexCoord center, int maxRadius);
+    std::vector<HexCoord> getHexesInRange(HexCoord center, int radius);
+
+    // Interpolation and transformation
+    static HexCoord hexLerp(HexCoord a, HexCoord b, float t);
+    static HexCoord hexRound(float q_frac, float r_frac, float s_frac);
+    static HexCoord hexRotate(HexCoord hex, int rotations);
+
 private:
     float m_hexSize;
     PixelCoord m_originOffset;
+
+    // Precomputed static data for performance
+    // Using fixed-size arrays to avoid Static Initialization Order Fiasco
+    // No heap allocation - all storage is in BSS/initialized data sections
+    static std::unique_ptr<HexCoord[]> s_precomputedRingsFlat;  // Flat storage for all rings
+    static std::unique_ptr<int[]> s_ringOffsets;  // Offset of each ring in flat storage
+    static std::unique_ptr<int[]> s_ringSizes;    // Size of each ring
+    static std::unique_ptr<HexCoord[]> s_precomputedSpiral;
+    static std::unique_ptr<HexCoord[]> s_indexToHexCoord;  // LED index -> HexCoord lookup
+    static bool s_precomputed;
+
+    static void precomputeHexData();
+    static void cleanupPrecomputedData();
 };
