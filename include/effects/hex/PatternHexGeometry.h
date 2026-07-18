@@ -83,10 +83,12 @@ public:
         return LEDStripEffect::SetSetting(name, value);
     }
 
-    HexCoord getSmoothRotatedPoint(float radius, float angleDegrees) {
+    HexCoord getSmoothRotatedPoint(float hexRadius, float angleDegrees) {
         float angleRad = angleDegrees * (std::numbers::pi_v<float> / 180.0f);
-        float targetX = std::cos(angleRad) * radius;
-        float targetY = std::sin(angleRad) * radius;
+        // Convert hex rings to physical cartesian radius so we actually reach the edges
+        float cartesianRadius = hexRadius * std::numbers::sqrt3_v<float>;
+        float targetX = std::cos(angleRad) * cartesianRadius;
+        float targetY = std::sin(angleRad) * cartesianRadius;
         
         // Convert cartesian to axial hex coordinates
         // x = sqrt(3) * q + sqrt(3)/2 * r
@@ -94,6 +96,19 @@ public:
         float r = targetY / 1.5f;
         float q = (targetX - (std::numbers::sqrt3_v<float> / 2.0f) * r) / std::numbers::sqrt3_v<float>;
         return HexCoord(std::round(q), std::round(r));
+    }
+
+    void drawCurvedArc(std::shared_ptr<GFXHex> hexGfx, float startRadius, float endRadius, float startAngle, float endAngle, CRGB color) {
+        int steps = std::max(5.0f, std::abs(endRadius - startRadius) * 2.0f);
+        HexCoord lastP = getSmoothRotatedPoint(startRadius, startAngle);
+        for (int i = 1; i <= steps; i++) {
+            float t = (float)i / steps;
+            float r = startRadius + t * (endRadius - startRadius);
+            float a = startAngle + t * (endAngle - startAngle);
+            HexCoord p = getSmoothRotatedPoint(r, a);
+            hexGfx->drawHexLine(lastP, p, color);
+            lastP = p;
+        }
     }
 
     void Draw() override
@@ -132,38 +147,42 @@ public:
                 }
                 break;
 
-            case 1: // Smooth spinning squares (diamonds)
+            case 1: // Pulsing Curved Atom / Fan Leaves
                 {
-                    float r = maxRadius * (0.7f + breath * 0.3f);
-                    for (int offset = 0; offset < 360; offset += 90) {
-                        HexCoord p1 = getSmoothRotatedPoint(r, smoothRotation + offset);
-                        HexCoord p2 = getSmoothRotatedPoint(r, smoothRotation + offset + 90);
+                    float outerR = maxRadius * (0.8f + breath * 0.2f);
+                    for (int offset = 0; offset < 360; offset += 60) {
+                        // Draw sweeping curves outwards from the center
+                        float twist = 60.0f * std::sin(millis() / 1000.0f); // dynamic twisting arc
                         CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + offset, 255, LINEARBLEND);
+                        drawCurvedArc(hexGfx, 0.0f, outerR, smoothRotation + offset, smoothRotation + offset + twist, color);
+                        
+                        // Cross-link them like fan blades
+                        HexCoord p1 = getSmoothRotatedPoint(outerR, smoothRotation + offset + twist);
+                        HexCoord p2 = getSmoothRotatedPoint(outerR * 0.5f, smoothRotation + offset + twist + 30);
                         hexGfx->drawHexLine(p1, p2, color);
                     }
                 }
                 break;
 
-            case 2: // Multi-point star wireframe
+            case 2: // Multi-point star wireframe (now with breathing curves)
                 {
-                    float innerR = maxRadius * 0.3f;
+                    float innerR = maxRadius * (0.2f + breath * 0.2f);
                     float outerR = maxRadius;
                     for (int offset = 0; offset < 360; offset += 60) {
-                        HexCoord pOuter = getSmoothRotatedPoint(outerR, smoothRotation + offset);
-                        HexCoord pInner1 = getSmoothRotatedPoint(innerR, smoothRotation + offset + 30);
-                        HexCoord pInner2 = getSmoothRotatedPoint(innerR, smoothRotation + offset - 30);
                         CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + offset, 255, LINEARBLEND);
-                        hexGfx->drawHexLine(pOuter, pInner1, color);
-                        hexGfx->drawHexLine(pOuter, pInner2, color);
+                        // Draw curved lines instead of straight lines to the star points
+                        drawCurvedArc(hexGfx, innerR, outerR, smoothRotation + offset + 30, smoothRotation + offset, color);
+                        drawCurvedArc(hexGfx, innerR, outerR, smoothRotation + offset - 30, smoothRotation + offset, color);
                     }
                 }
                 break;
 
-            case 3: // Spiraling polygon
+            case 3: // Spiraling polygon webs
                 {
                     int sides = 6;
                     for (int radiusStep = 1; radiusStep <= maxRadius; radiusStep += 2) {
-                        float stepRotation = smoothRotation + (radiusStep * 15);
+                        // The rotation increases with radius, creating a true spiral
+                        float stepRotation = smoothRotation + (radiusStep * (15.0f + 10.0f * breath));
                         for (int offset = 0; offset < 360; offset += (360 / sides)) {
                             HexCoord p1 = getSmoothRotatedPoint(radiusStep, stepRotation + offset);
                             HexCoord p2 = getSmoothRotatedPoint(radiusStep, stepRotation + offset + (360 / sides));
@@ -174,13 +193,15 @@ public:
                 }
                 break;
 
-            case 4: // Sine-wave geometric rings
+            case 4: // Electron Arcs / Sine-wave geometric rings
                 {
-                    for (int i = 0; i < 360; i += 30) {
-                        float waveR = maxRadius * (0.5f + std::sin((millis() / 300.0f) + i * 0.1f) * 0.5f);
-                        HexCoord p = getSmoothRotatedPoint(waveR, smoothRotation + i);
+                    for (int i = 0; i < 360; i += 45) {
+                        float waveStartR = maxRadius * 0.2f;
+                        float waveEndR = maxRadius * (0.6f + std::sin((millis() / 300.0f) + i * 0.1f) * 0.4f);
                         CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + i, 255, LINEARBLEND);
-                        hexGfx->drawHexLine(center, p, color);
+                        // Draw curving "electron orbits" that sweep out and back
+                        drawCurvedArc(hexGfx, waveStartR, waveEndR, smoothRotation + i, smoothRotation + i + 90, color);
+                        drawCurvedArc(hexGfx, waveEndR, waveStartR, smoothRotation + i + 90, smoothRotation + i + 180, color);
                     }
                 }
                 break;
