@@ -1,3 +1,28 @@
+//+--------------------------------------------------------------------------
+//
+// File:        gfxhex.cpp
+//
+// Hexagonal grid graphics driver implementation.
+// Maps 2D Cartesian and Hex axes to the physical 1D LED strip layout.
+//
+// NightDriverStrip - (c) 2026 Robert Lipe.  All Rights Reserved.
+//
+// This file is part of the NightDriver software project.
+//
+//    NightDriver is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    NightDriver is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Nightdriver.  It is normally found in copying.txt
+//+--------------------------------------------------------------------------
+
 #include "globals.h"
 #include <algorithm>
 #include <cmath>
@@ -217,15 +242,15 @@ void HexagonGFX::drawHexCone(HexCoord center, int direction, int length, CRGB co
         for (int spread = 0; spread <= i; spread++) {
             int leftDir = (direction - 1 + 6) % 6;
             int rightDir = (direction + 1) % 6;
-            
+
             HexCoord leftHex = current;
             HexCoord rightHex = current;
-            
+
             for (int j = 0; j < spread; j++) {
                 leftHex = getHexNeighbor(leftHex, leftDir);
                 rightHex = getHexNeighbor(rightHex, rightDir);
             }
-            
+
             if (spread > 0) {
                 drawHexPixel(leftHex, color);
                 drawHexPixel(rightHex, color);
@@ -239,7 +264,7 @@ void HexagonGFX::drawHexWedge(HexCoord center, int startDir, int endDir, int rad
     // Normalize directions
     startDir = ((startDir % 6) + 6) % 6;
     endDir = ((endDir % 6) + 6) % 6;
-    
+
     for (int r = 0; r <= radius; r++) {
         int dir = startDir;
         do {
@@ -421,11 +446,11 @@ HexCoord HexagonGFX::hexRound(float q_frac, float r_frac, float s_frac) {
     int rx = static_cast<int>(roundf(q_frac));
     int ry = static_cast<int>(roundf(r_frac));
     int rs = static_cast<int>(roundf(s_frac));
-    
+
     float x_diff = fabsf(rx - q_frac);
     float y_diff = fabsf(ry - r_frac);
     float z_diff = fabsf(rs - s_frac);
-    
+
     if (x_diff > y_diff && x_diff > z_diff) {
         rx = -ry - rs;
     } else if (y_diff > z_diff) {
@@ -433,21 +458,21 @@ HexCoord HexagonGFX::hexRound(float q_frac, float r_frac, float s_frac) {
     } else {
         rs = -rx - ry;
     }
-    
+
     return HexCoord(rx, ry);
 }
 
 HexCoord HexagonGFX::hexRotate(HexCoord hex, int rotations) {
     // Normalize rotations to 0-5 range
     rotations = ((rotations % 6) + 6) % 6;
-    
+
     for (int i = 0; i < rotations; i++) {
         // 60-degree rotation: (q, r, s) -> (-r, -s, -q)
         int new_q = -hex.r;
         int new_r = -hex.s;
         hex = HexCoord(new_q, new_r);
     }
-    
+
     return hex;
 }
 

@@ -1,3 +1,28 @@
+//+--------------------------------------------------------------------------
+//
+// File:        PatternHexMaze.h
+//
+// Generates and solves a maze on the hex grid.
+// A pathfinder actively explores a randomly generated hex labyrinth.
+//
+// NightDriverStrip - (c) 2026 Robert Lipe.  All Rights Reserved.
+//
+// This file is part of the NightDriver software project.
+//
+//    NightDriver is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    NightDriver is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Nightdriver.  It is normally found in copying.txt
+//+--------------------------------------------------------------------------
+
 #pragma once
 
 #include "globals.h"
@@ -68,7 +93,7 @@ public:
         currentPos = HexCoord(0, 0);
         generating = true;
         waitStart = 0;
-        
+
         path.push_back(currentPos);
         visitedList.push_back(currentPos);
         auto idx = hexGfx->hexToIndex(currentPos);
@@ -126,7 +151,7 @@ public:
                     while (path.size() > 1) {
                         path.pop_back();
                         currentPos = path.back();
-                        
+
                         // Check if this new pos has unvisited neighbors
                         for (int i = 0; i < 6; i++) {
                             HexCoord neighbor = hexGfx->getHexNeighbor(currentPos, i);

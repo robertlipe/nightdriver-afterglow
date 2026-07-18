@@ -1,3 +1,28 @@
+//+--------------------------------------------------------------------------
+//
+// File:        PatternHexSnowflake.h
+//
+// Vapor diffusion snowflake growth.
+// Cellular automaton that grows a symmetrical 6-sided crystal and melts.
+//
+// NightDriverStrip - (c) 2026 Robert Lipe.  All Rights Reserved.
+//
+// This file is part of the NightDriver software project.
+//
+//    NightDriver is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    NightDriver is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Nightdriver.  It is normally found in copying.txt
+//+--------------------------------------------------------------------------
+
 #pragma once
 
 #include "globals.h"
@@ -13,12 +38,12 @@ class PatternHexSnowflake : public EffectWithId<PatternHexSnowflake>
 {
 private:
     int speed = 50;
-    
+
     struct Crystal {
         bool active;
         int age;
     };
-    
+
     std::vector<Crystal> grid;
     bool melting = false;
     unsigned long lastUpdate = 0;
@@ -82,7 +107,7 @@ public:
         int updateInterval = 200 - speed;
         if (millis() - lastUpdate > updateInterval) {
             lastUpdate = millis();
-            
+
             std::vector<Crystal> nextGrid = grid;
             bool changed = false;
             int activeCount = 0;

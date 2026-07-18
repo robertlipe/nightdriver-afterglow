@@ -1,3 +1,28 @@
+//+--------------------------------------------------------------------------
+//
+// File:        PatternHexSpiderweb.h
+//
+// Pulsing energy web.
+// Bright bolts shoot down the 3 primary axes of a faint spiderweb framework.
+//
+// NightDriverStrip - (c) 2026 Robert Lipe.  All Rights Reserved.
+//
+// This file is part of the NightDriver software project.
+//
+//    NightDriver is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    NightDriver is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Nightdriver.  It is normally found in copying.txt
+//+--------------------------------------------------------------------------
+
 #pragma once
 
 #include "globals.h"
@@ -13,14 +38,14 @@ class PatternHexSpiderweb : public EffectWithId<PatternHexSpiderweb>
 {
 private:
     int speed = 30;
-    
+
     struct Pulse {
         int radius;
         int maxRadius;
         uint8_t hue;
         bool active;
     };
-    
+
     std::vector<Pulse> pulses;
     unsigned long lastUpdate = 0;
     uint8_t baseHue = 0;
@@ -69,7 +94,7 @@ public:
         if (millis() - lastUpdate > updateInterval) {
             lastUpdate = millis();
             baseHue += 2;
-            
+
             // Advance pulses
             for (auto& p : pulses) {
                 if (p.active) {
@@ -79,10 +104,10 @@ public:
                     }
                 }
             }
-            
+
             // Cleanup and spawn
             pulses.erase(std::remove_if(pulses.begin(), pulses.end(), [](const Pulse& p) { return !p.active; }), pulses.end());
-            
+
             if (random(0, 10) > 6) {
                 Pulse p;
                 p.radius = 0;
@@ -94,15 +119,15 @@ public:
         }
 
         HexCoord center(0,0);
-        
+
         // Draw the web framework faintly
         for (int i = 0; i < TOTAL_LEDS_IN_HEX; i++) {
             HexCoord hex = hexGfx->indexToHexCoord(i);
-            
+
             bool isSpoke = (hex.q == 0 || hex.r == 0 || hex.s == 0);
             int dist = hexGfx->hexDistance(hex, center);
             bool isRing = (dist % 2 == 0); // Concentric rings every 2 steps
-            
+
             if (isSpoke || isRing) {
                 // Dim static web
                 auto idx = hexGfx->hexToIndex(hex);

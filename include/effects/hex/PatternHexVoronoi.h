@@ -1,3 +1,28 @@
+//+--------------------------------------------------------------------------
+//
+// File:        PatternHexVoronoi.h
+//
+// Voronoi cellular diagram.
+// Moving seeds color the grid based on mathematical proximity, forming sharp cells.
+//
+// NightDriverStrip - (c) 2026 Robert Lipe.  All Rights Reserved.
+//
+// This file is part of the NightDriver software project.
+//
+//    NightDriver is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    NightDriver is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Nightdriver.  It is normally found in copying.txt
+//+--------------------------------------------------------------------------
+
 #pragma once
 
 #include "globals.h"
@@ -14,7 +39,7 @@ class PatternHexVoronoi : public EffectWithId<PatternHexVoronoi>
 {
 private:
     int speed = 50;
-    
+
     struct Seed {
         float x;
         float y;
@@ -22,7 +47,7 @@ private:
         float vy;
         uint8_t hue;
     };
-    
+
     std::vector<Seed> seeds;
     int numSeeds = 6;
     float maxCartesianRadius;
@@ -62,7 +87,7 @@ public:
     void Reset() {
         seeds.clear();
         maxCartesianRadius = (HEX_RINGS - 1) * std::numbers::sqrt3_v<float>;
-        
+
         for (int i = 0; i < numSeeds; i++) {
             Seed s;
             s.x = random_float(-maxCartesianRadius, maxCartesianRadius);
@@ -88,7 +113,7 @@ public:
         for (auto& s : seeds) {
             s.x += s.vx * timeStep;
             s.y += s.vy * timeStep;
-            
+
             // Bounce off circular boundary
             float dist = sqrtf(s.x * s.x + s.y * s.y);
             if (dist > maxCartesianRadius) {
@@ -98,15 +123,15 @@ public:
                 float dot = s.vx * nx + s.vy * ny;
                 s.vx -= 2 * dot * nx;
                 s.vy -= 2 * dot * ny;
-                
+
                 // Add some randomness
                 s.vx += random_float(-0.1f, 0.1f);
                 s.vy += random_float(-0.1f, 0.1f);
-                
+
                 // Push back inside
                 s.x = nx * maxCartesianRadius;
                 s.y = ny * maxCartesianRadius;
-                
+
                 s.hue += random(0, 10);
             }
         }
@@ -114,7 +139,7 @@ public:
         // Draw voronoi
         for (int index = 0; index < TOTAL_LEDS_IN_HEX; index++) {
             HexCoord hex = hexGfx->indexToHexCoord(index);
-            
+
             // Convert hex to cartesian
             float cx = std::numbers::sqrt3_v<float> * hex.q + (std::numbers::sqrt3_v<float> / 2.0f) * hex.r;
             float cy = 1.5f * hex.r;
@@ -123,7 +148,7 @@ public:
             float minD = 999999.0f;
             float minD2 = 999999.0f;
             int closest = 0;
-            
+
             for (size_t i = 0; i < seeds.size(); i++) {
                 float dx = cx - seeds[i].x;
                 float dy = cy - seeds[i].y;
@@ -136,7 +161,7 @@ public:
                     minD2 = d;
                 }
             }
-            
+
             // Draw
             // Add a border highlight if it's near the boundary of two cells
             uint8_t brightness = 255;
@@ -147,12 +172,12 @@ public:
             } else {
                 brightness = 180;
             }
-            
+
             CRGB color = ColorFromPalette(g()->GetCurrentPalette(), seeds[closest].hue + millis() / 100, brightness, LINEARBLEND);
             hexGfx->drawHexPixel(hex, color);
         }
     }
-    
+
     float random_float(float min, float max) {
         return min + (max - min) * (random(0, 10000) / 10000.0f);
     }

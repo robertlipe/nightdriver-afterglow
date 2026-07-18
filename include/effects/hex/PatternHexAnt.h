@@ -1,3 +1,28 @@
+//+--------------------------------------------------------------------------
+//
+// File:        PatternHexAnt.h
+//
+// Hexagonal Langton's Ant cellular automaton.
+// Ants wander the grid changing colors and turning based on the previous color.
+//
+// NightDriverStrip - (c) 2026 Robert Lipe.  All Rights Reserved.
+//
+// This file is part of the NightDriver software project.
+//
+//    NightDriver is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    NightDriver is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Nightdriver.  It is normally found in copying.txt
+//+--------------------------------------------------------------------------
+
 #pragma once
 
 #include "globals.h"
@@ -13,13 +38,13 @@ class PatternHexAnt : public EffectWithId<PatternHexAnt>
 {
 private:
     int speed = 50;
-    
+
     struct Ant {
         HexCoord pos;
         int dir;
         uint8_t hue;
     };
-    
+
     std::vector<Ant> ants;
     std::vector<uint8_t> gridState; // 0 to numColors-1
     int numColors = 4;
@@ -61,7 +86,7 @@ public:
     void Reset() {
         gridState.assign(TOTAL_LEDS_IN_HEX, 0);
         ants.clear();
-        
+
         // Spawn 3 ants
         for (int i = 0; i < 3; i++) {
             Ant a;
@@ -70,7 +95,7 @@ public:
             a.hue = i * 85;
             ants.push_back(a);
         }
-        
+
         // Randomize rules slightly for variety
         for (int i = 0; i < numColors; i++) {
             rules[i] = random(1, 3) * (random(0, 2) == 0 ? 1 : -1);
@@ -88,22 +113,22 @@ public:
 
         // Multiple steps per frame based on speed
         int stepsPerFrame = std::max(1, speed / 10);
-        
+
         for (int step = 0; step < stepsPerFrame; step++) {
             for (auto& ant : ants) {
                 auto idx = hexGfx->hexToIndex(ant.pos);
                 if (idx) {
                     int currentState = gridState[*idx];
-                    
+
                     // 1. Turn
                     ant.dir = (ant.dir + rules[currentState] + 6) % 6;
-                    
+
                     // 2. Flip color
                     gridState[*idx] = (currentState + 1) % numColors;
-                    
+
                     // 3. Move forward
                     ant.pos = hexGfx->hexAdd(ant.pos, hexGfx->getHexDirection(ant.dir));
-                    
+
                     // Wrap or bounce if out of bounds
                     if (hexGfx->hexDistance(ant.pos, HexCoord(0,0)) > (HEX_RINGS - 1)) {
                         ant.pos = HexCoord(0,0); // Teleport to center to keep it going
@@ -128,12 +153,12 @@ public:
                 hexGfx->drawHexPixel(hex, CRGB::Black);
             }
         }
-        
+
         // Draw ants as bright sparks
         for (const auto& ant : ants) {
             hexGfx->drawHexPixel(ant.pos, CRGB::White);
         }
-        
+
         // Reset occasionally
         if (random(0, 5000) == 0) Reset();
     }

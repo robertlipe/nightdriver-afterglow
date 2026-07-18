@@ -1,3 +1,28 @@
+//+--------------------------------------------------------------------------
+//
+// File:        PatternHexTesla.h
+//
+// Beat-reactive Tesla Coil lightning.
+// Branching, forking lightning bolts randomly walk from the core to the edges.
+//
+// NightDriverStrip - (c) 2026 Robert Lipe.  All Rights Reserved.
+//
+// This file is part of the NightDriver software project.
+//
+//    NightDriver is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    NightDriver is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Nightdriver.  It is normally found in copying.txt
+//+--------------------------------------------------------------------------
+
 #pragma once
 
 #include "globals.h"
@@ -77,7 +102,7 @@ public:
     void SpawnBranch(bool major) {
         int count = major ? 6 : random(1, 4);
         int startDir = random(0, 6);
-        
+
         for (int i = 0; i < count; i++) {
             Branch b;
             b.head = HexCoord(0, 0); // Center
@@ -118,7 +143,7 @@ public:
         baseHue += speed / 50;
 
         HexCoord center(0, 0);
-        
+
         // Draw bright center core
         hexGfx->fillHexagon(center, 1, CHSV(baseHue, 100, 255)); // White/blue hot core
         hexGfx->drawHexPixel(center, CRGB::White);
@@ -150,7 +175,7 @@ public:
             // Check bounds and life
             if (it->life <= 0 || hexGfx->hexDistance(it->head, center) > maxRadius) {
                 it->active = false;
-                
+
                 // Spawn a small explosion/spark at the end
                 if (random(0, 2) == 0) {
                     for (int i = 0; i < 6; i++) {
@@ -167,7 +192,7 @@ public:
                 Branch fork = *it;
                 fork.direction = (fork.direction + (random(0, 2) == 0 ? 1 : 5)) % 6;
                 fork.life /= 2;
-                newForks.push_back(fork); 
+                newForks.push_back(fork);
             }
 
             ++it;

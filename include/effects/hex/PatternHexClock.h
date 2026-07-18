@@ -1,3 +1,28 @@
+//+--------------------------------------------------------------------------
+//
+// File:        PatternHexClock.h
+//
+// Hexagonal analog clock.
+// Displays time using glowing hands on the hex axes.
+//
+// NightDriverStrip - (c) 2026 Robert Lipe.  All Rights Reserved.
+//
+// This file is part of the NightDriver software project.
+//
+//    NightDriver is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    NightDriver is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Nightdriver.  It is normally found in copying.txt
+//+--------------------------------------------------------------------------
+
 #pragma once
 
 #include "globals.h"
@@ -61,17 +86,17 @@ public:
         // 0.0 (12:00) should be straight UP (y < 0 in our coords)
         // 3.0 (3:00) should be straight RIGHT (x > 0)
         float angle = (time_12h / 12.0f) * 2.0f * std::numbers::pi_v<float>;
-        
+
         // Target cartesian vector
         float targetX = std::sin(angle);
         float targetY = -std::cos(angle);
         float targetAtan = std::atan2(targetY, targetX);
-        
+
         // Find the hex in the exact ring that minimizes the angular difference
         std::vector<HexCoord> ring = hexGfx->getHexRing(HexCoord(0,0), radius);
         HexCoord bestHex(0,0);
         float bestDiff = 999.0f;
-        
+
         for (const auto& hex : ring) {
             // Convert HexCoord to Cartesian (flat-top)
             float x = std::numbers::sqrt3_v<float> * hex.q + (std::numbers::sqrt3_v<float> / 2.0f) * hex.r;
@@ -79,18 +104,18 @@ public:
 
             // Get angle of this pixel (0 is straight right, PI/2 is straight down)
             float hAtan = atan2f(y, x);
-            
+
             float diff = std::abs(targetAtan - hAtan);
             if (diff > std::numbers::pi_v<float>) {
                 diff = 2.0f * std::numbers::pi_v<float> - diff;
             }
-            
+
             if (diff < bestDiff) {
                 bestDiff = diff;
                 bestHex = hex;
             }
         }
-        
+
         return bestHex;
     }
 
