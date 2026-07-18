@@ -559,11 +559,11 @@ def create_animated_gif(frames, output_filename, frame_duration=100, scale=None,
     original_height = first_frame['height']
 
     if scale is None:
-        if original_width < 256 and original_height < 256:
+        if original_width < 256 and original_height < 256 and not is_hex_display:
             scale = 8 # Default scale factor for small images
             if verbose: print(f"create_animated_gif: Auto-scaling enabled with factor {scale}.")
         else:
-            scale = 1 # No scaling for larger images
+            scale = 1 # No scaling for larger images or hex displays
 
     if verbose: print(f"create_animated_gif: Creating GIF from {len(frames)} frames with scale factor {scale}.")
     images = []
@@ -643,11 +643,11 @@ def save_png_sequence(frames, output_filename, scale=None, verbose=False, is_hex
     original_height = first_frame['height']
 
     if scale is None:
-        if original_width < 256 and original_height < 256:
+        if original_width < 256 and original_height < 256 and not is_hex_display:
             scale = 8 # Default scale factor for small images
             if verbose: print(f"save_png_sequence: Auto-scaling enabled with factor {scale}.")
         else:
-            scale = 1 # No scaling for larger images
+            scale = 1 # No scaling for larger images or hex displays
 
     base_name = os.path.splitext(output_filename)[0]
     if verbose: print(f"save_png_sequence: Saving {len(frames)} frames with prefix '{base_name}-' and scale factor {scale}.")
@@ -682,11 +682,11 @@ def create_contact_sheet(frames, output_filename, scale=None, verbose=False, is_
     original_height = first_frame['height']
 
     if scale is None:
-        if original_width < 256 and original_height < 256:
+        if original_width < 256 and original_height < 256 and not is_hex_display:
             scale = 8 # Default scale factor for small images
             if verbose: print(f"create_contact_sheet: Auto-scaling enabled with factor {scale}.")
         else:
-            scale = 1 # No scaling for larger images
+            scale = 1 # No scaling for larger images or hex displays
 
     num_frames = len(frames)
     cols = math.ceil(math.sqrt(num_frames))
