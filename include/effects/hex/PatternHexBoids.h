@@ -200,12 +200,12 @@ public:
                 vS += ((cohS / cohCount) - boid.position.s) * 0.8f;
             }
 
-            // Boundary avoidance (steer to center gently)
+            // Boundary avoidance (bounce sharply off the walls)
             float distToCenter = hexGfx->hexDistance(boid.position, center);
-            if (distToCenter >= maxRadius - 1) {
-                vQ += (center.q - boid.position.q) * 0.4f;
-                vR += (center.r - boid.position.r) * 0.4f;
-                vS += (center.s - boid.position.s) * 0.4f;
+            if (distToCenter >= maxRadius) {
+                vQ += (center.q - boid.position.q) * 2.0f;
+                vR += (center.r - boid.position.r) * 2.0f;
+                vS += (center.s - boid.position.s) * 2.0f;
             }
 
             // Occasionally add random noise to prevent locking up

@@ -142,7 +142,7 @@ public:
         for (int r = 2; r <= maxRadius; r += 2) {
             std::vector<HexCoord> ring = hexGfx->getHexRing(center, r);
             uint8_t hue = (hueOffset + r * 15) % 256;
-            CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, 64, LINEARBLEND);
+            CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, 12, LINEARBLEND);
             for (const auto& hex : ring) {
                 hexGfx->drawHexPixel(hex, color);
             }

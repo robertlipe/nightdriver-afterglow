@@ -50,7 +50,9 @@ class PatternHexLife : public EffectWithId<PatternHexLife>
 {
 private:
     std::unique_ptr<HexCell[]> world;
+    int speed = 50;
     int generation = 0;
+    unsigned long lastUpdate = 0;
     unsigned int density = 30;
     unsigned long seed;
     int maxRadius = HEX_RINGS - 1;
@@ -167,9 +169,15 @@ public:
             }
         }
 
-        // Birth and death cycle
-        for (int r = -(HEX_RINGS - 1); r <= (HEX_RINGS - 1); ++r) {
-            int q1 = std::max(-(HEX_RINGS - 1), -r - (HEX_RINGS - 1));
+        // Birth and death cycle, throttled by speed
+        unsigned long now = millis();
+        int updateInterval = std::max(20, 1000 / std::max(1, (speed / 5)));
+        
+        if (now - lastUpdate >= updateInterval) {
+            lastUpdate = now;
+
+            for (int r = -(HEX_RINGS - 1); r <= (HEX_RINGS - 1); ++r) {
+                int q1 = std::max(-(HEX_RINGS - 1), -r - (HEX_RINGS - 1));
             int q2 = std::min(HEX_RINGS - 1, -r + (HEX_RINGS - 1));
             for (int q = q1; q <= q2; ++q) {
                 HexCoord hex(q, r);
@@ -197,16 +205,17 @@ public:
             }
         }
 
-        // Copy next generation
-        for (int i = 0; i < totalHexes; i++) {
-            world[i].prev = world[i].alive;
-        }
+            // Copy next generation
+            for (int i = 0; i < totalHexes; i++) {
+                world[i].prev = world[i].alive;
+            }
 
-        generation++;
+            generation++;
 
-        // Auto-reset if stagnant (simple check)
-        if (generation > 500) {
-            Reset();
+            // Auto-reset if stagnant (simple check)
+            if (generation > 500) {
+                Reset();
+            }
         }
     }
 };

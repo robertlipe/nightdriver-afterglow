@@ -37,8 +37,10 @@
 #include <vector>
 
 struct HexParticle {
-    HexCoord position;
-    HexCoord velocity;
+    float q;
+    float r;
+    float vq;
+    float vr;
     CRGB color;
     int life;
     int maxLife;
@@ -104,12 +106,14 @@ public:
         for (int i = 0; i < particleCount; i++) {
             if (particles.size() >= MAX_PARTICLES) break;
 
-            HexCoord dir = hexGfx->getHexDirection(random(0, 6));
-            int speed = 1 + random(0, 2);
+            float angle = random(0, 360) * (std::numbers::pi_v<float> / 180.0f);
+            float vel = (random(30, 120) / 1000.0f) * (this->speed / 50.0f);
 
             HexParticle p;
-            p.position = origin;
-            p.velocity = hexGfx->hexScale(dir, speed);
+            p.q = origin.q;
+            p.r = origin.r;
+            p.vq = std::cos(angle) * vel;
+            p.vr = std::sin(angle) * vel;
             p.color = ColorFromPalette(g()->GetCurrentPalette(), baseHue + random(0, 32), 255, LINEARBLEND);
             p.life = 100 + random(0, 50);
             p.maxLife = p.life;
@@ -152,10 +156,14 @@ public:
             HexParticle& p = *it;
 
             // Update position
-            p.position = hexGfx->hexAdd(p.position, p.velocity);
+            p.q += p.vq;
+            p.r += p.vr;
+            
+            // Fake gravity pulling towards positive r (downwards in hex)
+            p.vr += 0.005f * (this->speed / 50.0f);
 
             // Fade out
-            p.life -= speed / 10;
+            p.life -= std::max(1, this->speed / 10);
 
             if (p.life <= 0) {
                 it = particles.erase(it);
@@ -166,7 +174,8 @@ public:
             uint8_t brightness = (p.life * 255) / p.maxLife;
             CRGB fadedColor = p.color;
             fadedColor.nscale8(brightness);
-            hexGfx->drawHexPixel(p.position, fadedColor);
+            HexCoord pos(std::round(p.q), std::round(p.r));
+            hexGfx->drawHexPixel(pos, fadedColor);
 
             ++it;
         }
