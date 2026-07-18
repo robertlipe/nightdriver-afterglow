@@ -666,8 +666,17 @@ def live_view(host, layout="flat", verbose=False, gain=1.0, scale=None, mapping=
 
             if layout == "pointy":
                 # Sort coordinates to match the "upper-left" start order (flat-top)
-                # Sort by y (2r+q), then by x (q)
-                hex_coords.sort(key=lambda c: (2 * c[1] + c[0], c[0]))
+                # Sort by y (2r+q), then by x (q) in a boustrophedon pattern
+                rows = collections.defaultdict(list)
+                for c in hex_coords:
+                    rows[2 * c[1] + c[0]].append(c)
+                
+                hex_coords = []
+                for i, row_key in enumerate(sorted(rows.keys())):
+                    row = sorted(rows[row_key], key=lambda c: c[0])
+                    if i % 2 == 1:
+                        row.reverse()
+                    hex_coords.extend(row)
 
                 # Function to get screen coordinates from axial coordinates (flat-top)
                 def axial_to_screen(q, r, radius):
@@ -683,8 +692,17 @@ def live_view(host, layout="flat", verbose=False, gain=1.0, scale=None, mapping=
                     ]
             else: # flat layout (default)
                 # Sort coordinates for a pointy-top layout.
-                # This sorts by row (r), then by column (q).
-                hex_coords.sort(key=lambda c: (c[1], c[0]))
+                # Sort by row (r), then by column (q) in a boustrophedon pattern
+                rows = collections.defaultdict(list)
+                for c in hex_coords:
+                    rows[c[1]].append(c)
+                
+                hex_coords = []
+                for i, row_key in enumerate(sorted(rows.keys())):
+                    row = sorted(rows[row_key], key=lambda c: c[0])
+                    if i % 2 == 1:
+                        row.reverse()
+                    hex_coords.extend(row)
 
                 # Function to get screen coordinates from axial coordinates (pointy-top)
                 def axial_to_screen(q, r, radius):

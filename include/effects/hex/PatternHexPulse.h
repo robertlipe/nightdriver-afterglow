@@ -93,7 +93,7 @@ public:
         for (int ring = 0; ring < 3; ring++) {
             float offsetPhase = pulsePhase + ring * 2.0f;
             float sineValue = (sinf(offsetPhase) + 1.0f) / 2.0f; // 0 to 1
-            int currentRadius = static_cast<int>(sineValue * maxRadius);
+            int currentRadius = static_cast<int>(sineValue * maxRadius + 0.5f);
 
             if (currentRadius > 0) {
                 std::vector<HexCoord> ringHexes = hexGfx->getHexRing(center, currentRadius);

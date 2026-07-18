@@ -149,8 +149,8 @@ public:
         }
 
         // Draw hour markers (12 positions)
-        for (int i = 1; i <= 12; i++) {
-            HexCoord marker = getClockHex(i, maxRadius - 1);
+        for (int i = 0; i < 12; i++) {
+            HexCoord marker = getClockHex(i, maxRadius);
             CRGB markerColor = ColorFromPalette(g()->GetCurrentPalette(), hueOffset, 200, LINEARBLEND);
             hexGfx->drawHexPixel(marker, markerColor);
         }
@@ -163,13 +163,13 @@ public:
 
         // Minute hand
         float minuteTime = (minutes + (seconds / 60.0f)) / 5.0f; // Scale 60 mins to 12 hours
-        HexCoord minuteEnd = getClockHex(minuteTime, maxRadius - 2);
+        HexCoord minuteEnd = getClockHex(minuteTime, maxRadius - 1);
         CRGB minuteColor = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + 85, 255, LINEARBLEND);
         hexGfx->drawHexLine(center, minuteEnd, minuteColor);
 
         // Second hand
         float secondTime = seconds / 5.0f; // Scale 60 seconds to 12 hours
-        HexCoord secondEnd = getClockHex(secondTime, maxRadius - 1);
+        HexCoord secondEnd = getClockHex(secondTime, maxRadius);
         CRGB secondColor = CRGB::Red;
         hexGfx->drawHexLine(center, secondEnd, secondColor);
 

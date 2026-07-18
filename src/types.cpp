@@ -102,6 +102,10 @@ double CAppTime::LastFrameTime() const
 // allows itself to be called from the outside as well.
 void SettingSpec::FinishAndValidateInitialization()
 {
+    if (Description == nullptr || Description[0] == '\0') {
+        debugW("Code Quality: SettingSpec for '%s' ('%s') is missing a description!", Name ? Name : "unknown", FriendlyName ? FriendlyName : "unknown");
+    }
+
     // Default to front-end rejection of empty Strings
     if (Type == SettingType::String)
         EmptyAllowed = false;
