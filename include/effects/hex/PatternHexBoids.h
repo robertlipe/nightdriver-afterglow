@@ -202,7 +202,7 @@ public:
 
             // Boundary avoidance (steer to center gently)
             float distToCenter = hexGfx->hexDistance(boid.position, center);
-            if (distToCenter > maxRadius - 2) {
+            if (distToCenter >= maxRadius - 1) {
                 vQ += (center.q - boid.position.q) * 0.4f;
                 vR += (center.r - boid.position.r) * 0.4f;
                 vS += (center.s - boid.position.s) * 0.4f;

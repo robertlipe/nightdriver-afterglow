@@ -654,7 +654,7 @@ def save_png_sequence(frames, output_filename, scale=None, verbose=False, is_hex
 
     for i, frame in enumerate(frames):
         img = frame_to_image(frame, scale, is_hex_display, layout, mapping)
-        filename = f\"{base_name}-{i}.png\"
+        filename = f"{base_name}-{i}.png"
         img.save(filename)
         if verbose: print(f"save_png_sequence: Saved {filename}")
 
