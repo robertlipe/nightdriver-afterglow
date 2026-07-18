@@ -122,8 +122,8 @@ public:
         HexCoord center(0, 0);
 
         // Flocking parameters
-        float desiredSeparation = 2.0f;
-        float neighborDist = 4.0f;
+        float desiredSeparation = 3.5f; // Was 2.0f
+        float neighborDist = 6.0f;      // Was 4.0f
 
         // Update and draw boids
         std::vector<HexBoid> nextBoids = boids;
@@ -174,37 +174,37 @@ public:
 
             // Apply Separation
             if (sepCount > 0) {
-                vQ += (sepQ / sepCount) * 1.5f;
-                vR += (sepR / sepCount) * 1.5f;
-                vS += (sepS / sepCount) * 1.5f;
+                vQ += (sepQ / sepCount) * 2.5f;
+                vR += (sepR / sepCount) * 2.5f;
+                vS += (sepS / sepCount) * 2.5f;
             }
             // Apply Alignment
             if (aliCount > 0) {
-                vQ += (aliQ / aliCount) * 1.0f;
-                vR += (aliR / aliCount) * 1.0f;
-                vS += (aliS / aliCount) * 1.0f;
+                vQ += (aliQ / aliCount) * 1.5f;
+                vR += (aliR / aliCount) * 1.5f;
+                vS += (aliS / aliCount) * 1.5f;
             }
             // Apply Cohesion
             if (cohCount > 0) {
-                vQ += ((cohQ / cohCount) - boid.position.q) * 1.0f;
-                vR += ((cohR / cohCount) - boid.position.r) * 1.0f;
-                vS += ((cohS / cohCount) - boid.position.s) * 1.0f;
+                vQ += ((cohQ / cohCount) - boid.position.q) * 0.8f;
+                vR += ((cohR / cohCount) - boid.position.r) * 0.8f;
+                vS += ((cohS / cohCount) - boid.position.s) * 0.8f;
             }
 
-            // Boundary avoidance (steer to center if too far)
+            // Boundary avoidance (steer to center gently)
             float distToCenter = hexGfx->hexDistance(boid.position, center);
             if (distToCenter > maxRadius - 2) {
-                vQ += (center.q - boid.position.q) * 2.0f;
-                vR += (center.r - boid.position.r) * 2.0f;
-                vS += (center.s - boid.position.s) * 2.0f;
+                vQ += (center.q - boid.position.q) * 0.4f;
+                vR += (center.r - boid.position.r) * 0.4f;
+                vS += (center.s - boid.position.s) * 0.4f;
             }
 
             // Occasionally add random noise to prevent locking up
-            if (random(0, 100) < 15) {
+            if (random(0, 100) < 25) {
                 HexCoord randDir = hexGfx->getHexDirection(random(0, 6));
-                vQ += randDir.q * 1.5f;
-                vR += randDir.r * 1.5f;
-                vS += randDir.s * 1.5f;
+                vQ += randDir.q * 1.0f;
+                vR += randDir.r * 1.0f;
+                vS += randDir.s * 1.0f;
             }
 
             // Convert accumulated float vectors to nearest hex direction
