@@ -46,7 +46,7 @@ private:
 public:
     PatternHexAudio() : EffectWithId<PatternHexAudio>("Hex: Audio") {}
     PatternHexAudio(const JsonObjectConst& jsonObject) : EffectWithId<PatternHexAudio>(jsonObject) {
-        if (jsonObject.containsKey(PTY_SPEED)) speed = jsonObject[PTY_SPEED].as<int>();
+        if (jsonObject[PTY_SPEED].is<int>()) speed = jsonObject[PTY_SPEED].as<int>();
     }
     virtual ~PatternHexAudio() {}
 
