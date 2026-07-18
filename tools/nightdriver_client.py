@@ -692,8 +692,9 @@ def create_contact_sheet(frames, output_filename, scale=None, verbose=False, is_
     cols = math.ceil(math.sqrt(num_frames))
     rows = math.ceil(num_frames / cols)
 
-    frame_width = original_width * scale
-    frame_height = original_height * scale
+    first_img = frame_to_image(frames[0], scale, is_hex_display, layout, mapping)
+    frame_width = first_img.width
+    frame_height = first_img.height
 
     sheet_width = cols * frame_width
     sheet_height = rows * frame_height
