@@ -98,7 +98,7 @@ public:
         return HexCoord(std::round(q), std::round(r));
     }
 
-    void drawCurvedArc(std::shared_ptr<GFXHex> hexGfx, float startRadius, float endRadius, float startAngle, float endAngle, CRGB color) {
+    void drawCurvedArc(std::shared_ptr<HexagonGFX> hexGfx, float startRadius, float endRadius, float startAngle, float endAngle, CRGB color) {
         int steps = std::max(5.0f, std::abs(endRadius - startRadius) * 2.0f);
         HexCoord lastP = getSmoothRotatedPoint(startRadius, startAngle);
         for (int i = 1; i <= steps; i++) {

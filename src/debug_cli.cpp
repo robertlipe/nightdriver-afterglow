@@ -859,9 +859,10 @@ static const command core_commands[] = {
      }},
     {"settings", "List current effect settings", "Effect Settings:", [](const cli_argv&) {
         auto& effect = g_ptrSystem->GetEffectManager().GetCurrentEffect();
-        EffectSettingSpecs* specs = effect.GetSettingSpecs();
-        if (specs && !specs->empty()) {
-            for (const auto& spec : *specs) {
+        const auto& specs = effect.GetSettingSpecs();
+        if (!specs.empty()) {
+            for (const auto& spec_ref : specs) {
+                const auto& spec = spec_ref.get();
                 cli_printf("  %s (%s)\n", spec.Name, spec.FriendlyName ? spec.FriendlyName : "");
             }
         } else {
