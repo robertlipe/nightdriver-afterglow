@@ -428,7 +428,115 @@ class ColorClient:
         if self.verbose: print(f"capture_frames: Exiting. Total frames captured: {self.frames_captured}, Total frames in error: {self.frames_in_error}")
         return frames
 
-def create_animated_gif(frames, output_filename, frame_duration=100, scale=None, verbose=False):
+
+def frame_to_image(frame, scale, is_hex_display, layout, mapping):
+    from PIL import Image, ImageDraw
+    import math
+    import collections
+    
+    if is_hex_display and len(frame['pixels']) == 271:
+        hex_n = 10
+        hex_coords = []
+        R = hex_n - 1
+        for q in range(-R, R + 1):
+            r1 = max(-R, -q - R)
+            r2 = min(R, -q + R)
+            for r in range(r1, r2 + 1):
+                hex_coords.append((q, r))
+                
+        if layout == "pointy":
+            rows = collections.defaultdict(list)
+            for c in hex_coords:
+                rows[2 * c[1] + c[0]].append(c)
+            hex_coords = []
+            for i, row_key in enumerate(sorted(rows.keys())):
+                row = sorted(rows[row_key], key=lambda c: c[0])
+                if i % 2 == 1:
+                    row.reverse()
+                hex_coords.extend(row)
+                
+            def axial_to_screen(q, r, radius):
+                x = radius * 3/2 * q
+                y = radius * math.sqrt(3) * (r + q/2)
+                return (x, y)
+                
+            def get_hex_points(x, y, radius):
+                return [(x + radius * math.cos(math.radians(angle)), y + radius * math.sin(math.radians(angle))) for angle in range(0, 360, 60)]
+        else:
+            rows = collections.defaultdict(list)
+            for c in hex_coords:
+                rows[c[1]].append(c)
+            hex_coords = []
+            for i, row_key in enumerate(sorted(rows.keys())):
+                row = sorted(rows[row_key], key=lambda c: c[0])
+                if i % 2 == 1:
+                    row.reverse()
+                hex_coords.extend(row)
+                
+            def axial_to_screen(q, r, radius):
+                x = radius * math.sqrt(3) * (q + r / 2.0)
+                y = radius * 3.0/2.0 * r
+                return (x, y)
+                
+            def get_hex_points(x, y, radius):
+                return [(x + radius * math.cos(math.radians(angle)), y + radius * math.sin(math.radians(angle))) for angle in range(30, 390, 60)]
+
+        HEX_RADIUS = 20 * (scale if scale else 1)
+        PIXEL_GAP = 1 * (scale if scale else 1)
+        
+        screen_coords = [axial_to_screen(q, r, HEX_RADIUS) for q, r in hex_coords]
+        min_x = min(c[0] for c in screen_coords)
+        max_x = max(c[0] for c in screen_coords)
+        min_y = min(c[1] for c in screen_coords)
+        max_y = max(c[1] for c in screen_coords)
+        
+        screen_width = int(max_x - min_x + 2.5 * HEX_RADIUS)
+        screen_height = int(max_y - min_y + 2.5 * HEX_RADIUS)
+        
+        offset_x = -min_x + 1.5 * HEX_RADIUS
+        offset_y = -min_y + 1.5 * HEX_RADIUS
+        
+        img = Image.new('RGB', (screen_width, screen_height), (0,0,0))
+        draw = ImageDraw.Draw(img)
+        
+        for i, (q, r) in enumerate(hex_coords):
+            if i < len(frame['pixels']):
+                color = tuple(frame['pixels'][i])
+                x, y = axial_to_screen(q, r, HEX_RADIUS)
+                points = get_hex_points(x + offset_x, y + offset_y, HEX_RADIUS - PIXEL_GAP)
+                draw.polygon(points, fill=color)
+        return img
+    else:
+        img = Image.new('RGB', (frame['width'], frame['height']))
+        pixels = frame['pixels']
+        mapped_pixels = [ (0,0,0) ] * (frame['width'] * frame['height'])
+        for y in range(frame['height']):
+            for x in range(frame['width']):
+                if mapping == "serpentine":
+                    if x % 2 == 1:
+                        pixel_index = x * frame['height'] + (frame['height'] - 1 - y)
+                    else:
+                        pixel_index = x * frame['height'] + y
+                elif mapping == "spectrum":
+                    panel_index = x // 16
+                    local_x = x % 16
+                    if local_x % 2 == 1:
+                        pixel_index = panel_index * 256 + local_x * 16 + (15 - y)
+                    else:
+                        pixel_index = panel_index * 256 + local_x * 16 + y
+                else:
+                    pixel_index = y * frame['width'] + x
+                
+                if pixel_index < len(pixels):
+                    mapped_pixels[y * frame['width'] + x] = tuple(pixels[pixel_index])
+
+        img.putdata(mapped_pixels)
+        if scale and scale > 1:
+            img = img.resize((frame['width'] * scale, frame['height'] * scale), Image.NEAREST)
+        return img
+
+def create_animated_gif(frames, output_filename, frame_duration=100, scale=None, verbose=False, is_hex_display=False, layout="flat", mapping="row-major"):
+
     """
     Creates an animated GIF from a list of frames.
 
@@ -460,12 +568,7 @@ def create_animated_gif(frames, output_filename, frame_duration=100, scale=None,
     if verbose: print(f"create_animated_gif: Creating GIF from {len(frames)} frames with scale factor {scale}.")
     images = []
     for i, frame in enumerate(frames):
-        img = Image.new('RGB', (frame['width'], frame['height']))
-        img.putdata([tuple(p) for p in frame['pixels']])
-
-        if scale > 1:
-            img = img.resize((frame['width'] * scale, frame['height'] * scale), Image.NEAREST)
-
+        img = frame_to_image(frame, scale, is_hex_display, layout, mapping)
         images.append(img)
         if verbose: print(f"create_animated_gif: Added frame {i+1}/{len(frames)} to GIF.")
 
@@ -517,7 +620,7 @@ def save_raw_frames(frames, output_filename, verbose=False):
 
     if verbose: print(f"save_raw_frames: Saved raw frames to {output_filename}")
 
-def save_png_sequence(frames, output_filename, scale=None, verbose=False):
+def save_png_sequence(frames, output_filename, scale=None, verbose=False, is_hex_display=False, layout="flat", mapping="row-major"):
     """
     Saves captured frames as a sequence of PNG files.
 
@@ -550,17 +653,12 @@ def save_png_sequence(frames, output_filename, scale=None, verbose=False):
     if verbose: print(f"save_png_sequence: Saving {len(frames)} frames with prefix '{base_name}-' and scale factor {scale}.")
 
     for i, frame in enumerate(frames):
-        img = Image.new('RGB', (frame['width'], frame['height']))
-        img.putdata([tuple(p) for p in frame['pixels']])
-
-        if scale > 1:
-            img = img.resize((frame['width'] * scale, frame['height'] * scale), Image.NEAREST)
-
-        filename = f"{base_name}-{i}.png"
+        img = frame_to_image(frame, scale, is_hex_display, layout, mapping)
+        filename = f\"{base_name}-{i}.png\"
         img.save(filename)
         if verbose: print(f"save_png_sequence: Saved {filename}")
 
-def create_contact_sheet(frames, output_filename, scale=None, verbose=False):
+def create_contact_sheet(frames, output_filename, scale=None, verbose=False, is_hex_display=False, layout="flat", mapping="row-major"):
     """
     Creates a contact sheet (grid of frames) from a list of frames.
 
@@ -605,12 +703,7 @@ def create_contact_sheet(frames, output_filename, scale=None, verbose=False):
     if verbose: print(f"create_contact_sheet: Creating {sheet_width}x{sheet_height} sheet from {num_frames} frames ({cols}x{rows} grid).")
 
     for i, frame in enumerate(frames):
-        img = Image.new('RGB', (frame['width'], frame['height']))
-        img.putdata([tuple(p) for p in frame['pixels']])
-
-        if scale > 1:
-            img = img.resize((frame_width, frame_height), Image.NEAREST)
-
+        img = frame_to_image(frame, scale, is_hex_display, layout, mapping)
         col = i % cols
         row = i // cols
         x = col * frame_width
@@ -1088,7 +1181,7 @@ def main():
                 frames = color_client.capture_frames(args.duration)
 
             if frames:
-                create_animated_gif(frames, out_name, scale=args.scale, verbose=args.verbose)
+                create_animated_gif(frames, out_name, scale=args.scale, verbose=args.verbose, is_hex_display=(args.hex_layout != 'none'), layout=args.hex_layout, mapping=args.mapping)
                 raw_filename = out_name.replace('.gif', '.raw')
                 save_raw_frames(frames, raw_filename, verbose=args.verbose)
                 if args.save_png:
@@ -1120,13 +1213,13 @@ def main():
                     frames = color_client.capture_frames(args.duration)
 
                 if frames:
-                    create_animated_gif(frames, output_filename, scale=args.scale, verbose=args.verbose)
+                    create_animated_gif(frames, output_filename, scale=args.scale, verbose=args.verbose, is_hex_display=(args.hex_layout != 'none'), layout=args.hex_layout, mapping=args.mapping)
                     raw_filename = output_filename.replace('.gif', '.raw')
                     save_raw_frames(frames, raw_filename, verbose=args.verbose)
                     if args.save_png:
-                        save_png_sequence(frames, output_filename, scale=args.scale, verbose=args.verbose)
+                        save_png_sequence(frames, output_filename, scale=args.scale, verbose=args.verbose, is_hex_display=(args.hex_layout != 'none'), layout=args.hex_layout, mapping=args.mapping)
                     if args.save_contact_sheet:
-                        create_contact_sheet(frames, output_filename, scale=args.scale, verbose=args.verbose)
+                        create_contact_sheet(frames, output_filename, scale=args.scale, verbose=args.verbose, is_hex_display=(args.hex_layout != 'none'), layout=args.hex_layout, mapping=args.mapping)
                     captured_files.append(output_filename)
 
     if args.live_view:
