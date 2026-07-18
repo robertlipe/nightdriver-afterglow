@@ -1431,7 +1431,7 @@ void IRAM_ATTR ColorDataTaskEntry(void *)
                 if (!_viewer.SendPacket(socket, pPacket.get(), sizeof(ColorDataPacket)))
                 {
                     // If anything goes wrong, we close the socket so it can accept new incoming attempts
-                    debugW("Error on color data socket, so closing");
+                    debugD("Closing color data socket after write failure");
                     close(socket);
                     socket = -1;
                 }
