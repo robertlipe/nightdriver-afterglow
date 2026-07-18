@@ -46,7 +46,7 @@ struct HexBoid {
 class PatternHexBoids : public EffectWithId<PatternHexBoids>
 {
 private:
-    int speed = 30;
+    int speed = 15;
     float timePhase = 0.0f;
     std::vector<HexBoid> boids;
     uint8_t hueOffset = 0;
@@ -131,8 +131,8 @@ public:
         HexCoord center(0, 0);
 
         // Flocking parameters
-        float desiredSeparation = 3.5f; // Was 2.0f
-        float neighborDist = 6.0f;      // Was 4.0f
+        float desiredSeparation = 5.0f; // Make them less tightly packed
+        float neighborDist = 8.0f;      // See neighbors further away
 
         // Update and draw boids
         std::vector<HexBoid> nextBoids = boids;
@@ -181,11 +181,11 @@ public:
             float vR = boid.velocity.r;
             float vS = boid.velocity.s;
 
-            // Apply Separation
+            // Apply Separation (stronger to prevent packing)
             if (sepCount > 0) {
-                vQ += (sepQ / sepCount) * 2.5f;
-                vR += (sepR / sepCount) * 2.5f;
-                vS += (sepS / sepCount) * 2.5f;
+                vQ += (sepQ / sepCount) * 4.0f;
+                vR += (sepR / sepCount) * 4.0f;
+                vS += (sepS / sepCount) * 4.0f;
             }
             // Apply Alignment
             if (aliCount > 0) {
