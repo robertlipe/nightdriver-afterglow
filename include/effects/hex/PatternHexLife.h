@@ -106,13 +106,45 @@ private:
     }
 
 public:
-    PatternHexLife() : EffectWithId<PatternHexLife>("Hex: Life") {}
-    PatternHexLife(const JsonObjectConst& jsonObject) : EffectWithId<PatternHexLife>(jsonObject) {}
+    PatternHexLife() : EffectWithId<PatternHexLife>("Hex: Life")
+    {
+        totalHexes = TOTAL_LEDS_IN_HEX;
+        world = std::make_unique<HexCell[]>(totalHexes);
+        Reset();
+    }
+    PatternHexLife(const JsonObjectConst& jsonObject) : EffectWithId<PatternHexLife>(jsonObject)
+    {
+        totalHexes = TOTAL_LEDS_IN_HEX;
+        world = std::make_unique<HexCell[]>(totalHexes);
+        if (jsonObject[PTY_SPEED].is<int>()) speed = jsonObject[PTY_SPEED].as<int>();
+        Reset();
+    }
     virtual ~PatternHexLife() {}
 
     EffectSettingSpecs* FillSettingSpecs() override
     {
+        if (mySettingSpecs.size() == 0)
+        {
+            mySettingSpecs.emplace_back(PTY_SPEED, "Speed", SettingSpec::SettingType::Integer, 10.0, 100.0);
+        }
         return &mySettingSpecs;
+    }
+
+    bool SerializeSettingsToJSON(JsonObject& jsonObject) override
+    {
+        auto jsonDoc = CreateJsonDocument();
+        JsonObject root = jsonDoc.to<JsonObject>();
+        LEDStripEffect::SerializeSettingsToJSON(root);
+
+        jsonDoc[PTY_SPEED] = speed;
+
+        return SetIfNotOverflowed(jsonDoc, jsonObject, __PRETTY_FUNCTION__);
+    }
+
+    bool SetSetting(const String& name, const String& value) override
+    {
+        RETURN_IF_SET(name, PTY_SPEED, speed, value);
+        return LEDStripEffect::SetSetting(name, value);
     }
 
     bool Init(std::vector<std::shared_ptr<GFXBase>>& gfx) override

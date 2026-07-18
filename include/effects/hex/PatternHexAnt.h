@@ -111,10 +111,13 @@ public:
             Reset();
         }
 
-        // Multiple steps per frame based on speed
-        int stepsPerFrame = std::max(1, speed / 10);
-
-        for (int step = 0; step < stepsPerFrame; step++) {
+        // Throttle updates based on speed
+        unsigned long now = millis();
+        int updateInterval = std::max(10, 1000 / std::max(1, (speed / 2)));
+        
+        if (now - lastUpdate >= updateInterval) {
+            lastUpdate = now;
+            
             for (auto& ant : ants) {
                 auto idx = hexGfx->hexToIndex(ant.pos);
                 if (idx) {
@@ -131,22 +134,26 @@ public:
 
                     // Wrap or bounce if out of bounds
                     if (hexGfx->hexDistance(ant.pos, HexCoord(0,0)) > (HEX_RINGS - 1)) {
-                        ant.pos = HexCoord(0,0); // Teleport to center to keep it going
+                        // Bounce by reversing direction and taking a step
+                        ant.dir = (ant.dir + 3) % 6;
+                        ant.pos = hexGfx->hexAdd(ant.pos, hexGfx->getHexDirection(ant.dir));
                     }
                 } else {
                     ant.pos = HexCoord(0,0);
                 }
             }
+            
+            // Reset occasionally to prevent complete chaos
+            if (random(0, 2000) == 0) Reset();
         }
 
         // Draw grid
+        uint8_t baseHue = millis() / 200; // Cycle very slowly so patterns remain readable
         for (int i = 0; i < TOTAL_LEDS_IN_HEX; i++) {
             if (gridState[i] > 0) {
                 HexCoord hex = hexGfx->indexToHexCoord(i);
-                uint8_t brightness = 50 + gridState[i] * 50;
-                // Base color changes slowly over time, plus state offset
-                uint8_t hue = (millis() / 50) + gridState[i] * (256 / numColors);
-                CRGB color = CHSV(hue, 200, brightness);
+                uint8_t hue = baseHue + (gridState[i] * (256 / numColors));
+                CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, 200, LINEARBLEND);
                 hexGfx->drawHexPixel(hex, color);
             } else {
                 HexCoord hex = hexGfx->indexToHexCoord(i);
@@ -158,9 +165,6 @@ public:
         for (const auto& ant : ants) {
             hexGfx->drawHexPixel(ant.pos, CRGB::White);
         }
-
-        // Reset occasionally
-        if (random(0, 5000) == 0) Reset();
     }
 };
 #endif
