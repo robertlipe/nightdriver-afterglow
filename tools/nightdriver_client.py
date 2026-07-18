@@ -1183,7 +1183,7 @@ def main():
 
             if frames:
                 # Auto-detect hex layout based on pixel count, just like live_view
-                if len(frames[0]['pixel_data']) // 3 == 271 and args.hex_layout == 'none':
+                if len(frames[0]['pixels']) == 271 and args.hex_layout == 'none':
                     if args.verbose: print("Auto-detecting hex layout (flat) based on 271 pixels.")
                     args.hex_layout = 'flat'
                     
@@ -1220,7 +1220,7 @@ def main():
 
                 if frames:
                     # Auto-detect hex layout based on pixel count
-                    if len(frames[0]['pixel_data']) // 3 == 271 and args.hex_layout == 'none':
+                    if len(frames[0]['pixels']) == 271 and args.hex_layout == 'none':
                         if args.verbose: print("Auto-detecting hex layout (flat) based on 271 pixels.")
                         args.hex_layout = 'flat'
 
