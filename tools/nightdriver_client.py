@@ -1182,13 +1182,18 @@ def main():
                 frames = color_client.capture_frames(args.duration)
 
             if frames:
+                # Auto-detect hex layout based on pixel count, just like live_view
+                if len(frames[0]['pixel_data']) // 3 == 271 and args.hex_layout == 'none':
+                    if args.verbose: print("Auto-detecting hex layout (flat) based on 271 pixels.")
+                    args.hex_layout = 'flat'
+                    
                 create_animated_gif(frames, out_name, scale=args.scale, verbose=args.verbose, is_hex_display=(args.hex_layout != 'none'), layout=args.hex_layout, mapping=args.mapping)
                 raw_filename = out_name.replace('.gif', '.raw')
                 save_raw_frames(frames, raw_filename, verbose=args.verbose)
                 if args.save_png:
-                    save_png_sequence(frames, out_name, scale=args.scale, verbose=args.verbose)
+                    save_png_sequence(frames, out_name, scale=args.scale, verbose=args.verbose, is_hex_display=(args.hex_layout != 'none'), layout=args.hex_layout, mapping=args.mapping)
                 if args.save_contact_sheet:
-                    create_contact_sheet(frames, out_name, scale=args.scale, verbose=args.verbose)
+                    create_contact_sheet(frames, out_name, scale=args.scale, verbose=args.verbose, is_hex_display=(args.hex_layout != 'none'), layout=args.hex_layout, mapping=args.mapping)
                 captured_files.append(out_name)
 
     elif args.capture_all:
@@ -1214,6 +1219,11 @@ def main():
                     frames = color_client.capture_frames(args.duration)
 
                 if frames:
+                    # Auto-detect hex layout based on pixel count
+                    if len(frames[0]['pixel_data']) // 3 == 271 and args.hex_layout == 'none':
+                        if args.verbose: print("Auto-detecting hex layout (flat) based on 271 pixels.")
+                        args.hex_layout = 'flat'
+
                     create_animated_gif(frames, output_filename, scale=args.scale, verbose=args.verbose, is_hex_display=(args.hex_layout != 'none'), layout=args.hex_layout, mapping=args.mapping)
                     raw_filename = output_filename.replace('.gif', '.raw')
                     save_raw_frames(frames, raw_filename, verbose=args.verbose)
