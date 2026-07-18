@@ -83,92 +83,109 @@ public:
         return LEDStripEffect::SetSetting(name, value);
     }
 
+    HexCoord getSmoothRotatedPoint(float radius, float angleDegrees) {
+        float angleRad = angleDegrees * (std::numbers::pi_v<float> / 180.0f);
+        float targetX = std::cos(angleRad) * radius;
+        float targetY = std::sin(angleRad) * radius;
+        
+        // Convert cartesian to axial hex coordinates
+        // x = sqrt(3) * q + sqrt(3)/2 * r
+        // y = 1.5 * r
+        float r = targetY / 1.5f;
+        float q = (targetX - (std::numbers::sqrt3_v<float> / 2.0f) * r) / std::numbers::sqrt3_v<float>;
+        return HexCoord(std::round(q), std::round(r));
+    }
+
     void Draw() override
     {
         auto hexGfx = hg();
         if (!hexGfx) return;
 
-        g()->DimAll(220);
+        g()->DimAll(200);
         hueOffset += speed / 20;
-        rotation = (rotation + speed / 30) % 6;
+        
+        float smoothRotation = (millis() * speed) / 1000.0f;
+        float breath = std::sin(millis() / 500.0f) * 0.5f + 0.5f; // 0.0 to 1.0
 
         HexCoord center(0, 0);
-        int maxRadius = HEX_RINGS - 1;
+        float maxRadius = HEX_RINGS - 1;
 
         switch (shapeType) {
-            case 0: // Rotating triangle
+            case 0: // Smooth spinning breathing triangles
                 {
-                    for (int i = 0; i < 3; i++) {
-                        int dir = (rotation + i * 2) % 6;
-                        HexCoord end = hexGfx->hexAdd(center, hexGfx->hexScale(hexGfx->getHexDirection(dir), maxRadius));
-                        CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + i * 85, 255, LINEARBLEND);
-                        hexGfx->drawHexLine(center, end, color);
+                    float r = maxRadius * (0.5f + breath * 0.5f);
+                    for (int offset = 0; offset < 360; offset += 120) {
+                        HexCoord p1 = getSmoothRotatedPoint(r, smoothRotation + offset);
+                        HexCoord p2 = getSmoothRotatedPoint(r, smoothRotation + offset + 120);
+                        CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + offset, 255, LINEARBLEND);
+                        hexGfx->drawHexLine(p1, p2, color);
+                    }
+                    
+                    // Inverse rotating inner triangle
+                    float innerR = maxRadius * (1.0f - breath * 0.5f);
+                    for (int offset = 0; offset < 360; offset += 120) {
+                        HexCoord p1 = getSmoothRotatedPoint(innerR, -smoothRotation + offset + 60);
+                        HexCoord p2 = getSmoothRotatedPoint(innerR, -smoothRotation + offset + 180);
+                        CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + 128 + offset, 255, LINEARBLEND);
+                        hexGfx->drawHexLine(p1, p2, color);
                     }
                 }
                 break;
 
-            case 1: // Rotating hexagon outline
+            case 1: // Smooth spinning squares (diamonds)
                 {
-                    for (int r = 1; r <= maxRadius; r++) {
-                        uint8_t hue = (hueOffset + r * 15) % 256;
-                        CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, 255, LINEARBLEND);
-                        // Use precomputed ring data - no allocation
-                        auto ring = hexGfx->getHexRing(r);
-                        for (const auto& hex : ring) {
-                            HexCoord rotated = hexGfx->hexRotate(hex, rotation);
-                            hexGfx->drawHexPixel(rotated, color);
+                    float r = maxRadius * (0.7f + breath * 0.3f);
+                    for (int offset = 0; offset < 360; offset += 90) {
+                        HexCoord p1 = getSmoothRotatedPoint(r, smoothRotation + offset);
+                        HexCoord p2 = getSmoothRotatedPoint(r, smoothRotation + offset + 90);
+                        CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + offset, 255, LINEARBLEND);
+                        hexGfx->drawHexLine(p1, p2, color);
+                    }
+                }
+                break;
+
+            case 2: // Multi-point star wireframe
+                {
+                    float innerR = maxRadius * 0.3f;
+                    float outerR = maxRadius;
+                    for (int offset = 0; offset < 360; offset += 60) {
+                        HexCoord pOuter = getSmoothRotatedPoint(outerR, smoothRotation + offset);
+                        HexCoord pInner1 = getSmoothRotatedPoint(innerR, smoothRotation + offset + 30);
+                        HexCoord pInner2 = getSmoothRotatedPoint(innerR, smoothRotation + offset - 30);
+                        CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + offset, 255, LINEARBLEND);
+                        hexGfx->drawHexLine(pOuter, pInner1, color);
+                        hexGfx->drawHexLine(pOuter, pInner2, color);
+                    }
+                }
+                break;
+
+            case 3: // Spiraling polygon
+                {
+                    int sides = 6;
+                    for (int radiusStep = 1; radiusStep <= maxRadius; radiusStep += 2) {
+                        float stepRotation = smoothRotation + (radiusStep * 15);
+                        for (int offset = 0; offset < 360; offset += (360 / sides)) {
+                            HexCoord p1 = getSmoothRotatedPoint(radiusStep, stepRotation + offset);
+                            HexCoord p2 = getSmoothRotatedPoint(radiusStep, stepRotation + offset + (360 / sides));
+                            CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + radiusStep * 20, 255, LINEARBLEND);
+                            hexGfx->drawHexLine(p1, p2, color);
                         }
                     }
                 }
                 break;
 
-            case 2: // Star pattern
+            case 4: // Sine-wave geometric rings
                 {
-                    for (int i = 0; i < 6; i++) {
-                        int dir = (rotation + i) % 6;
-                        HexCoord end = hexGfx->hexAdd(center, hexGfx->hexScale(hexGfx->getHexDirection(dir), maxRadius));
-                        CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + i * 42, 255, LINEARBLEND);
-                        hexGfx->drawHexLine(center, end, color);
-                    }
-                    // Inner star
-                    for (int i = 0; i < 6; i++) {
-                        int dir = (rotation + i) % 6;
-                        HexCoord mid = hexGfx->hexAdd(center, hexGfx->hexScale(hexGfx->getHexDirection(dir), maxRadius / 2));
-                        CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + i * 42 + 128, 200, LINEARBLEND);
-                        hexGfx->drawHexLine(center, mid, color);
-                    }
-                }
-                break;
-
-            case 3: // Concentric triangles
-                {
-                    for (int r = 1; r <= maxRadius; r += 2) {
-                        for (int i = 0; i < 3; i++) {
-                            int dir = (rotation + i * 2) % 6;
-                            HexCoord end = hexGfx->hexAdd(center, hexGfx->hexScale(hexGfx->getHexDirection(dir), r));
-                            uint8_t hue = (hueOffset + r * 20) % 256;
-                            CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, 255, LINEARBLEND);
-                            hexGfx->drawHexLine(center, end, color);
-                        }
-                    }
-                }
-                break;
-
-            case 4: // Diamond pattern
-                {
-                    for (int r = 1; r <= maxRadius; r++) {
-                        for (int i = 0; i < 6; i++) {
-                            int dir = (rotation + i) % 6;
-                            HexCoord end = hexGfx->hexAdd(center, hexGfx->hexScale(hexGfx->getHexDirection(dir), r));
-                            uint8_t hue = (hueOffset + r * 15 + i * 42) % 256;
-                            CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, 200, LINEARBLEND);
-                            hexGfx->drawHexPixel(end, color);
-                        }
+                    for (int i = 0; i < 360; i += 30) {
+                        float waveR = maxRadius * (0.5f + std::sin((millis() / 300.0f) + i * 0.1f) * 0.5f);
+                        HexCoord p = getSmoothRotatedPoint(waveR, smoothRotation + i);
+                        CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + i, 255, LINEARBLEND);
+                        hexGfx->drawHexLine(center, p, color);
                     }
                 }
                 break;
         }
-        EVERY_N_SECONDS(5) {
+        EVERY_N_SECONDS(10) {
             shapeType = (shapeType + 1) % maxShapeType;
         }
     }
