@@ -44,7 +44,7 @@ private:
 public:
     PatternHex3D() : EffectWithId<PatternHex3D>("Hex: Isometric 3D") {}
     PatternHex3D(const JsonObjectConst& jsonObject) : EffectWithId<PatternHex3D>(jsonObject) {
-        if (jsonObject["speed"].is<int>()) speed = jsonObject["speed"].as<int>();
+        if (jsonObject[PTY_SPEED].is<int>()) speed = jsonObject[PTY_SPEED].as<int>();
     }
     virtual ~PatternHex3D() {}
 
@@ -53,7 +53,7 @@ public:
     {
         if (mySettingSpecs.size() == 0)
         {
-            mySettingSpecs.emplace_back("speed", "Speed", SettingSpec::SettingType::Integer, 10.0, 100.0);
+            mySettingSpecs.emplace_back(PTY_SPEED, "Speed", SettingSpec::SettingType::Integer, 10.0, 100.0);
         }
         return &mySettingSpecs;
     }
@@ -64,14 +64,14 @@ public:
         JsonObject root = jsonDoc.to<JsonObject>();
         LEDStripEffect::SerializeSettingsToJSON(root);
 
-        jsonDoc["speed"] = speed;
+        jsonDoc[PTY_SPEED] = speed;
 
         return SetIfNotOverflowed(jsonDoc, jsonObject, __PRETTY_FUNCTION__);
     }
 
     bool SetSetting(const String& name, const String& value) override
     {
-        RETURN_IF_SET(name, "speed", speed, value);
+        RETURN_IF_SET(name, PTY_SPEED, speed, value);
         return LEDStripEffect::SetSetting(name, value);
     }
 

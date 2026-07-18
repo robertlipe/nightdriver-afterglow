@@ -47,9 +47,9 @@ private:
 public:
     PatternHexMath() : EffectWithId<PatternHexMath>("Hex: Math Patterns") {}
     PatternHexMath(const JsonObjectConst& jsonObject) : EffectWithId<PatternHexMath>(jsonObject) {
-        if (jsonObject["pattern"].is<int>()) patternType = jsonObject["pattern"].as<int>();
-        if (jsonObject["scale"].is<int>()) scale = jsonObject["scale"].as<int>();
-        if (jsonObject["speed"].is<int>()) speed = jsonObject["speed"].as<int>();
+        if (jsonObject[PTY_PATTERN].is<int>()) patternType = jsonObject[PTY_PATTERN].as<int>();
+        if (jsonObject[PTY_SCALE].is<int>()) scale = jsonObject[PTY_SCALE].as<int>();
+        if (jsonObject[PTY_SPEED].is<int>()) speed = jsonObject[PTY_SPEED].as<int>();
     }
     virtual ~PatternHexMath() {}
 
@@ -60,9 +60,9 @@ public:
     {
         if (mySettingSpecs.size() == 0)
         {
-            mySettingSpecs.emplace_back("pattern", "Pattern Type", SettingSpec::SettingType::Integer, 0.0, 4.0);
-            mySettingSpecs.emplace_back("scale", "Scale", SettingSpec::SettingType::Integer, 1.0, 10.0);
-            mySettingSpecs.emplace_back("speed", "Speed", SettingSpec::SettingType::Integer, 0.0, 100.0);
+            mySettingSpecs.emplace_back(PTY_PATTERN, "Pattern Type", SettingSpec::SettingType::Integer, 0.0, 4.0);
+            mySettingSpecs.emplace_back(PTY_SCALE, "Scale", SettingSpec::SettingType::Integer, 1.0, 10.0);
+            mySettingSpecs.emplace_back(PTY_SPEED, "Speed", SettingSpec::SettingType::Integer, 0.0, 100.0);
         }
         return &mySettingSpecs;
     }
@@ -73,18 +73,18 @@ public:
         JsonObject root = jsonDoc.to<JsonObject>();
         LEDStripEffect::SerializeSettingsToJSON(root);
 
-        jsonDoc["pattern"] = patternType;
-        jsonDoc["scale"] = scale;
-        jsonDoc["speed"] = speed;
+        jsonDoc[PTY_PATTERN] = patternType;
+        jsonDoc[PTY_SCALE] = scale;
+        jsonDoc[PTY_SPEED] = speed;
 
         return SetIfNotOverflowed(jsonDoc, jsonObject, __PRETTY_FUNCTION__);
     }
 
     bool SetSetting(const String& name, const String& value) override
     {
-        RETURN_IF_SET(name, "pattern", patternType, value);
-        RETURN_IF_SET(name, "scale", scale, value);
-        RETURN_IF_SET(name, "speed", speed, value);
+        RETURN_IF_SET(name, PTY_PATTERN, patternType, value);
+        RETURN_IF_SET(name, PTY_SCALE, scale, value);
+        RETURN_IF_SET(name, PTY_SPEED, speed, value);
         return LEDStripEffect::SetSetting(name, value);
     }
 

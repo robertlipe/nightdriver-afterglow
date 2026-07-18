@@ -47,8 +47,8 @@ private:
 public:
     PatternHexKaleidoscope() : EffectWithId<PatternHexKaleidoscope>("Hex: Kaleidoscope") {}
     PatternHexKaleidoscope(const JsonObjectConst& jsonObject) : EffectWithId<PatternHexKaleidoscope>(jsonObject) {
-        if (jsonObject["speed"].is<int>()) speed = jsonObject["speed"].as<int>();
-        if (jsonObject["segments"].is<int>()) segments = jsonObject["segments"].as<int>();
+        if (jsonObject[PTY_SPEED].is<int>()) speed = jsonObject[PTY_SPEED].as<int>();
+        if (jsonObject[PTY_SEGMENTS].is<int>()) segments = jsonObject[PTY_SEGMENTS].as<int>();
     }
     virtual ~PatternHexKaleidoscope() {}
 
@@ -57,8 +57,8 @@ public:
     {
         if (mySettingSpecs.size() == 0)
         {
-            mySettingSpecs.emplace_back("speed", "Speed", SettingSpec::SettingType::Integer, 1.0, 100.0);
-            mySettingSpecs.emplace_back("segments", "Segments", SettingSpec::SettingType::Integer, 3.0, 6.0);
+            mySettingSpecs.emplace_back(PTY_SPEED, "Speed", SettingSpec::SettingType::Integer, 1.0, 100.0);
+            mySettingSpecs.emplace_back(PTY_SEGMENTS, "Segments", SettingSpec::SettingType::Integer, 3.0, 6.0);
         }
         return &mySettingSpecs;
     }
@@ -69,16 +69,16 @@ public:
         JsonObject root = jsonDoc.to<JsonObject>();
         LEDStripEffect::SerializeSettingsToJSON(root);
 
-        jsonDoc["speed"] = speed;
-        jsonDoc["segments"] = segments;
+        jsonDoc[PTY_SPEED] = speed;
+        jsonDoc[PTY_SEGMENTS] = segments;
 
         return SetIfNotOverflowed(jsonDoc, jsonObject, __PRETTY_FUNCTION__);
     }
 
     bool SetSetting(const String& name, const String& value) override
     {
-        RETURN_IF_SET(name, "speed", speed, value);
-        RETURN_IF_SET(name, "segments", segments, value);
+        RETURN_IF_SET(name, PTY_SPEED, speed, value);
+        RETURN_IF_SET(name, PTY_SEGMENTS, segments, value);
         return LEDStripEffect::SetSetting(name, value);
     }
 
