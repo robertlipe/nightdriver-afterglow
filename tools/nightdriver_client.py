@@ -266,8 +266,8 @@ class ColorClient:
                 if self.verbose: print(f"_find_header: Received {len(chunk)} bytes. Current buffer size: {len(self.internal_buffer)}")
             except queue.Empty:
                 if len(self.internal_buffer) == 0:
-                     if self.verbose: print("_find_header: Queue empty, waiting for first data.")
-                     break # Break to allow outer loop to check timeout
+                     if self.verbose: print("_find_header: Queue empty, continuing.")
+                     continue # No data yet, try again
                 # If we have data, fall through to try and find header
                 pass
 
