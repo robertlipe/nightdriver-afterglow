@@ -46,7 +46,8 @@ struct HexBoid {
 class PatternHexBoids : public EffectWithId<PatternHexBoids>
 {
 private:
-    int speed = 40;
+    int speed = 30;
+    float timePhase = 0.0f;
     std::vector<HexBoid> boids;
     uint8_t hueOffset = 0;
     int maxRadius = HEX_RINGS - 1;
@@ -114,10 +115,18 @@ public:
 
         g()->DimAll(220);
         hueOffset += speed / 25;
-
-        if (boids.empty()) {
-            InitBoids();
-        }
+        timePhase += speed / 30.0f;
+        
+        // Use timePhase to accumulate full steps
+        int steps = static_cast<int>(timePhase);
+        timePhase -= steps;
+        
+        if (steps > 3) steps = 3; // Cap to avoid huge jumps
+        
+        for (int step = 0; step < steps; step++) {
+            if (boids.empty()) {
+                InitBoids();
+            }
 
         HexCoord center(0, 0);
 
@@ -227,9 +236,10 @@ public:
                 nextBoid.position = center;
                 nextBoid.trail.clear();
             }
-        }
+        } // End of boid loop
 
         boids = nextBoids;
+    } // End of steps loop
 
         // Draw phase
         for (auto& boid : boids) {

@@ -773,10 +773,13 @@ def live_view(host, layout="flat", verbose=False, gain=1.0, scale=None, mapping=
                     running = False
 
             latest_frames = client.capture_frames(duration_seconds=0.1)
-            if not latest_frames:
+            
+            if latest_frames:
+                frame = latest_frames[-1]
+            elif 'frame' not in locals() or not frame:
+                # No frames received yet, just pump events and wait
+                clock.tick(60)
                 continue
-
-            frame = latest_frames[-1]
 
             # Check brightness stats every 30 frames (approx 0.5 - 1.0 sec depending on framerate)
             frame_count += 1
@@ -791,11 +794,8 @@ def live_view(host, layout="flat", verbose=False, gain=1.0, scale=None, mapping=
 
                     # If we have a full history and ALL samples are dim (< 40) but not black (> 0)
                     if len(brightness_history) == brightness_history.maxlen:
-                        # Logic: If the brightest pixel in the last N samples never exceeded 40/255
-                        # AND we saw at least some light (max > 0), then it's likely just too dim to see well.
                         max_history_brightness = max(brightness_history)
-                        if 0 < max_history_brightness < 40:
-                            # if max_history_brightness < 40:
+                        if 0 < max_history_brightness < 40 and gain <= 1.0:
                             print("\n[TIP] The live view seems very dark. Increase display brightness or ")
                             print("      try increasing visibility with: --preview-gain 5.0")
                             has_warned_brightness = True
