@@ -131,7 +131,8 @@ public:
         unsigned long now = millis();
         if (now - lastMove > moveInterval) {
             lastMove = now;
-            moveInterval = 400 - speed * 3; // Higher speed = lower interval
+            // Non-linear inverse scaling: speed 10 = 400ms, speed 100 = 40ms. Naturally asymptotes to prevent negative intervals.
+            moveInterval = 4000 / std::max(1, speed);
 
             // AI Pathfinding to food
             int bestDir = -1;

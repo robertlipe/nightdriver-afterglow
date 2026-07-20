@@ -65,6 +65,8 @@ struct PixelCoord {
 constexpr int TOTAL_HEX_ROWS = (2 * HEX_RINGS) - 1;
 constexpr int TOTAL_LEDS_IN_HEX = 3 * HEX_RINGS * (HEX_RINGS - 1) + 1;
 
+// Precomputes the number of LEDs in each horizontal row of a flat-topped hexagon.
+// The middle row is the widest, and rows taper symmetrically towards the top and bottom.
 constexpr std::array<int, TOTAL_HEX_ROWS> generateRowLengths() {
     std::array<int, TOTAL_HEX_ROWS> data{};
     for (int i = 0; i < TOTAL_HEX_ROWS; ++i) {
@@ -73,6 +75,10 @@ constexpr std::array<int, TOTAL_HEX_ROWS> generateRowLengths() {
     return data;
 }
 
+// Precomputes the starting LED index (offset) for each row.
+// Note the goofy array sizes: an N-element array of row lengths produces an (N+1)-element array
+// of starting offsets. The first row starts at index 0, the second at length[0], and the
+// final (N+1)th element holds the total sum of all LEDs. This avoids O(N) loops in `hexToIndex()`.
 constexpr std::array<int, TOTAL_HEX_ROWS + 1> generateCumulativeSums(const std::array<int, TOTAL_HEX_ROWS>& lengths) {
     std::array<int, TOTAL_HEX_ROWS + 1> data{};
     data[0] = 0;
@@ -82,33 +88,42 @@ constexpr std::array<int, TOTAL_HEX_ROWS + 1> generateCumulativeSums(const std::
     return data;
 }
 
-class HexagonGFX : public WS281xGFX
+class HexagonGFX final : public WS281xGFX
 {
 public:
     static constexpr std::array<int, TOTAL_HEX_ROWS> ROW_LENGTHS = generateRowLengths();
     static constexpr std::array<int, TOTAL_HEX_ROWS + 1> CUMULATIVE_ROW_SUMS = generateCumulativeSums(ROW_LENGTHS);
 
     HexagonGFX(size_t numLeds);
-    virtual ~HexagonGFX() {}
+    ~HexagonGFX() override = default;
 
     static void InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devices);
 
-    // Override XY mapping to use hexagonal offset logic
-    virtual uint16_t xy(uint16_t x, uint16_t y) const noexcept override;
+    // Provides a fallback compatibility layer for 2D Cartesian effects (e.g. moving lines).
+    // This maps standard (X,Y) logic onto the closest hex index so legacy effects don't
+    // crash, though they will appear optically skewed due to the non-square grid.
+    uint16_t xy(uint16_t x, uint16_t y) const noexcept override;
 
-    virtual bool isValidPixel(uint x, uint y) const noexcept override {
+    bool isValidPixel(uint x, uint y) const noexcept override {
         return xy(x, y) < _ledcount;
     }
 
-    // Native Hex drawing primitives
+    // --- Native Hex Drawing Primitives ---
+
+    // The core math engine of the hex grid. Maps a virtual Q/R/S axial coordinate
+    // to the physical 1D hardware index of the LED in the serpentine string.
     std::optional<int> hexToIndex(HexCoord hex) const;
+
+    // Primary rendering methods for hex-native effects. Converts coordinates and applies color.
     void drawHexPixel(int q, int r, CRGB color);
     void drawHexPixel(HexCoord hex, CRGB color);
 
     // Fills a ring around the hexagon, inset by the indent specified
-    virtual void fillHexRing(uint16_t indent, CRGB color);
+    void fillHexRing(uint16_t indent, CRGB color);
 
-    // Helpers
+    // --- Sub-Pixel / Float Coordinate Helpers ---
+    // These bridge the gap between continuous floating-point math (used for smooth
+    // physical motion, rotation, and gravity) and the discrete, snapped axial coordinates.
     static float hexDistance(HexCoord a, HexCoord b);
     OffsetCoord cubeToOffset(HexCoord hex) const;
     std::optional<int> offsetToLinearIndex(OffsetCoord offset) const;
@@ -142,9 +157,9 @@ public:
         const HexCoord* end() const { return data + size; }
     };
 
-    static HexCoordView getHexRing(int radius);
-    static HexCoordView getHexSpiral();
-    static HexCoord indexToHexCoord(int index);  // Convert LED index to HexCoord
+    HexCoordView getHexRing(int radius) const;
+    HexCoordView getHexSpiral() const;
+    HexCoord indexToHexCoord(int index) const;  // Convert LED index to HexCoord
 
     // Legacy allocating versions - avoid using these in hot paths
     // These support arbitrary centers and radii

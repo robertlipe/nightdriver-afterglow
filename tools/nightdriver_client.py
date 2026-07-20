@@ -16,6 +16,7 @@ import time
 import struct
 import threading
 import queue
+import collections
 
 import os
 
@@ -432,7 +433,7 @@ class ColorClient:
 def frame_to_image(frame, scale, is_hex_display, layout, mapping):
     from PIL import Image, ImageDraw
     import math
-    import collections
+
     
     if is_hex_display and len(frame['pixels']) == 271:
         hex_n = 10
@@ -722,7 +723,7 @@ def live_view(host, layout="flat", verbose=False, gain=1.0, scale=None, mapping=
     """
     import pygame
     import math
-    import collections
+
 
 
     PIXEL_GAP = 1

@@ -33,12 +33,12 @@
 
 #include <numbers>
 
-const float HEX_SQRT3 = std::numbers::sqrt3_v<float>;
-const float HEX_SQRT3_OVER_2 = HEX_SQRT3 / 2.0f;
-const float HEX_3_OVER_2 = 3.0f / 2.0f;
-const float HEX_2_OVER_3 = 2.0f / 3.0f;
-const float HEX_1_OVER_3 = 1.0f / 3.0f;
-const float HEX_SQRT3_OVER_3 = HEX_SQRT3 / 3.0f;
+constexpr float HEX_SQRT3 = std::numbers::sqrt3_v<float>;
+constexpr float HEX_SQRT3_OVER_2 = HEX_SQRT3 / 2.0f;
+constexpr float HEX_3_OVER_2 = 3.0f / 2.0f;
+constexpr float HEX_2_OVER_3 = 2.0f / 3.0f;
+constexpr float HEX_1_OVER_3 = 1.0f / 3.0f;
+constexpr float HEX_SQRT3_OVER_3 = HEX_SQRT3 / 3.0f;
 
 // Static member initialization - nullptr, allocated in InitializeHardware()
 std::unique_ptr<HexCoord[]> HexagonGFX::s_precomputedRingsFlat;
@@ -63,9 +63,9 @@ void HexagonGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devic
     // Precompute hex data once at startup
     precomputeHexData();
 
-    // We don't support more than 8 parallel channels
-    #if NUM_CHANNELS > 8
-        #error The maximum value of NUM_CHANNELS (number of parallel channels) is 8
+    // Modern PSRAM boards can handle massive parallel strip allocations
+    #if NUM_CHANNELS > 16
+        #error The maximum value of NUM_CHANNELS (number of parallel channels) is 16
     #endif
 
     for (int i = 0; i < NUM_CHANNELS; i++)
@@ -78,8 +78,11 @@ void HexagonGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devic
     AddLEDs(devices);
 }
 
+// Maps a virtual Q/R/S axial coordinate to the physical 1D hardware index.
+// The math is slightly gnarly to handle the "boustrophedon" (serpentine) wiring
+// typical of these flat-topped LED hex panels.
 std::optional<int> HexagonGFX::hexToIndex(HexCoord hex) const {
-    // 1. Check bounds
+    // 1. Check bounds (axial coordinates naturally define a hexagon when constrained)
     if (std::abs(hex.q) >= HEX_RINGS || std::abs(hex.r) >= HEX_RINGS || std::abs(hex.s) >= HEX_RINGS) {
         return std::nullopt;
     }
@@ -113,10 +116,13 @@ float HexagonGFX::hexDistance(HexCoord a, HexCoord b) {
     return (fabsf(a.q - b.q) + fabsf(a.r - b.r) + fabsf(a.s - b.s)) / 2.0f;
 }
 
+// Converts a smooth 2D Cartesian floating-point coordinate (like a physics particle)
+// into the nearest discrete hex axial coordinate using standard hex rotation matrices.
 HexCoord HexagonGFX::pixelToHex(PixelCoord pixel, float hex_size, PixelCoord origin_offset_pixels) const {
     float adjusted_x = pixel.x - origin_offset_pixels.x;
     float adjusted_y = pixel.y - origin_offset_pixels.y;
 
+    // Inverse flat-top basis matrix
     float q_frac = (adjusted_x * HEX_SQRT3_OVER_3 - adjusted_y * HEX_1_OVER_3) / hex_size;
     float r_frac = (adjusted_y * HEX_2_OVER_3) / hex_size;
     float s_frac = -q_frac - r_frac;
@@ -124,7 +130,10 @@ HexCoord HexagonGFX::pixelToHex(PixelCoord pixel, float hex_size, PixelCoord ori
     return hexRound(q_frac, r_frac, s_frac);
 }
 
+// Converts a discrete hex axial coordinate back to the exact center point
+// of that hexagon in smooth 2D Cartesian floating-point space.
 PixelCoord HexagonGFX::hexToPixelFlatTop(HexCoord hex, float hex_size, PixelCoord origin_offset_pixels) const {
+    // Forward flat-top basis matrix
     float pixel_x_float = hex_size * (HEX_SQRT3 * hex.q + HEX_SQRT3_OVER_2 * hex.r);
     float pixel_y_float = hex_size * (HEX_3_OVER_2 * hex.r);
     return {pixel_x_float + origin_offset_pixels.x, pixel_y_float + origin_offset_pixels.y};
@@ -236,13 +245,13 @@ void HexagonGFX::drawHexSpiral(HexCoord center, int maxRadius, CRGB color) {
 
 void HexagonGFX::drawHexCone(HexCoord center, int direction, int length, CRGB color) {
     HexCoord current = center;
+    const int leftDir = (direction - 1 + 6) % 6;
+    const int rightDir = (direction + 1) % 6;
+
     for (int i = 0; i < length; i++) {
         drawHexPixel(current, color);
         // Draw a fan of hexes at this distance
         for (int spread = 0; spread <= i; spread++) {
-            int leftDir = (direction - 1 + 6) % 6;
-            int rightDir = (direction + 1) % 6;
-
             HexCoord leftHex = current;
             HexCoord rightHex = current;
 
@@ -373,38 +382,21 @@ void HexagonGFX::cleanupPrecomputedData()
     s_precomputed = false;
 }
 
-HexagonGFX::HexCoordView HexagonGFX::getHexRing(int radius)
-{
-    if (!s_precomputed) {
-        precomputeHexData();
-    }
-
+HexagonGFX::HexCoordView HexagonGFX::getHexRing(int radius) const {
     if (radius < 0 || radius >= HEX_RINGS) {
         return HexCoordView{nullptr, 0};
     }
-
     return HexCoordView{s_precomputedRingsFlat.get() + s_ringOffsets[radius], s_ringSizes[radius]};
 }
 
-HexagonGFX::HexCoordView HexagonGFX::getHexSpiral()
-{
-    if (!s_precomputed) {
-        precomputeHexData();
-    }
-
+HexagonGFX::HexCoordView HexagonGFX::getHexSpiral() const {
     return HexCoordView{s_precomputedSpiral.get(), TOTAL_LEDS_IN_HEX};
 }
 
-HexCoord HexagonGFX::indexToHexCoord(int index)
-{
-    if (!s_precomputed) {
-        precomputeHexData();
-    }
-
+HexCoord HexagonGFX::indexToHexCoord(int index) const {
     if (index < 0 || index >= TOTAL_LEDS_IN_HEX) {
-        return HexCoord(0, 0);  // Return center for invalid indices
+        return HexCoord(0, 0);
     }
-
     return s_indexToHexCoord[index];
 }
 

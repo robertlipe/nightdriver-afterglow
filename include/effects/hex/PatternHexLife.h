@@ -109,15 +109,11 @@ public:
     PatternHexLife() : EffectWithId<PatternHexLife>("Hex: Life")
     {
         totalHexes = TOTAL_LEDS_IN_HEX;
-        world = std::make_unique<HexCell[]>(totalHexes);
-        Reset();
     }
     PatternHexLife(const JsonObjectConst& jsonObject) : EffectWithId<PatternHexLife>(jsonObject)
     {
         totalHexes = TOTAL_LEDS_IN_HEX;
-        world = std::make_unique<HexCell[]>(totalHexes);
         if (jsonObject[PTY_SPEED].is<int>()) speed = jsonObject[PTY_SPEED].as<int>();
-        Reset();
     }
     virtual ~PatternHexLife() {}
 
@@ -217,7 +213,7 @@ public:
                 if (idx < 0) continue;
 
                 if (world[idx].brightness > 0 && world[idx].prev == 0)
-                    world[idx].brightness *= 0.75;
+                    world[idx].brightness *= 0.75f;
 
                 int count = countNeighbors(hex);
                 // B2/S23 Hex Life Rules
