@@ -142,3 +142,27 @@ This file documents the custom reliability, diagnostic, and performance improvem
 ### 3. Audio Thread Flash Panic Fix
 - **Issue**: The `adc_continuous` DMA audio polling driver is prone to panic (`Cache disabled but cached memory region accessed`) when NVS or SPIFFS writes occur on the shared flash bus.
 - **Fix**: Wrapped the high-level `SaveJSON` config routines and the new `nvs_commit` operations inside `nd_network.cpp` with `g_Analyzer.Pause()` and `Resume()`. This guarantees the audio driver safely sleeps for the few milliseconds that flash writes disable the system cache, keeping CPU usage low without panicking the ESP32.
+
+---
+
+## ⬡ First-Class Hexagon Matrix Math & Visuals
+
+### 1. The Hexagon Graphics Pipeline (`gfxhex.h`)
+- **Feature**: NightDriverStrip now boasts arguably the most advanced open-source hexagonal LED matrix math pipeline available on a microcontroller. Unlike WLED or FastLED (which natively only understand 1D strips or 2D Cartesian X/Y grids), this fork implements a full Q/R/S axial coordinate system mapped seamlessly to physical space.
+- **Support**: Designed specifically for flat-topped hexagonal serpentine matrices (e.g., the 271-pixel hexagon).
+
+### 2. Hex-Native Visual Effects
+- Translated, re-math'd, and optimized over two dozen classic LED tropes to run natively in hexagonal coordinate space without visual tearing or Cartesian stretching:
+  - **Life / Langton's Ant**: Cellular automata that actually traverse 6 axial neighbors.
+  - **Geometry**: Breathing, sweeping, and spinning curved arcs and kaleidoscopes that perfectly track the physical border.
+  - **Physics (Ripple & Fireworks)**: Fluid gravity and intersecting wave trains based on true physical distancing.
+  - **Boids**: Flocking algorithms bounding naturally off a 6-sided arena.
+  - **Math & Noise**: Voronoi, Plasma, Flow Field, Terrain, and more.
+
+---
+
+## ⚡ Hardware Upgrades
+
+### 1. YULC Support
+- **Feature**: Added full compilation support (`env:yulc-hex`) for the YULC (Your Ultimate LED Controller) board.
+- **Credit**: Huge thanks to Alessandro for his partnership and excellent hardware. Check out his hardware [in the Electromage Store](https://electromage.com) or his Tindie/GitHub repos for high-quality ESP32-S3 LED drivers.
