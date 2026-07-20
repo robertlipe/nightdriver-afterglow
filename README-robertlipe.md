@@ -47,6 +47,8 @@ This file documents the custom reliability, diagnostic, and performance improvem
 - **`statuslog [on|off]`**: Disables/enables the periodic 5-second console status print.
 - **`stats` update**: Now outputs the number of active WebSocket clients (`WS  : frames:X effects:Y`) to diagnose socket exhaustion.
 - **`heap` update**: Replaced the direct ESP-IDF `heap_caps_print_heap_info` call (which writes directly to raw serial stdout) with a custom query and format using `cli_printf`. This enables the `heap` command to print correctly over telnet as well as serial.
+- **`settings` & `setsetting`**: View and dynamically tune effect parameters (like `spd` for speed) in real-time without
+  recompiling.
 
 ---
 
@@ -164,5 +166,13 @@ This file documents the custom reliability, diagnostic, and performance improvem
 ## ⚡ Hardware Upgrades
 
 ### 1. YULC Support
-- **Feature**: Added full compilation support (`env:yulc-hex`) for the YULC (Your Ultimate LED Controller) board.
-- **Credit**: Huge thanks to Alessandro for his partnership and excellent hardware. Check out his hardware [in the Electromage Store](https://electromage.com) or his Tindie/GitHub repos for high-quality ESP32-S3 LED drivers.
+- **Feature**: Added full compilation support (`env:yulc-hex`) for the YULC (Yes, a USB-C Led Controller) board. It's easy to layer in other effects by pairing in dev_yulc with an effect definition.
+- **Credit**: Huge thanks to Alessandro Alfonzetti for his partnership and excellent hardware. Check out his hardware on his
+[AA Electronics shop](https://aaelectronics-shop.com/products/yulc) or [Tindie](https://www.tindie.
+com/products/aaelectronics/yulc-yes-a-usb-c-led-controller/) for a high-quality ESP32-S3 LED driver.
+- I love the power options of USB-C PD, and stepping DC power down OR UP. It's a great development board. It's well-fused and easy to configure with two buffered, fused outputs and a row of GPIOs you can use for triggering, mics, clock signals, etc.
+
+### 2. Custom Hexagon Panels
+- **Hardware**: The 271-pixel hexagon effects were developed against custom 3D-printed serpentine WS2812B panels.
+- **Credit**: A massive thanks to Kane Harrison at EvilutionLtd for manufacturing these niche displays. You can find these
+panels [on Etsy](https://www.etsy.com/listing/1482072552/addressable-ws2812b-led-hex-panel-271).
