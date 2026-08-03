@@ -34,6 +34,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 #include <vector>
 
 class PatternHexRadar : public EffectWithId<PatternHexRadar>
@@ -89,9 +90,8 @@ public:
 
         // Rotate the radar beam
         angle += speed / 400.0f;
-        if (angle > 2.0f * 3.14159265f) {
-            angle -= 2.0f * 3.14159265f;
-        }
+        if (angle > 2.0f * std::numbers::pi_v<float>)
+            angle -= 2.0f * std::numbers::pi_v<float>;
 
         // Beam width in radians
         float beamWidth = 1.0f;

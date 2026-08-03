@@ -59,6 +59,7 @@ private:
     };
 
     std::vector<Branch> branches;
+    std::vector<Branch> newForks;
 
 public:
 #if ENABLE_AUDIO
@@ -149,7 +150,7 @@ public:
         hexGfx->drawHexPixel(center, CRGB::White);
 
         // Update and draw active branches
-        std::vector<Branch> newForks;
+        newForks.clear();
         for (auto it = branches.begin(); it != branches.end();) {
             if (!it->active) {
                 it = branches.erase(it);

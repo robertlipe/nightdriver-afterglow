@@ -158,7 +158,7 @@ public:
             // Update position
             p.q += p.vq;
             p.r += p.vr;
-            
+
             // Fake gravity pulling towards positive r (downwards in hex)
             p.vr += 0.005f * (this->speed / 50.0f);
 

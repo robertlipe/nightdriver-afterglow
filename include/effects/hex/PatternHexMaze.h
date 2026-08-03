@@ -125,22 +125,22 @@ public:
             int steps = std::max(1, speed / 20);
 
             for (int s = 0; s < steps && generating; s++) {
-                std::vector<HexCoord> validNeighbors;
-                validNeighbors.reserve(6);
+                std::array<HexCoord, 6> validNeighbors;
+                int numValidNeighbors = 0;
 
                 for (int i = 0; i < 6; i++) {
                     HexCoord neighbor = hexGfx->getHexNeighbor(currentPos, i);
                     if (hexGfx->hexDistance(neighbor, HexCoord(0, 0)) <= maxRadius) {
                         auto idx = hexGfx->hexToIndex(neighbor);
                         if (idx && !visitedMap[*idx]) {
-                            validNeighbors.push_back(neighbor);
+                            validNeighbors[numValidNeighbors++] = neighbor;
                         }
                     }
                 }
 
-                if (!validNeighbors.empty()) {
+                if (numValidNeighbors > 0) {
                     // Move to random unvisited neighbor
-                    currentPos = validNeighbors[random(0, validNeighbors.size())];
+                    currentPos = validNeighbors[random(0, numValidNeighbors)];
                     path.push_back(currentPos);
                     visitedList.push_back(currentPos);
                     auto idx = hexGfx->hexToIndex(currentPos);

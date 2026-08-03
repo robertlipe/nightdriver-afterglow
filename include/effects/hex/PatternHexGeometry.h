@@ -89,7 +89,7 @@ public:
         float cartesianRadius = hexRadius * std::numbers::sqrt3_v<float>;
         float targetX = std::cos(angleRad) * cartesianRadius;
         float targetY = std::sin(angleRad) * cartesianRadius;
-        
+
         // Convert cartesian to axial hex coordinates
         // x = sqrt(3) * q + sqrt(3)/2 * r
         // y = 1.5 * r
@@ -118,7 +118,7 @@ public:
 
         g()->DimAll(200);
         hueOffset += speed / 20;
-        
+
         float smoothRotation = (millis() * speed) / 1000.0f;
         float breath = std::sin(millis() / 500.0f) * 0.5f + 0.5f; // 0.0 to 1.0
 
@@ -135,7 +135,7 @@ public:
                         CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + offset, 255, LINEARBLEND);
                         hexGfx->drawHexLine(p1, p2, color);
                     }
-                    
+
                     // Inverse rotating inner triangle
                     float innerR = maxRadius * (1.0f - breath * 0.5f);
                     for (int offset = 0; offset < 360; offset += 120) {
@@ -155,7 +155,7 @@ public:
                         float twist = 60.0f * std::sin(millis() / 1000.0f); // dynamic twisting arc
                         CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hueOffset + offset, 255, LINEARBLEND);
                         drawCurvedArc(hexGfx, 0.0f, outerR, smoothRotation + offset, smoothRotation + offset + twist, color);
-                        
+
                         // Cross-link them like fan blades
                         HexCoord p1 = getSmoothRotatedPoint(outerR, smoothRotation + offset + twist);
                         HexCoord p2 = getSmoothRotatedPoint(outerR * 0.5f, smoothRotation + offset + twist + 30);

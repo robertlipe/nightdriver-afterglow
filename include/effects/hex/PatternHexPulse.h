@@ -96,7 +96,7 @@ public:
             int currentRadius = static_cast<int>(sineValue * maxRadius + 0.5f);
 
             if (currentRadius > 0) {
-                std::vector<HexCoord> ringHexes = hexGfx->getHexRing(center, currentRadius);
+                auto ringHexes = hexGfx->getHexRing(currentRadius);
                 uint8_t hue = (hueOffset + ring * 85) % 256;
                 CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, 255, LINEARBLEND);
 

@@ -143,7 +143,7 @@ public:
         for (const auto& p : pulses) {
             if (p.active) {
                 // Pulse forms a ring
-                std::vector<HexCoord> ring = hexGfx->getHexRing(center, p.radius);
+                auto ring = hexGfx->getHexRing(p.radius);
                 CRGB c = CHSV(p.hue, 255, 255);
                 for (const auto& hex : ring) {
                     // Only light up if it's on the web structure

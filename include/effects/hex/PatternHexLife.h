@@ -200,7 +200,7 @@ public:
         // Birth and death cycle, throttled by speed
         unsigned long now = millis();
         int updateInterval = std::max(20, 1000 / std::max(1, (speed / 5)));
-        
+
         if (now - lastUpdate >= updateInterval) {
             lastUpdate = now;
 
