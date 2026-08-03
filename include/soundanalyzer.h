@@ -42,16 +42,9 @@
 #include <atomic>
 #include <memory>
 
-#include <esp_idf_version.h>
-#define IS_IDF5 (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0))
 
-#if IS_IDF5
     #include <driver/i2s_std.h>
     #include <esp_adc/adc_continuous.h>
-#else
-    #include <driver/adc.h>
-    #include <driver/i2s.h>
-#endif
 
 #ifndef SPECTRUM_BAND_SCALE_MEL
 #define SPECTRUM_BAND_SCALE_MEL 1
@@ -390,7 +383,7 @@ class SoundAnalyzerBase : public ISoundAnalyzer
     // Used by the WiFi test thread to know when it is safe to call Pause().
     bool IsADCHandleValid() const override
     {
-#if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
+#if !USE_M5 && !USE_I2S_AUDIO
         return _adc_handle != nullptr;
 #else
         return false;
@@ -572,10 +565,8 @@ class SoundAnalyzerBase : public ISoundAnalyzer
     std::array<float, MAX_SAMPLES> _vImaginary{};
     std::unique_ptr<int16_t[]> ptrSampleBuffer; // sample buffer storage
 
-#if IS_IDF5
     i2s_chan_handle_t _rx_handle = nullptr;
     adc_continuous_handle_t _adc_handle = nullptr;
-#endif
 
     ArduinoFFT<float> _FFT;
     std::mutex _pauseMutex;
@@ -595,16 +586,12 @@ class SoundAnalyzerBase : public ISoundAnalyzer
     virtual const PeakData & ProcessPeaksEnergy() = 0;
 
     void InitM5();
-    void InitI2S_Modern();
-    void InitI2S_Legacy();
-    void InitADC_Modern();
-    void InitADC_Legacy();
+    void InitI2S();
+    void InitADC();
 
     size_t SampleM5();
-    size_t SampleI2S_Modern();
-    size_t SampleI2S_Legacy();
-    size_t SampleADC_Modern();
-    size_t SampleADC_Legacy();
+    size_t SampleI2S();
+    size_t SampleADC();
 };
 
 // SoundAnalyzer

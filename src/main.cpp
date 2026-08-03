@@ -239,12 +239,7 @@ void ConfirmUpdate();
 void ScreenUpdateLoopEntry(void *);
 
 #if ENABLE_ESPNOW
-#include <esp_arduino_version.h>
-#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
 void onReceiveESPNOW(const esp_now_recv_info_t *recvInfo, const uint8_t *data, int dataLen);
-#else
-void onReceiveESPNOW(const uint8_t *macAddr, const uint8_t *data, int dataLen);
-#endif
 #endif
 
 //
@@ -596,18 +591,9 @@ void setup()
     // Onboard PWM LED
 
     #if ONBOARD_LED_R
-	#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-	    ledcAttach(ONBOARD_LED_R, 12000, 8); //
+		    ledcAttach(ONBOARD_LED_R, 12000, 8); //
 	    ledcAttach(ONBOARD_LED_G, 12000, 8); //
 	    ledcAttach(ONBOARD_LED_B, 12000, 8); //
-        #else
-	    ledcAttachPin(ONBOARD_LED_R,  1);    // assign RGB led pins to PWM channels
-	    ledcAttachPin(ONBOARD_LED_G,  2);
-	    ledcAttachPin(ONBOARD_LED_B,  3);
-	    ledcSetup(1, 12000, 8);              // 12 kHz PWM, 8-bit resolution
-	    ledcSetup(2, 12000, 8);
-	    ledcSetup(3, 12000, 8);
-        #endif
     #endif
 
     #if INCOMING_WIFI_ENABLED

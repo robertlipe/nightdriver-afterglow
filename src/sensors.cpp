@@ -28,7 +28,7 @@
 #include <esp_timer.h>
 #include <soc/soc_caps.h>
 
-#if SOC_TEMP_SENSOR_SUPPORTED && (ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0))
+#if SOC_TEMP_SENSOR_SUPPORTED
 #define HAS_TEMP_SENSOR 1
 #include <driver/temperature_sensor.h>
 static temperature_sensor_handle_t s_temp_sensor = nullptr;

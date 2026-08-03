@@ -65,7 +65,6 @@ SoundAnalyzerBase::SoundAnalyzerBase()
 
 SoundAnalyzerBase::~SoundAnalyzerBase()
 {
-#if IS_IDF5
     // Stop the hardware first to kill any active DMA transfers
     if (_rx_handle)
     {
@@ -77,11 +76,6 @@ SoundAnalyzerBase::~SoundAnalyzerBase()
         adc_continuous_stop(_adc_handle);
         adc_continuous_deinit(_adc_handle);
     }
-#else
-    // Legacy cleanup - i2s_stop terminates DMA
-    i2s_stop(I2S_NUM_0);
-    i2s_driver_uninstall(I2S_NUM_0);
-#endif
 }
 
 // Reset
@@ -122,10 +116,8 @@ void SoundAnalyzerBase::SampleAudio()
 #else
     // Attempt to sample from all supported backends.
     // Those not active in the current configuration will return 0 immediately.
-    if (bytesRead == 0) bytesRead = SampleI2S_Modern();
-    if (bytesRead == 0) bytesRead = SampleI2S_Legacy();
-    if (bytesRead == 0) bytesRead = SampleADC_Modern();
-    if (bytesRead == 0) bytesRead = SampleADC_Legacy();
+    if (bytesRead == 0) bytesRead = SampleI2S();
+    if (bytesRead == 0) bytesRead = SampleADC();
 #endif
 
     if (bytesRead == 0) return;
@@ -229,12 +221,10 @@ void SoundAnalyzerBase::InitAudioInput()
     InitM5();
 #else
     // Digital Microphones
-    InitI2S_Modern();
-    InitI2S_Legacy();
+    InitI2S();
 
     // Analog Microphones
-    InitADC_Modern();
-    InitADC_Legacy();
+    InitADC();
 #endif
     debugV("InitAudioInput Complete\n");
 }
@@ -297,7 +287,7 @@ void SoundAnalyzerBase::SetPeakDecayRates(float r1, float r2)
 
 void SoundAnalyzerBase::Pause()
 {
-#if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
+#if !USE_M5 && !USE_I2S_AUDIO
     if (_adc_handle)
     {
         std::lock_guard<std::mutex> lock(_pauseMutex);
@@ -324,7 +314,7 @@ void SoundAnalyzerBase::Pause()
 
 void SoundAnalyzerBase::Resume()
 {
-#if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
+#if !USE_M5 && !USE_I2S_AUDIO
     if (_adc_handle)
     {
         std::lock_guard<std::mutex> lock(_pauseMutex);
@@ -429,7 +419,7 @@ void SoundAnalyzerBase::SimulateBeatPass()
 // Uses local mic if no recent remote peaks; otherwise trusts remote and only updates VU.
 void SoundAnalyzerBase::RunSamplerPass()
 {
-#if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
+#if !USE_M5 && !USE_I2S_AUDIO
     if (_pauseRequested)
     {
         if (_adc_handle && !_isPaused)
@@ -491,9 +481,9 @@ void SoundAnalyzerBase::InitM5()
 #endif
 }
 
-void SoundAnalyzerBase::InitI2S_Modern()
+void SoundAnalyzerBase::InitI2S()
 {
-#if (USE_I2S_AUDIO || ELECROW) && IS_IDF5
+#if (USE_I2S_AUDIO || ELECROW)
     debugI("Audio: Initializing I2S Digital Mic (Modern) on BCLK:%d WS:%d DIN:%d", I2S_BCLK_PIN, I2S_WS_PIN, INPUT_PIN);
     // Digital Microphones (INMP441, etc.) - Standard I2S Mode
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
@@ -516,41 +506,9 @@ void SoundAnalyzerBase::InitI2S_Modern()
 #endif
 }
 
-void SoundAnalyzerBase::InitI2S_Legacy()
+void SoundAnalyzerBase::InitADC()
 {
-#if (USE_I2S_AUDIO || ELECROW) && !IS_IDF5
-    debugI("Audio: Initializing I2S Digital Mic (Legacy) on BCLK:%d WS:%d DIN:%d", I2S_BCLK_PIN, I2S_WS_PIN, INPUT_PIN);
-    const i2s_config_t i2s_config = {.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
-                                     .sample_rate = SAMPLING_FREQUENCY,
-                                     .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT,
-                                     .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
-                                     .communication_format = I2S_COMM_FORMAT_STAND_I2S,
-                                     .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-                                     .dma_buf_count = 4,
-                                     .dma_buf_len = (int)MAX_SAMPLES,
-                                     .use_apll = false,
-                                     .tx_desc_auto_clear = false,
-                                     .fixed_mclk = 0};
-
-    pinMode(I2S_BCLK_PIN, OUTPUT);
-    pinMode(I2S_WS_PIN, OUTPUT);
-    pinMode(INPUT_PIN, INPUT);
-
-    const i2s_pin_config_t pin_config = {.bck_io_num = I2S_BCLK_PIN,
-                                         .ws_io_num = I2S_WS_PIN,
-                                         .data_out_num = I2S_PIN_NO_CHANGE,
-                                         .data_in_num = INPUT_PIN};
-
-    ESP_ERROR_CHECK(i2s_driver_install(I2S_NUM_0, &i2s_config, 0, NULL));
-    ESP_ERROR_CHECK(i2s_set_pin(I2S_NUM_0, &pin_config));
-    ESP_ERROR_CHECK(i2s_zero_dma_buffer(I2S_NUM_0));
-    ESP_ERROR_CHECK(i2s_start(I2S_NUM_0));
-#endif
-}
-
-void SoundAnalyzerBase::InitADC_Modern()
-{
-#if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
+#if !USE_M5 && !USE_I2S_AUDIO
     debugI("Audio: Initializing I2S ADC Analog Mic (Modern) on Channel 0");
     adc_continuous_handle_cfg_t adc_config = {
         .max_store_buf_size = 1024,
@@ -583,33 +541,6 @@ void SoundAnalyzerBase::InitADC_Modern()
 #endif
 }
 
-void SoundAnalyzerBase::InitADC_Legacy()
-{
-#if !USE_M5 && !USE_I2S_AUDIO && !IS_IDF5 && defined(SOC_I2S_SUPPORTS_ADC)
-    debugI("Audio: Initializing I2S ADC Analog Mic (Legacy) on Channel 0");
-    static_assert(SOC_I2S_SUPPORTS_ADC, "This ESP32 model does not support ADC built-in mode");
-
-    const i2s_config_t i2s_config = {
-        .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_ADC_BUILT_IN),
-        .sample_rate = SAMPLING_FREQUENCY,
-        .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
-        .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
-        .communication_format = I2S_COMM_FORMAT_STAND_I2S,
-        .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-        .dma_buf_count = 2,
-        .dma_buf_len = MAX_SAMPLES,
-        .use_apll = false,
-        .tx_desc_auto_clear = false,
-        .fixed_mclk = 0
-    };
-
-    ESP_ERROR_CHECK(adc1_config_width(ADC_WIDTH_BIT_12));
-    ESP_ERROR_CHECK(adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_0));
-    ESP_ERROR_CHECK(i2s_driver_install(I2S_NUM_0, &i2s_config, 0, NULL));
-    ESP_ERROR_CHECK(i2s_set_adc_mode(ADC_UNIT_1, ADC1_CHANNEL_0));
-#endif
-}
-
 // --- Private Sampling Helpers ---
 
 size_t SoundAnalyzerBase::SampleM5()
@@ -625,10 +556,10 @@ size_t SoundAnalyzerBase::SampleM5()
     return bytesRead;
 }
 
-size_t SoundAnalyzerBase::SampleI2S_Modern()
+size_t SoundAnalyzerBase::SampleI2S()
 {
     size_t bytesReadTotal = 0;
-#if (USE_I2S_AUDIO || ELECROW) && IS_IDF5
+#if (USE_I2S_AUDIO || ELECROW)
     static int32_t tempBuffer[MAX_SAMPLES * 2];
     constexpr int kChannels = 2;
     size_t bytesToRead = MAX_SAMPLES * kChannels * sizeof(int32_t);
@@ -648,51 +579,10 @@ size_t SoundAnalyzerBase::SampleI2S_Modern()
     return bytesReadTotal;
 }
 
-size_t SoundAnalyzerBase::SampleI2S_Legacy()
-{
-    size_t bytesRead = 0;
-#if (USE_I2S_AUDIO || ELECROW) && !IS_IDF5
-    constexpr int kChannels = 2; // RIGHT + LEFT
-    constexpr auto wordsToRead = MAX_SAMPLES * kChannels;
-    constexpr auto bytesExpected32 = wordsToRead * sizeof(int32_t);
-    static int32_t raw32[wordsToRead];
-
-    ESP_ERROR_CHECK(i2s_read(I2S_NUM_0, (void *)raw32, bytesExpected32, &bytesRead, 100 / portTICK_PERIOD_MS));
-    if (bytesRead != bytesExpected32)
-    {
-        debugW("Only read %u of %u bytes from I2S\n", bytesRead, bytesExpected32);
-        return bytesRead;
-    }
-
-    static int s_chanIndex = -1;
-    if (s_chanIndex < 0)
-    {
-        long long sumAbs[2] = {0, 0};
-        for (int i = 0; i < MAX_SAMPLES; ++i)
-        {
-            int32_t r0 = raw32[i * kChannels + 0];
-            int32_t r1 = raw32[i * kChannels + 1];
-            sumAbs[0] += llabs((long long)r0);
-            sumAbs[1] += llabs((long long)r1);
-        }
-        s_chanIndex = (sumAbs[1] > sumAbs[0]) ? 1 : 0;
-    }
-
-    for (int i = 0; i < MAX_SAMPLES; i++)
-    {
-        int32_t v = raw32[i * kChannels + s_chanIndex];
-        int32_t scaled = (v >> 15);
-        ptrSampleBuffer[i] = (int16_t)std::clamp(scaled, (int32_t)INT16_MIN, (int32_t)INT16_MAX);
-    }
-    bytesRead = MAX_SAMPLES * sizeof(int16_t); // effectively valid now
-#endif
-    return bytesRead;
-}
-
-size_t SoundAnalyzerBase::SampleADC_Modern()
+size_t SoundAnalyzerBase::SampleADC()
 {
     uint32_t ret_num = 0;
-#if !USE_M5 && !USE_I2S_AUDIO && IS_IDF5
+#if !USE_M5 && !USE_I2S_AUDIO
     constexpr size_t bytesToRead = MAX_SAMPLES * sizeof(uint16_t);
     // Use 100ms timeout instead of 0 to wait for a full buffer
     if (!_adc_handle ) throw std::runtime_error("Failed to allocate adc handle");
@@ -717,21 +607,6 @@ size_t SoundAnalyzerBase::SampleADC_Modern()
     }
 #endif
     return ret_num;
-}
-
-size_t SoundAnalyzerBase::SampleADC_Legacy()
-{
-    size_t bytesRead = 0;
-#if !USE_M5 && !USE_I2S_AUDIO && !IS_IDF5 && defined(SOC_I2S_SUPPORTS_ADC)
-    constexpr auto bytesExpected16 = MAX_SAMPLES * sizeof(ptrSampleBuffer[0]);
-    ESP_ERROR_CHECK(i2s_read(I2S_NUM_0, (void *)ptrSampleBuffer.get(), bytesExpected16, &bytesRead, 100 / portTICK_PERIOD_MS));
-    if (bytesRead != bytesExpected16)
-    {
-        debugW("Could only read %u bytes of %u in FillBufferI2S()\n", bytesRead, bytesExpected16);
-        return bytesRead;
-    }
-#endif
-    return bytesRead;
 }
 
 // SoundAnalyzer<Params>

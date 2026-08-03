@@ -38,12 +38,8 @@
 #include <utility>
 #include <vector>
 
-#include <esp_arduino_version.h>
-// Retire this test once Arduino3 fully lands.
-#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-   #if ENABLE_WIFI
-      #include <Network.h> // For wl_status_t, etc.
-   #endif
+#if ENABLE_WIFI
+   #include <Network.h> // For wl_status_t, etc.
 #endif
 
 #ifdef ENABLE_WIFI_TEST_MODE
