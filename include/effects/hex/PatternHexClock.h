@@ -93,7 +93,7 @@ public:
         float targetAtan = std::atan2(targetY, targetX);
 
         // Find the hex in the exact ring that minimizes the angular difference
-        std::vector<HexCoord> ring = hexGfx->getHexRing(HexCoord(0,0), radius);
+        auto ring = hexGfx->getHexRing(radius);
         HexCoord bestHex(0,0);
         float bestDiff = 999.0f;
 
@@ -140,7 +140,7 @@ public:
 
         // Draw clock face rings.
         for (int r = 2; r <= maxRadius; r += 2) {
-            std::vector<HexCoord> ring = hexGfx->getHexRing(center, r);
+            auto ring = hexGfx->getHexRing(r);
             uint8_t hue = (hueOffset + r * 15) % 256;
             CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, 12, LINEARBLEND);
             for (const auto& hex : ring) {

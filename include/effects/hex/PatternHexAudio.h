@@ -101,7 +101,7 @@ public:
             ringLevel = std::max(0.0f, std::min(1.0f, ringLevel));
 
             if (ringLevel > 0.1f) {
-                std::vector<HexCoord> ring = hexGfx->getHexRing(center, r);
+                auto ring = hexGfx->getHexRing(r);
                 uint8_t hue = (hueOffset + r * 20) % 256;
                 uint8_t brightness = static_cast<uint8_t>(ringLevel * 255);
 

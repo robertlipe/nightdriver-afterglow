@@ -114,10 +114,10 @@ public:
         // Throttle updates based on speed
         unsigned long now = millis();
         int updateInterval = std::max(10, 1000 / std::max(1, (speed / 2)));
-        
+
         if (now - lastUpdate >= updateInterval) {
             lastUpdate = now;
-            
+
             for (auto& ant : ants) {
                 auto idx = hexGfx->hexToIndex(ant.pos);
                 if (idx) {
@@ -142,7 +142,7 @@ public:
                     ant.pos = HexCoord(0,0);
                 }
             }
-            
+
             // Reset occasionally to prevent complete chaos
             if (random(0, 2000) == 0) Reset();
         }

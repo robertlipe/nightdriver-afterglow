@@ -127,18 +127,18 @@ public:
                 // If pixel is inside the expanding ripple
                 if (dist <= r.radius + 1.0f) {
                     // Create multiple rings using a wave function
-                    float waveLength = 2.5f;
+                    const float waveLength = 2.5f;
                     // phase 0 is the leading edge, increasing phase goes inwards towards center
-                    float phase = std::max(0.0f, (r.radius - dist) / waveLength);
-                    
+                    const float phase = std::max(0.0f, (r.radius - dist) / waveLength);
+
                     // We only want to draw a few rings behind the leading edge
                     if (phase < 2.5f) {
                         // Cosine wave for the rings, mapped from [-1, 1] to [0, 1]
-                        float intensity = (std::cos(phase * 2.0f * std::numbers::pi_v<float>) + 1.0f) * 0.5f;
-                        
+                        const float intensity = (std::cos(phase * 2.0f * std::numbers::pi_v<float>) + 1.0f) * 0.5f;
+
                         // Fade out the trailing rings (phase = 0 is leading edge)
-                        float trailFade = 1.0f - (phase / 2.5f);
-                        
+                        const float trailFade = 1.0f - (phase / 2.5f);
+
                         // Fade out as the whole ripple gets larger
                         float fade = 1.0f - (r.radius / r.maxRadius);
                         if (fade < 0.0f) fade = 0.0f;
