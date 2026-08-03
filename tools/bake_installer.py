@@ -33,6 +33,7 @@
 #---------------------------------------------------------------------------
 
 import os
+import shutil
 import sys
 import installer_buildenv
 import installer_compose

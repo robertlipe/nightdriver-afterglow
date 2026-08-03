@@ -29,8 +29,6 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
     std::unique_ptr<std::bitset<MATRIX_WIDTH * MATRIX_HEIGHT>> snowBits = make_unique_psram<std::bitset<MATRIX_WIDTH * MATRIX_HEIGHT>>();
     uint8_t Speed = 150;                                                             // 1-255 is speed
     uint8_t Scale = 90;                                                              // 1-100 is something parameter
-    uint8_t FPSdelay;        // BUGBUG: This is set but never used. :-(
-    const int LOW_DELAY = 0; // This is used to set FPSdelay ... which is never used.
 
 #if ENABLE_AUDIO
     const int top_line_offset = 1;
@@ -78,7 +76,6 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
 
     void Start() override
     {
-        //  	  FPSdelay = 25U; // LOW_DELAY;
         //    hue2 = 1;
         g()->Clear();
     }
@@ -142,12 +139,10 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
             g()->blur2d(g()->leds, MATRIX_WIDTH, 0, MATRIX_HEIGHT, top_line_offset, beatsin8(3, 64, 80));
             // g()->blur2d(g()->leds, MATRIX_WIDTH, 0, MATRIX_HEIGHT, top_line_offset,
             // 24);
-            FPSdelay = LOW_DELAY;
             STEP = 1U;
             if (Scale < 75)
             {
                 // chaos ---
-                FPSdelay = 30;
                 //      VirtualSnow();
             }
         }
@@ -157,12 +152,10 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
             if (Scale > 25)
             {
                 g()->DimAll(200);
-                FPSdelay = 30;
             }
             else
             {
                 g()->DimAll(24);
-                FPSdelay = 40;
             }
         }
 
