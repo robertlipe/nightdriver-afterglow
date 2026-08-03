@@ -217,7 +217,7 @@ void NightDriverTaskManager::StartColorDataThread()
 {
     #if COLORDATA_SERVER_ENABLED
         Serial.print( str_sprintf(">> Launching ColorData Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-        xTaskCreatePinnedToCore(ColorDataTaskEntry, "ColorData Loop", DEFAULT_STACK_SIZE, nullptr, COLORDATA_PRIORITY, &_taskColorData, COLORDATA_CORE);
+        xTaskCreatePinnedToCore(ColorDataTaskEntry, "ColorData Loop", 4096, nullptr, COLORDATA_PRIORITY, &_taskColorData, COLORDATA_CORE);
         CheckHeap();
     #endif
 }
@@ -314,7 +314,7 @@ String NightDriverTaskManager::GetStackUsageSummary() const
     AppendTaskStackUsage(output, "Remote", _taskRemote, REMOTE_STACK_SIZE);
     AppendTaskStackUsage(output, "Screen", _taskScreen, SCREEN_STACK_SIZE);
     AppendTaskStackUsage(output, "Serial", _taskSerial, DEFAULT_STACK_SIZE);
-    AppendTaskStackUsage(output, "Color", _taskColorData, DEFAULT_STACK_SIZE);
+    AppendTaskStackUsage(output, "Color", _taskColorData, 4096);
 
     for (const auto& effectTask : _vEffectTasks)
     {

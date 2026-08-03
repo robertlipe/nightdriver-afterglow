@@ -857,6 +857,31 @@ static const command core_commands[] = {
         }
         cli_printf("SimBeat: %s  BPM: %d\n", g_Analyzer.GetSimulateBeat() ? "ON" : "OFF", g_Analyzer.GetSimulateBPM());
      }},
+    {"settings", "List current effect settings", "Effect Settings:", [](const cli_argv&) {
+        auto& effect = g_ptrSystem->GetEffectManager().GetCurrentEffect();
+        const auto& specs = effect.GetSettingSpecs();
+        if (!specs.empty()) {
+            for (const auto& spec_ref : specs) {
+                const auto& spec = spec_ref.get();
+                cli_printf("  %s (%s)\n", spec.Name, spec.FriendlyName ? spec.FriendlyName : "");
+            }
+        } else {
+            cli_printf("  No settings for this effect.\n");
+        }
+    }},
+    {"setsetting", "<key> <value> Set property of current effect", "Setting property:", [](const cli_argv& argv) {
+        if (argv.size() < 3) {
+            cli_printf("Usage: setsetting <key> <value>\n");
+            return;
+        }
+        auto& effect = g_ptrSystem->GetEffectManager().GetCurrentEffect();
+        if (effect.SetSetting(String(argv[1].data(), argv[1].length()), String(argv[2].data(), argv[2].length()))) {
+            cli_printf("Successfully set %.*s to %.*s.\n", (int)argv[1].length(), argv[1].data(), (int)argv[2].length(), argv[2].data());
+            SaveEffectManagerConfig();
+        } else {
+            cli_printf("Failed to set %.*s.\n", (int)argv[1].length(), argv[1].data());
+        }
+    }},
     {"statuslog", "[on|off] Show/change periodic status logs", "Status logs.", DoStatusLog},
     {"tasks", "Display FreeRTOS task list", "Task List:",
      [](const cli_argv &) {

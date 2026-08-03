@@ -553,7 +553,8 @@ void CWebServer::SetupCaptivePortalMode()
 
     if (WiFi.getMode() != WIFI_AP) {
         debugW("CWebServer::SetupCaptivePortalMode: WiFi mode changed during scan, resetting to WIFI_AP.");
-        nd_network::SetWiFiMode(nd_network::WiFiMode::AP);
+        // Do NOT use nd_network::SetWiFiMode here, as it calls softAPdisconnect() and destroys the AP we just created!
+        WiFi.mode(WIFI_AP);
     }
 
     if (_dnsServer) {

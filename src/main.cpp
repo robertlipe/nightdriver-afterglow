@@ -229,6 +229,9 @@ void ConfirmUpdate();
 
 #if USE_WS281X
 #include "ws281xgfx.h"
+#if HEXAGON
+#include "gfxhex.h"
+#endif
 #endif
 
 
@@ -350,6 +353,7 @@ void setup()
 
     // Initialize Serial output
     Serial.begin(115200);
+    delay(3000);
 
     // Route all ESP-IDF log output through ConsoleManager so CRLF translation
     // and Serial.flush() are applied on every log line.
@@ -606,7 +610,9 @@ void setup()
         #endif
     #endif
 
-    g_ptrSystem->SetupBufferManagers();
+    #if INCOMING_WIFI_ENABLED
+        g_ptrSystem->SetupBufferManagers();
+    #endif
 
     // Show splash effect on matrix
     #if USE_HUB75
@@ -635,7 +641,7 @@ void setup()
 
     #if ENABLE_WIFI && !defined(ENABLE_WIFI_TEST_MODE)
         debugI("Making initial attempt to connect to WiFi.");
-        nd_network::ConnectToWiFi(WiFi_ssid, WiFi_password);
+        nd_network::LoadAndConnectToWiFiWithPriority();
     #endif
 
     // Start Audio Thread AFTER initial WiFi NVS writes to prevent DMA Cache Panics

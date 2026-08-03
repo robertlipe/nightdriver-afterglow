@@ -37,9 +37,7 @@ HUB75GFX::HUB75GFX(size_t w, size_t h) : GFXBase(w, h)
 {
 }
 
-HUB75GFX::~HUB75GFX()
-{
-}
+HUB75GFX::~HUB75GFX() = default;
 
 void HUB75GFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devices)
 {

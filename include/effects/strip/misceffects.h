@@ -1,4 +1,3 @@
-#pragma once
 //+--------------------------------------------------------------------------
 //
 // File:        misceffects.h
@@ -29,11 +28,11 @@
 // History:     Apr-17-2019         Davepl      Adapted from NightDriver
 //
 //---------------------------------------------------------------------------
-
-
-
+#pragma once
+#include "ledstripeffect.h"
 
 #if HEXAGON
+#include "gfxhex.h"
 #include "ws281xgfx.h"
 #endif
 

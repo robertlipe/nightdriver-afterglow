@@ -47,6 +47,8 @@ This file documents the custom reliability, diagnostic, and performance improvem
 - **`statuslog [on|off]`**: Disables/enables the periodic 5-second console status print.
 - **`stats` update**: Now outputs the number of active WebSocket clients (`WS  : frames:X effects:Y`) to diagnose socket exhaustion.
 - **`heap` update**: Replaced the direct ESP-IDF `heap_caps_print_heap_info` call (which writes directly to raw serial stdout) with a custom query and format using `cli_printf`. This enables the `heap` command to print correctly over telnet as well as serial.
+- **`settings` & `setsetting`**: View and dynamically tune effect parameters (like `spd` for speed) in real-time without
+  recompiling.
 
 ---
 
@@ -142,3 +144,35 @@ This file documents the custom reliability, diagnostic, and performance improvem
 ### 3. Audio Thread Flash Panic Fix
 - **Issue**: The `adc_continuous` DMA audio polling driver is prone to panic (`Cache disabled but cached memory region accessed`) when NVS or SPIFFS writes occur on the shared flash bus.
 - **Fix**: Wrapped the high-level `SaveJSON` config routines and the new `nvs_commit` operations inside `nd_network.cpp` with `g_Analyzer.Pause()` and `Resume()`. This guarantees the audio driver safely sleeps for the few milliseconds that flash writes disable the system cache, keeping CPU usage low without panicking the ESP32.
+
+---
+
+## ⬡ First-Class Hexagon Matrix Math & Visuals
+
+### 1. The Hexagon Graphics Pipeline (`gfxhex.h`)
+- **Feature**: NightDriverStrip now boasts arguably the most advanced open-source hexagonal LED matrix math pipeline available on a microcontroller. Unlike WLED or FastLED (which natively only understand 1D strips or 2D Cartesian X/Y grids), this fork implements a full Q/R/S axial coordinate system mapped seamlessly to physical space.
+- **Support**: Designed specifically for flat-topped hexagonal serpentine matrices (e.g., the 271-pixel hexagon).
+
+### 2. Hex-Native Visual Effects
+- Translated, re-math'd, and optimized over two dozen classic LED tropes to run natively in hexagonal coordinate space without visual tearing or Cartesian stretching:
+  - **Life / Langton's Ant**: Cellular automata that actually traverse 6 axial neighbors.
+  - **Geometry**: Breathing, sweeping, and spinning curved arcs and kaleidoscopes that perfectly track the physical border.
+  - **Physics (Ripple & Fireworks)**: Fluid gravity and intersecting wave trains based on true physical distancing.
+  - **Boids**: Flocking algorithms bounding naturally off a 6-sided arena.
+  - **Math & Noise**: Voronoi, Plasma, Flow Field, Terrain, and more.
+
+---
+
+## ⚡ Hardware Upgrades
+
+### 1. YULC Support
+- **Feature**: Added full compilation support (`env:yulc-hex`) for the YULC (Yes, a USB-C Led Controller) board. It's easy to layer in other effects by pairing in dev_yulc with an effect definition.
+- **Credit**: Huge thanks to Alessandro Alfonzetti for his partnership and excellent hardware. Check out his hardware on his
+[AA Electronics shop](https://aaelectronics-shop.com/products/yulc) or [Tindie](https://www.tindie.
+com/products/aaelectronics/yulc-yes-a-usb-c-led-controller/) for a high-quality ESP32-S3 LED driver.
+- I love the power options of USB-C PD, and stepping DC power down OR UP. It's a great development board. It's well-fused and easy to configure with two buffered, fused outputs and a row of GPIOs you can use for triggering, mics, clock signals, etc.
+
+### 2. Custom Hexagon Panels
+- **Hardware**: The 271-pixel hexagon effects were developed against custom 3D-printed serpentine WS2812B panels.
+- **Credit**: A massive thanks to Kane Harrison at EvilutionLtd for manufacturing these niche displays. You can find these
+panels [on Etsy](https://www.etsy.com/listing/1482072552/addressable-ws2812b-led-hex-panel-271).

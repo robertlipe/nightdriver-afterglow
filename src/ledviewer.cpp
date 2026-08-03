@@ -143,7 +143,7 @@ bool LEDViewer::SendPacket(int socket, void * pData, size_t cbSize)
 
     if (cbSize != write(socket, pData, cbSize))
     {
-        debugE("Could not write to color data socket\n");
+        debugD("Client disconnected from color data socket (write failed)\n");
         return false;
     }
     return true;

@@ -243,7 +243,7 @@ class SoundAnalyzer : public ISoundAnalyzer // Non-audio case stub
     {
         if (!_simulateBeat || _simBPM <= 0)
             return false;
-            
+
         unsigned long currentMillis = millis();
         if (currentMillis == _lastBeatMillis)
             return _cachedBeat;
@@ -251,7 +251,7 @@ class SoundAnalyzer : public ISoundAnalyzer // Non-audio case stub
         const uint32_t beatPeriodMillis = (60 * 1000) / (uint32_t)_simBPM;
         const uint32_t beatActiveDurationMillis = beatPeriodMillis / 5; // 20% duration
         uint32_t timeInCycle = currentMillis % beatPeriodMillis;
-        
+
         _cachedBeat = (timeInCycle < beatActiveDurationMillis);
         _lastBeatMillis = currentMillis;
         return _cachedBeat;

@@ -41,6 +41,7 @@
 #include "random_utils.h"
 
 #if HEXAGON
+#include "gfxhex.h"
 #include "ws281xgfx.h"
 #endif
 

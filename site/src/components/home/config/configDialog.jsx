@@ -132,7 +132,7 @@ const ConfigInput = ({setting, updateData, updateError}) => {
                 "a:visited": { color: theme.a.visited }
             }
         } />
-        {parse(setting.description)}
+        {parse(setting.description || "")}
     </>;
     const [helper, setHelper] = useState(jsxDescription);
     const baseProps = {
@@ -245,7 +245,7 @@ const ConfigInput = ({setting, updateData, updateError}) => {
                         setHelper(`Empty value is not allowed for this input. Original value was '${setting.value}'`);
                     } else {
                         setError(false);
-                        setHelper(setting.description);
+                        setHelper(setting.description || "");
                     }
                     setValue(e.target.value)
                 }}
