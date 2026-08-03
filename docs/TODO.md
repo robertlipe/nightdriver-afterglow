@@ -44,3 +44,15 @@ Low priority
 - [ ] FastLED Tech Debt: Refactor the 'bottom half' of FastLED to address reinterpret_cast warnings/errors.
 - [x] sensors.cpp Surgery: Refactor the merge-collision issue in sensors.cpp.
 - [ ] FFT Optimization: Evaluate replacing kosme/arduinoFFT with Espressif’s esp-dsp (LX7 PIE optimized).
+- [ ] Matrix Effects Modernization (ATMega Legacy / "ESP32-edness"):
+    - Review and optimize `*SM*` (SmartMatrix) patterns. Many were originally written for ATMega and lack ESP32 hardware advantages (e.g., single-point hardware floats).
+    - Refactor heavy effects (`PatternLife`, `PatternSMStarDeep`, `PatternSMFire2021/2012`, `PatternSMNoise*`) where appropriate.
+    - Evaluate `PatternSMStarDeep` for leveraging precomputed radial math from `gfxbase` (or `gfxmatrix`) to remove heavy per-frame trig calculations.
+    - Standardize array flipping: use `std::swap` (or similar standard algorithms) instead of manual buffer copying in heavy effects like `PatternLife`.
+    - Evaluate bounds checking, wrapping logic, and `uint8_t` iterators vs `int`. Safe pixel-setting methods are ideal, but if `g()->drawPixel` harms 60fps performance on hot paths, explore optimized manual bounds-checking and wrapping alternatives to mitigate the risks of unchecked array access (`g()->leds[XY(...)]`).
+- [ ] Core Codebase Modernization (src/ & include/):
+    - **C++20/C++26 Features**: With the solid move to Arduino3 (IDF5) and looking toward IDF6, deeply integrate modern C++ features. Explore `std::ranges` or `<algorithm>` to replace manual `for`/`while` loops where appropriate, to improve readability and safety.
+    - **Constants Standardization**: Replace legacy math macros (like `PI`, `M_PI`, `TWO_PI`) spread across `PatternCube.h`, `PatternSMTixyLand.h`, `Vector.h`, etc., with modern `<numbers>` equivalents like `std::numbers::pi` or `std::numbers::pi_v<float>`.
+    - **Data Structures**: Convert raw C-style arrays (e.g., `int rules[4]`, `int digits[5]`, `Point screen[8]`, `float ReelPos[NUM_FANS]`) to `std::array` to benefit from standard iterators, bounds-checking in debug mode, and better interoperability with C++ algorithms.
+    - **Memory Management**: Audit occurrences of manual `memset` and `memcpy` (found in `hub75gfx.cpp`, `telnetserver.cpp`, `socketserver.cpp`, `ledbuffer.cpp`, and various effects). Where possible, migrate to `std::fill`, `std::copy`, or rely on zero-initialization semantics of modern C++ structures and smart pointers. Evaluate if LVGL config (`lv_conf.h`) should continue preferring standard C functions or be customized.
+    - **Dead Code / Format Cleanup**: Review the extensive use of `auto p = ...` and raw `new` calls in network/socket code for potential leaks or migration to `std::make_unique`/`std::make_shared`. Evaluate `<fmt>` alternatives or optimizations to mitigate flash space bloat.
