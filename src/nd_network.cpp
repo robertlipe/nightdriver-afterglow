@@ -1064,6 +1064,7 @@ void IRAM_ATTR RemoteLoopEntry(void *)
 String urlEncode(const String &str)
 {
     String encoded = "";
+    encoded.reserve(str.length() * 3);
     for (int i = 0; i < str.length(); i++)
     {
         char c = str.charAt(i);

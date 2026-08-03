@@ -157,7 +157,7 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
         int16_t bx, by; uint16_t bw, bh;
 
         // Hours (left side)
-        sprintf(buffer, "%2d", hours);
+        snprintf(buffer, sizeof(buffer), "%2d", hours);
         g()->getTextBounds(buffer, 0, 0, &bx, &by, &bw, &bh);
         int16_t hoursX = (MATRIX_WIDTH / 2) - 2 - bw;
         int16_t baselineY = bh+2; // draw so the text's top is near y=0
@@ -165,7 +165,7 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
         g()->print(buffer);
 
         // Minutes (right side)
-        sprintf(buffer, "%02d", mins);
+        snprintf(buffer, sizeof(buffer), "%02d", mins);
         g()->getTextBounds(buffer, 0, 0, &bx, &by, &bw, &bh);
         int16_t minsX = (MATRIX_WIDTH / 2) + 2;
         g()->setCursor(minsX, baselineY);
