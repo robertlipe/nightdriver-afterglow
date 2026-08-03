@@ -34,7 +34,7 @@ def find_platformio_bin():
             return resolved
 
     # 4. Fallback to raw command
-    return "platformio"
+    return [sys.executable, "-m", "platformio"]
 
 # Simple platformio.ini parser
 class SimplePIOConfig:
@@ -163,8 +163,9 @@ for lib in shared_libs:
 
         try:
             # Use PlatformIO's package manager to install it
-            subprocess.run([
-                pio_bin, "pkg", "install",
+            cmd = pio_bin if isinstance(pio_bin, list) else [pio_bin]
+            subprocess.run(cmd + [
+                "pkg", "install",
                 "--library", lib,
                 "--storage-dir", TARGET_DIR
             ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
