@@ -20,7 +20,6 @@ from pytubefix import YouTube      # python3 -m pip install pytubefix
 import sys
 import socket
 import time
-import struct
 import zlib
 import datetime
 
