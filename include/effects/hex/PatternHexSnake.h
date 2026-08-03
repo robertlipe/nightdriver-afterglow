@@ -161,7 +161,7 @@ public:
 
                 bool isValid = true;
                 float dist = hexGfx->hexDistance(candidateHead, food);
-                if (isValid && hexGfx->hexDistance(candidateHead, HexCoord(0,0)) <= HEX_RINGS - 1) {
+                if (isValid) {
                     validDirs[numValidDirs++] = i;
                 }
                 if (dist < minDistance) {

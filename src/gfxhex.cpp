@@ -263,7 +263,7 @@ HexagonGFX::HexCoordView HexagonGFX::getHexRing(int radius) const {
 }
 
 HexagonGFX::HexCoordView HexagonGFX::getHexSpiral() const {
-    return HexCoordView{PRECOMPUTED_SPIRAL.data(), TOTAL_LEDS_IN_HEX};
+    return HexCoordView{RINGS_DATA.flat.data(), TOTAL_LEDS_IN_HEX};
 }
 
 HexCoord HexagonGFX::indexToHexCoord(int index) const {

@@ -33,6 +33,7 @@
 #include "systemcontainer.h"
 
 #include <vector>
+#include <utility>
 
 class PatternHexSnowflake : public EffectWithId<PatternHexSnowflake>
 {
@@ -147,7 +148,7 @@ public:
                 }
             }
 
-            grid = nextGrid;
+            std::swap(grid, nextGrid);
 
             // State machine transitions
             if (!melting && !changed) {

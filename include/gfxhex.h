@@ -26,6 +26,7 @@
 #pragma once
 
 #include "globals.h"
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <vector>
@@ -192,9 +193,6 @@ private:
     static consteval PrecomputedRingsData generatePrecomputedRings();
     static const PrecomputedRingsData RINGS_DATA;
 
-    static consteval std::array<HexCoord, TOTAL_LEDS_IN_HEX> generateSpiral();
-    static const std::array<HexCoord, TOTAL_LEDS_IN_HEX> PRECOMPUTED_SPIRAL;
-
     static consteval std::array<HexCoord, TOTAL_LEDS_IN_HEX> generateIndexToHex();
     static const std::array<HexCoord, TOTAL_LEDS_IN_HEX> INDEX_TO_HEX_COORD;
 };
@@ -225,20 +223,6 @@ inline consteval HexagonGFX::PrecomputedRingsData HexagonGFX::generatePrecompute
 }
 inline constexpr HexagonGFX::PrecomputedRingsData HexagonGFX::RINGS_DATA = HexagonGFX::generatePrecomputedRings();
 
-inline consteval std::array<HexCoord, TOTAL_LEDS_IN_HEX> HexagonGFX::generateSpiral() {
-    std::array<HexCoord, TOTAL_LEDS_IN_HEX> d{};
-    int spiralOffset = 0;
-    for (int radius = 0; radius < HEX_RINGS; radius++) {
-        int ringOffset = RINGS_DATA.offsets[radius];
-        int ringSize = RINGS_DATA.sizes[radius];
-        for (int i = 0; i < ringSize; i++) {
-            d[spiralOffset++] = RINGS_DATA.flat[ringOffset + i];
-        }
-    }
-    return d;
-}
-inline constexpr std::array<HexCoord, TOTAL_LEDS_IN_HEX> HexagonGFX::PRECOMPUTED_SPIRAL = HexagonGFX::generateSpiral();
-
 inline consteval std::array<HexCoord, TOTAL_LEDS_IN_HEX> HexagonGFX::generateIndexToHex() {
     std::array<HexCoord, TOTAL_LEDS_IN_HEX> d{};
     for (int index = 0; index < TOTAL_LEDS_IN_HEX; index++) {
@@ -248,8 +232,7 @@ inline consteval std::array<HexCoord, TOTAL_LEDS_IN_HEX> HexagonGFX::generateInd
         }
         int indexInRow = index - CUMULATIVE_ROW_SUMS[row];
         int currentRowLength = ROW_LENGTHS[row];
-        int q_min = -(HEX_RINGS - 1) < -(HEX_RINGS - 1) - (row - (HEX_RINGS - 1)) ? -(HEX_RINGS - 1) - (row - (HEX_RINGS - 1)) : -(HEX_RINGS - 1);
-        if (-(HEX_RINGS - 1) - (row - (HEX_RINGS - 1)) > q_min) q_min = -(HEX_RINGS - 1) - (row - (HEX_RINGS - 1));
+        int q_min = std::max(-(HEX_RINGS - 1), -(HEX_RINGS - 1) - (row - (HEX_RINGS - 1)));
 
         int adjustedCol;
         if (row % 2 == 0) {
