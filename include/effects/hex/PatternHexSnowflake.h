@@ -45,6 +45,7 @@ private:
     };
 
     std::vector<Crystal> grid;
+    std::vector<Crystal> nextGrid;
     bool melting = false;
     unsigned long lastUpdate = 0;
     uint8_t baseHue = 130; // Ice blue
@@ -108,7 +109,7 @@ public:
         if (millis() - lastUpdate > updateInterval) {
             lastUpdate = millis();
 
-            std::vector<Crystal> nextGrid = grid;
+            nextGrid = grid;
             bool changed = false;
             int activeCount = 0;
 
@@ -146,7 +147,7 @@ public:
                 }
             }
 
-            grid = nextGrid;
+            std::swap(grid, nextGrid);
 
             // State machine transitions
             if (!melting && !changed) {

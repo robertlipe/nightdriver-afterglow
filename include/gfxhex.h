@@ -26,6 +26,7 @@
 #pragma once
 
 #include "globals.h"
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <vector>
@@ -131,12 +132,25 @@ public:
     PixelCoord hexToPixelFlatTop(HexCoord hex, float hex_size, PixelCoord origin_offset_pixels) const;
 
     // Direction and neighbor operations
-    static HexCoord getHexDirection(int direction);
-    static HexCoord getHexNeighbor(HexCoord hex, int direction);
-    static std::array<HexCoord, 6> getHexNeighbors(HexCoord hex);
-    static HexCoord hexAdd(HexCoord a, HexCoord b);
-    static HexCoord hexSubtract(HexCoord a, HexCoord b);
-    static HexCoord hexScale(HexCoord hex, int factor);
+    static constexpr HexCoord getHexDirection(int direction) {
+        return HEX_DIRECTIONS[((direction % 6) + 6) % 6];
+    }
+    static constexpr HexCoord hexAdd(HexCoord a, HexCoord b) {
+        return HexCoord(a.q + b.q, a.r + b.r);
+    }
+    static constexpr HexCoord hexSubtract(HexCoord a, HexCoord b) {
+        return HexCoord(a.q - b.q, a.r - b.r);
+    }
+    static constexpr HexCoord hexScale(HexCoord hex, int factor) {
+        return HexCoord(hex.q * factor, hex.r * factor);
+    }
+    static constexpr HexCoord getHexNeighbor(HexCoord hex, int direction) {
+        return hexAdd(hex, getHexDirection(direction));
+    }
+    static constexpr std::array<HexCoord, 6> getHexNeighbors(HexCoord hex) {
+        return {getHexNeighbor(hex, 0), getHexNeighbor(hex, 1), getHexNeighbor(hex, 2),
+                getHexNeighbor(hex, 3), getHexNeighbor(hex, 4), getHexNeighbor(hex, 5)};
+    }
 
     // Shape drawing
     // WARNING: fillHexagon and drawHexSpiral allocate internally. Use sparingly in hot paths.
@@ -161,12 +175,6 @@ public:
     HexCoordView getHexSpiral() const;
     HexCoord indexToHexCoord(int index) const;  // Convert LED index to HexCoord
 
-    // Legacy allocating versions - avoid using these in hot paths
-    // These support arbitrary centers and radii
-    std::vector<HexCoord> getHexRing(HexCoord center, int radius);
-    std::vector<HexCoord> getHexSpiral(HexCoord center, int maxRadius);
-    std::vector<HexCoord> getHexesInRange(HexCoord center, int radius);
-
     // Interpolation and transformation
     static HexCoord hexLerp(HexCoord a, HexCoord b, float t);
     static HexCoord hexRound(float q_frac, float r_frac, float s_frac);
@@ -176,16 +184,83 @@ private:
     float m_hexSize;
     PixelCoord m_originOffset;
 
-    // Precomputed static data for performance
-    // Using fixed-size arrays to avoid Static Initialization Order Fiasco
-    // No heap allocation - all storage is in BSS/initialized data sections
-    static std::unique_ptr<HexCoord[]> s_precomputedRingsFlat;  // Flat storage for all rings
-    static std::unique_ptr<int[]> s_ringOffsets;  // Offset of each ring in flat storage
-    static std::unique_ptr<int[]> s_ringSizes;    // Size of each ring
-    static std::unique_ptr<HexCoord[]> s_precomputedSpiral;
-    static std::unique_ptr<HexCoord[]> s_indexToHexCoord;  // LED index -> HexCoord lookup
-    static bool s_precomputed;
+    // Precomputed static data for performance - stored entirely in Flash!
+    struct PrecomputedRingsData {
+        std::array<HexCoord, TOTAL_LEDS_IN_HEX> flat;
+        std::array<int, HEX_RINGS> offsets;
+        std::array<int, HEX_RINGS> sizes;
+    };
+    static consteval PrecomputedRingsData generatePrecomputedRings();
+    static const PrecomputedRingsData RINGS_DATA;
 
-    static void precomputeHexData();
-    static void cleanupPrecomputedData();
+    static consteval std::array<HexCoord, TOTAL_LEDS_IN_HEX> generateSpiral();
+    static const std::array<HexCoord, TOTAL_LEDS_IN_HEX> PRECOMPUTED_SPIRAL;
+
+    static consteval std::array<HexCoord, TOTAL_LEDS_IN_HEX> generateIndexToHex();
+    static const std::array<HexCoord, TOTAL_LEDS_IN_HEX> INDEX_TO_HEX_COORD;
 };
+
+inline consteval HexagonGFX::PrecomputedRingsData HexagonGFX::generatePrecomputedRings() {
+    PrecomputedRingsData d{};
+    int flatOffset = 0;
+    HexCoord center(0, 0);
+    for (int radius = 0; radius < HEX_RINGS; radius++) {
+        d.offsets[radius] = flatOffset;
+        if (radius == 0) {
+            d.flat[flatOffset++] = center;
+            d.sizes[radius] = 1;
+        } else {
+            HexCoord hex = hexAdd(center, hexScale(getHexDirection(4), radius));
+            int ringSize = 0;
+            for (int i = 0; i < 6; i++) {
+                for (int j = 0; j < radius; j++) {
+                    d.flat[flatOffset++] = hex;
+                    ringSize++;
+                    hex = getHexNeighbor(hex, i);
+                }
+            }
+            d.sizes[radius] = ringSize;
+        }
+    }
+    return d;
+}
+inline constexpr HexagonGFX::PrecomputedRingsData HexagonGFX::RINGS_DATA = HexagonGFX::generatePrecomputedRings();
+
+inline consteval std::array<HexCoord, TOTAL_LEDS_IN_HEX> HexagonGFX::generateSpiral() {
+    std::array<HexCoord, TOTAL_LEDS_IN_HEX> d{};
+    int spiralOffset = 0;
+    for (int radius = 0; radius < HEX_RINGS; radius++) {
+        int ringOffset = RINGS_DATA.offsets[radius];
+        int ringSize = RINGS_DATA.sizes[radius];
+        for (int i = 0; i < ringSize; i++) {
+            d[spiralOffset++] = RINGS_DATA.flat[ringOffset + i];
+        }
+    }
+    return d;
+}
+inline constexpr std::array<HexCoord, TOTAL_LEDS_IN_HEX> HexagonGFX::PRECOMPUTED_SPIRAL = HexagonGFX::generateSpiral();
+
+inline consteval std::array<HexCoord, TOTAL_LEDS_IN_HEX> HexagonGFX::generateIndexToHex() {
+    std::array<HexCoord, TOTAL_LEDS_IN_HEX> d{};
+    for (int index = 0; index < TOTAL_LEDS_IN_HEX; index++) {
+        int row = 0;
+        while (row < TOTAL_HEX_ROWS && CUMULATIVE_ROW_SUMS[row + 1] <= index) {
+            row++;
+        }
+        int indexInRow = index - CUMULATIVE_ROW_SUMS[row];
+        int currentRowLength = ROW_LENGTHS[row];
+        int q_min = std::max(-(HEX_RINGS - 1), -(HEX_RINGS - 1) - (row - (HEX_RINGS - 1)));
+
+        int adjustedCol;
+        if (row % 2 == 0) {
+            adjustedCol = indexInRow;
+        } else {
+            adjustedCol = currentRowLength - 1 - indexInRow;
+        }
+        int q = q_min + adjustedCol;
+        int r = row - (HEX_RINGS - 1);
+        d[index] = HexCoord(q, r);
+    }
+    return d;
+}
+inline constexpr std::array<HexCoord, TOTAL_LEDS_IN_HEX> HexagonGFX::INDEX_TO_HEX_COORD = HexagonGFX::generateIndexToHex();

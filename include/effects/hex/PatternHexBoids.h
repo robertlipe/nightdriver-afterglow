@@ -49,6 +49,7 @@ private:
     int speed = 15;
     float timePhase = 0.0f;
     std::vector<HexBoid> boids;
+    std::vector<HexBoid> nextBoids;
     uint8_t hueOffset = 0;
     int maxRadius = HEX_RINGS - 1;
     int numBoids = 15;
@@ -116,13 +117,13 @@ public:
         g()->DimAll(220);
         hueOffset += speed / 25;
         timePhase += speed / 30.0f;
-        
+
         // Use timePhase to accumulate full steps
         int steps = static_cast<int>(timePhase);
         timePhase -= steps;
-        
+
         if (steps > 3) steps = 3; // Cap to avoid huge jumps
-        
+
         for (int step = 0; step < steps; step++) {
             if (boids.empty()) {
                 InitBoids();
@@ -135,7 +136,7 @@ public:
         float neighborDist = 8.0f;      // See neighbors further away
 
         // Update and draw boids
-        std::vector<HexBoid> nextBoids = boids;
+        nextBoids = boids;
 
         for (size_t i = 0; i < boids.size(); i++) {
             auto& boid = boids[i];
@@ -238,7 +239,7 @@ public:
             }
         } // End of boid loop
 
-        boids = nextBoids;
+        std::swap(boids, nextBoids);
     } // End of steps loop
 
         // Draw phase

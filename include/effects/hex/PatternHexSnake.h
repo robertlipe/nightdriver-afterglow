@@ -108,9 +108,9 @@ public:
 
         HexCoord center(0, 0);
         int r = random(1, maxRadius - 1);
-        std::vector<HexCoord> ring = hexGfx->getHexRing(center, r);
-        if (!ring.empty()) {
-            food = ring[random(0, ring.size())];
+        auto ring = hexGfx->getHexRing(r);
+        if (ring.size > 0) {
+            food = ring.data[random(0, ring.size)];
         } else {
             food = center;
         }
@@ -137,8 +137,8 @@ public:
             // AI Pathfinding to food
             int bestDir = -1;
             float minDistance = 999999.0f;
-            std::vector<int> validDirs;
-
+            std::array<int, 6> validDirs;
+            int numValidDirs = 0;
             for (int i = 0; i < 6; i++) {
                 // Don't reverse direction 180 degrees
                 if (i == (currentDirIndex + 3) % 6 && snake.size() > 1) continue;
@@ -159,20 +159,20 @@ public:
                 }
                 if (collision) continue;
 
-                validDirs.push_back(i);
                 float dist = hexGfx->hexDistance(candidateHead, food);
+                validDirs[numValidDirs++] = i;
                 if (dist < minDistance) {
                     minDistance = dist;
                     bestDir = i;
                 }
             }
 
-            if (!validDirs.empty()) {
+            if (numValidDirs > 0) {
                 // 15% chance to take a random valid turn instead of optimal to make it slither
                 if (bestDir == -1 || random(0, 100) < 15) {
-                     currentDirIndex = validDirs[random(0, validDirs.size())];
+                    currentDirIndex = validDirs[random(0, numValidDirs)];
                 } else {
-                     currentDirIndex = bestDir;
+                    currentDirIndex = bestDir;
                 }
                 direction = hexGfx->getHexDirection(currentDirIndex);
 
