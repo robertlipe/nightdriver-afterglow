@@ -184,13 +184,15 @@ NightDriverTaskManager::~NightDriverTaskManager()
 
 void NightDriverTaskManager::EffectTaskEntry(void *pVoid)
 {
-    auto *pTaskParams = static_cast<EffectTaskParams *>(pVoid);
+    std::unique_ptr<EffectTaskParams> pTaskParams(static_cast<EffectTaskParams *>(pVoid));
 
     EffectTaskFunction function = pTaskParams->function;
     LEDStripEffect* pEffect = pTaskParams->pEffect;
 
-    // Delete the params object before we invoke the actual function; they tend to run indefinitely
-    delete pTaskParams;
+    // Release the unique_ptr and let it clean up before we invoke the actual function.
+    // unique_ptr handles cleanup when falling out of scope, but since this function runs
+    // indefinitely, we should explicitly reset it here to free memory early.
+    pTaskParams.reset();
 
     function(*pEffect);
 }
@@ -330,18 +332,20 @@ String NightDriverTaskManager::GetStackUsageSummary() const
 
 TaskHandle_t NightDriverTaskManager::StartEffectThread(EffectTaskFunction function, LEDStripEffect* pEffect, const char* name, UBaseType_t priority, BaseType_t core)
 {
-    // We use a raw pointer here just to cross the thread/task boundary. The EffectTaskEntry method
-    //   deletes the object as soon as it can.
-    auto* pTaskParams = new EffectTaskParams(std::move(function), pEffect);
+    // We use a unique_ptr here to manage lifetime, and release() to cross the thread/task boundary.
+    // The EffectTaskEntry method recaptures it in a unique_ptr to delete it as soon as it can.
+    auto pTaskParams = std::make_unique<EffectTaskParams>(std::move(function), pEffect);
     TaskHandle_t effectTask = nullptr;
 
     Serial.print( str_sprintf(">> Launching %s Effect Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", name, (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
 
-    if (xTaskCreatePinnedToCore(EffectTaskEntry, name, DEFAULT_STACK_SIZE, pTaskParams, priority, &effectTask, core) == pdPASS)
+    if (xTaskCreatePinnedToCore(EffectTaskEntry, name, DEFAULT_STACK_SIZE, pTaskParams.get(), priority, &effectTask, core) == pdPASS)
         _vEffectTasks.push_back(effectTask);
-    else
-        // Clean up the task params object if the thread was not actually created
-        delete pTaskParams;
+
+    if (effectTask) {
+        // Ownership transferred successfully to the thread
+        pTaskParams.release();
+    }
 
     CheckHeap();
 

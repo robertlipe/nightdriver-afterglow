@@ -1,0 +1,524 @@
+From c17ffb2516fec3126801c03d1ab3bfba64965ff4 Mon Sep 17 00:00:00 2001
+From: robertlipe <8724975+robertlipe@users.noreply.github.com>
+Date: Tue, 4 Aug 2026 09:10:10 +0000
+Subject: [PATCH] Refactor: Modernize C++ core components with C++20 features
+
+* Replace `PI`, `TWO_PI`, and `M_PI` math macros with `<numbers>` constants
+* Convert prominent manual C-style arrays (`rules`, `digits`, `screen`, `ReelPos`) to `std::array` with CTAD where applicable
+* Replace unsafe `memset` and `memcpy` calls in core engine networking buffers with `<algorithm>` functions (`std::copy`, `std::fill`) or brace-enclosed zero-initialization (`{}`)
+* Safely wrap raw pointer memory allocations and task lifecycle management in `taskmgr.cpp` and `remotecontrol.cpp` into `std::unique_ptr` and `std::make_shared_psram` to properly transfer ownership to tasks and eliminate memory leaks
+* Convert manual looping sequences in `debug_cli.cpp` and `remotecontrol.cpp` to canonical classic `<algorithm>` standards (`std::find_if`, `std::vector::insert`) without using `<ranges>` to preserve ESP32 flash constraints.
+---
+ include/effects/hex/PatternHexAnt.h        |  3 +-
+ include/effects/matrix/PatternCGBreakout.h |  5 ++--
+ include/effects/matrix/PatternCGInvade.h   |  3 +-
+ include/effects/matrix/PatternCGKong.h     |  3 +-
+ include/effects/matrix/PatternCube.h       | 22 ++++++++------
+ include/effects/matrix/PatternSMTixyLand.h | 11 +++----
+ include/effects/matrix/PatternSMTwister.h  |  3 +-
+ include/effects/matrix/Vector.h            |  4 ++-
+ include/effects/strip/faneffects.h         | 15 +++++-----
+ src/gfxbase.cpp                            |  3 +-
+ src/hub75gfx.cpp                           | 16 ++--------
+ src/ledbuffer.cpp                          |  3 +-
+ src/remotecontrol.cpp                      | 34 +++++++++++-----------
+ src/socketserver.cpp                       | 10 +++----
+ src/taskmgr.cpp                            | 22 +++++++-------
+ src/telnetserver.cpp                       |  3 +-
+ 16 files changed, 83 insertions(+), 77 deletions(-)
+
+diff --git a/include/effects/hex/PatternHexAnt.h b/include/effects/hex/PatternHexAnt.h
+index ced13230..2db6e784 100644
+--- a/include/effects/hex/PatternHexAnt.h
++++ b/include/effects/hex/PatternHexAnt.h
+@@ -32,6 +32,7 @@
+ #include "gfxhex.h"
+ #include "systemcontainer.h"
+
++#include <array>
+ #include <vector>
+
+ class PatternHexAnt : public EffectWithId<PatternHexAnt>
+@@ -48,7 +49,7 @@ class PatternHexAnt : public EffectWithId<PatternHexAnt>
+     std::vector<Ant> ants;
+     std::vector<uint8_t> gridState; // 0 to numColors-1
+     int numColors = 4;
+-    int rules[4] = {1, -1, -2, 2}; // L60, R60, R120, L120
++    std::array rules = {1, -1, -2, 2}; // L60, R60, R120, L120
+     unsigned long lastUpdate = 0;
+
+ public:
+diff --git a/include/effects/matrix/PatternCGBreakout.h b/include/effects/matrix/PatternCGBreakout.h
+index e4ace2bf..a2cfc45a 100644
+--- a/include/effects/matrix/PatternCGBreakout.h
++++ b/include/effects/matrix/PatternCGBreakout.h
+@@ -1,5 +1,6 @@
+ #pragma once
+
++#include <array>
+ #include <vector>
+ #include <chrono>
+ #include <algorithm>
+@@ -112,8 +113,8 @@ class PatternCGBreakout : public EffectWithId<PatternCGBreakout> {
+
+         // Add time digits at the very top (like Pong score)
+         // Time digits are stored as individual pixels for collision detection
+-        unsigned int digits[5] = {
+-            (unsigned int)(t->tm_hour/10), (unsigned int)(t->tm_hour%10), 10,
++        std::array digits = {
++            (unsigned int)(t->tm_hour/10), (unsigned int)(t->tm_hour%10), 10u,
+             (unsigned int)(t->tm_min/10), (unsigned int)(t->tm_min%10)
+         };
+         unsigned int startX = (MATRIX_WIDTH - (5 * 4)) / 2;
+diff --git a/include/effects/matrix/PatternCGInvade.h b/include/effects/matrix/PatternCGInvade.h
+index 92ef5481..af2bb8db 100644
+--- a/include/effects/matrix/PatternCGInvade.h
++++ b/include/effects/matrix/PatternCGInvade.h
+@@ -1,5 +1,6 @@
+ #pragma once
+
++#include <array>
+ #include <vector>
+ #include <chrono>
+ #include <algorithm>
+@@ -93,7 +94,7 @@ class PatternCGInvade : public EffectWithId<PatternCGInvade> {
+         struct tm tm_buf;
+         struct tm* t = localtime_r(&now_t, &tm_buf);
+         lastMin = t->tm_min;
+-        unsigned int digits[5] = {(unsigned int)(t->tm_hour/10), (unsigned int)(t->tm_hour%10), 10, (unsigned int)(t->tm_min/10), (unsigned int)(t->tm_min%10)};
++        std::array digits = {(unsigned int)(t->tm_hour/10), (unsigned int)(t->tm_hour%10), 10u, (unsigned int)(t->tm_min/10), (unsigned int)(t->tm_min%10)};
+         unsigned int startX = (MATRIX_WIDTH - (5 * 4)) / 2;
+
+         for (unsigned int d = 0; d < 5; d++) {
+diff --git a/include/effects/matrix/PatternCGKong.h b/include/effects/matrix/PatternCGKong.h
+index af2a1ba8..e3587843 100644
+--- a/include/effects/matrix/PatternCGKong.h
++++ b/include/effects/matrix/PatternCGKong.h
+@@ -4,6 +4,7 @@
+ #define PATTERN_CG_KONG_H
+
+ #include "globals.h"
++#include <array>
+ #include <vector>
+ #include <chrono>
+ #include <algorithm>
+@@ -406,7 +407,7 @@ class PatternCGKong : public EffectWithId<PatternCGKong>
+         struct tm* t = localtime_r(&now, &tm_buf);
+         int hours = t->tm_hour;
+         int mins = t->tm_min;
+-        int digits[5] = {hours / 10, hours % 10, 10, mins / 10, mins % 10};
++        std::array digits = {hours / 10, hours % 10, 10, mins / 10, mins % 10};
+
+         if (_winTime > 0) { // v20: Spin digits on win!
+              uint8_t spin = (millis() / 50) % 10;
+diff --git a/include/effects/matrix/PatternCube.h b/include/effects/matrix/PatternCube.h
+index f89d4b41..14a5385d 100644
+--- a/include/effects/matrix/PatternCube.h
++++ b/include/effects/matrix/PatternCube.h
+@@ -63,8 +63,10 @@
+ #define PatternCube_H
+
+ #include <algorithm>
++#include <array>
+ #include <cmath>
+ #include <iterator>
++#include <numbers>
+
+ #include "Geometry.h"
+
+@@ -94,15 +96,15 @@ class PatternCube : public EffectWithId<PatternCube>
+     int zCamera = 110;                   // distance from cube to the eye of the camera
+
+     // Local vertices
+-    Vertex local[8];
++    std::array<Vertex, 8> local;
+     // Camera aligned vertices
+-    Vertex aligned[8];
++    std::array<Vertex, 8> aligned;
+     // On-screen projected vertices
+-    Point screen[8];
++    std::array<Point, 8> screen;
+     // Faces
+-    squareFace face[6];
++    std::array<squareFace, 6> face;
+     // Edges
+-    EdgePoint edge[12];
++    std::array<EdgePoint, 12> edge;
+     uint32_t nbEdges;
+     // ModelView matrix
+     float m00, m01, m02, m10, m11, m12, m20, m21, m22;
+@@ -243,14 +245,16 @@ class PatternCube : public EffectWithId<PatternCube>
+         Angx += AngxSpeed;
+         Angy += AngySpeed;
+
+-        if (Angx >= TWO_PI)
++        constexpr float two_pi = 2.0f * std::numbers::pi_v<float>;
++
++        if (Angx >= two_pi)
+         {
+-            Angx -= TWO_PI;
++            Angx -= two_pi;
+         }
+
+-        if (Angy >= TWO_PI)
++        if (Angy >= two_pi)
+         {
+-            Angy -= TWO_PI;
++            Angy -= two_pi;
+         }
+
+         // Determine tile size (the smaller of matrix width and height)
+diff --git a/include/effects/matrix/PatternSMTixyLand.h b/include/effects/matrix/PatternSMTixyLand.h
+index 3883a7eb..c9e895ff 100644
+--- a/include/effects/matrix/PatternSMTixyLand.h
++++ b/include/effects/matrix/PatternSMTixyLand.h
+@@ -1,6 +1,7 @@
+ #pragma once
+
+ #include "effectmanager.h"
++#include <numbers>
+
+ // Derived from https://editor.soulmatelights.com/gallery/916-tixyland
+ // 37 (!) mathematically easy effects in one. Pick your favorites and extract
+@@ -62,7 +63,7 @@ class PatternSMTixyLand : public EffectWithId<PatternSMTixyLand>
+             return sinf(y * sinf(t / 2) * 2 + t + i * 6);
+             break;
+         case 6:
+-            return fabs(7 - x) < 9 ? cosf(t + (x + y) * (float)PI / 8) : 0;
++            return fabs(7 - x) < 9 ? cosf(t + (x + y) * std::numbers::pi_v<float> / 8) : 0;
+             break; // https://twitter.com/HiraginoYuki/status/1327166558955663362
+         case 7:
+             return !((int)(x + t * 50 / (fmod(y * y, 5.9f) + 1)) & 15) / (fmod(y * y, 5.9f) + 1);
+@@ -96,8 +97,8 @@ class PatternSMTixyLand : public EffectWithId<PatternSMTixyLand>
+             return sinf(x / 3 * sinf(t / 3) * 2) + cos(y / 4 * sin(t / 2) * 2);
+             break;
+         case 17:
+-            return cosf(sinf((x * t * .1f)) * (float)PI) +
+-                   cosf(sinf(y * t * .1f + (sqrtf(fabs(cosf(x * t * .1))))) * (float)PI);
++            return cosf(sinf((x * t * .1f)) * std::numbers::pi_v<float>) +
++                   cosf(sinf(y * t * .1f + (sqrtf(fabs(cosf(x * t * .1))))) * std::numbers::pi_v<float>);
+             break;
+         case 18:
+             return x / t / sqrtf(55 - (x -= 8) * x - (y -= 8) * y);
+@@ -129,8 +130,8 @@ class PatternSMTixyLand : public EffectWithId<PatternSMTixyLand>
+             break; // i add move for
+                    // //https://twitter.com/aemkei/status/1326637631409676291
+         case 27:
+-            //return sinf((float)PI * 2 * atanf((y - 8) / (x - 8)) + 5 * t);
+-            return sinf((float)PI * 2 * atan2((y - 8) , (x - 8)) + 5 * t);
++            //return sinf(std::numbers::pi_v<float> * 2 * atanf((y - 8) / (x - 8)) + 5 * t);
++            return sinf(std::numbers::pi_v<float> * 2 * atan2((y - 8) , (x - 8)) + 5 * t);
+             break;
+         case 28:
+             return sinf((t / 16) * i + x / y);
+diff --git a/include/effects/matrix/PatternSMTwister.h b/include/effects/matrix/PatternSMTwister.h
+index 40a7fe42..dc3e7aab 100644
+--- a/include/effects/matrix/PatternSMTwister.h
++++ b/include/effects/matrix/PatternSMTwister.h
+@@ -1,6 +1,7 @@
+ #pragma once
+
+ #include "effectmanager.h"
++#include <numbers>
+
+ // Derived from https://wokwi.com/projects/297732081748804105
+ // High color barber-pole with varying Y-height stripes.
+@@ -49,7 +50,7 @@ class PatternSMTwister : public EffectWithId<PatternSMTwister>
+
+         for (int i = 0; i < MATRIX_HEIGHT; i++)
+         {
+-            uint8_t sinOff = sin8(i * 8 / PI + cos8(a / 2 + i) / 4 + a / 3);
++            uint8_t sinOff = sin8(i * 8 / std::numbers::pi_v<float> + cos8(a / 2 + i) / 4 + a / 3);
+
+             int x1 = sin8(sinOff + a) * (MATRIX_WIDTH) / 255;
+             int x2 = sin8(sinOff + a + 64) * (MATRIX_WIDTH) / 255;
+diff --git a/include/effects/matrix/Vector.h b/include/effects/matrix/Vector.h
+index 1880c9a6..934c0758 100644
+--- a/include/effects/matrix/Vector.h
++++ b/include/effects/matrix/Vector.h
+@@ -1,5 +1,7 @@
+ #pragma once
+
++#include <numbers>
++
+ //+--------------------------------------------------------------------------
+ //
+ // File:        PatternSpiro.h
+@@ -161,7 +163,7 @@ class Vector2
+
+     void rotate(float deg)
+     {
+-        float theta = deg / 180.0f * (float) M_PI;
++        float theta = deg / 180.0f * std::numbers::pi_v<float>;
+         float c = cos(theta);
+         float s = sin(theta);
+         float tx = x * c - y * s;
+diff --git a/include/effects/strip/faneffects.h b/include/effects/strip/faneffects.h
+index 9b8bdd70..13e31e9d 100644
+--- a/include/effects/strip/faneffects.h
++++ b/include/effects/strip/faneffects.h
+@@ -32,6 +32,7 @@
+ //---------------------------------------------------------------------------
+
+
++#include <array>
+ #include <cmath>
+
+ #include "effects.h"
+@@ -486,8 +487,8 @@ class TapeReelEffect : public EffectWithId<TapeReelEffect>
+ {
+ private:
+
+-  float ReelPos[NUM_FANS] = {0};
+-  float ReelDir[NUM_FANS] = {0};
++  std::array<float, NUM_FANS> ReelPos = {0};
++  std::array<float, NUM_FANS> ReelDir = {0};
+
+ public:
+
+@@ -568,9 +569,9 @@ class TapeReelEffect : public EffectWithId<TapeReelEffect>
+ class PaletteReelEffect : public EffectWithId<PaletteReelEffect>
+ {
+ private:
+-  float ReelPos[NUM_FANS] = {0};
+-  float ReelDir[NUM_FANS] = {0};
+-  int ColorOffset[NUM_FANS] = {0};
++  std::array<float, NUM_FANS> ReelPos = {0};
++  std::array<float, NUM_FANS> ReelDir = {0};
++  std::array<int, NUM_FANS> ColorOffset = {0};
+
+ public:
+   PaletteReelEffect(const String & strName) : EffectWithId<PaletteReelEffect>(strName) {}
+@@ -666,8 +667,8 @@ class PaletteSpinEffect : public EffectWithId<PaletteSpinEffect>
+     const CRGBPalette16 _Palette;
+     bool _bReplaceMagenta;
+     float _sparkleChance;
+-    float ReelPos[NUM_FANS] = {0};
+-    int ColorOffset[NUM_FANS] = {0};
++    std::array<float, NUM_FANS> ReelPos = {0};
++    std::array<int, NUM_FANS> ColorOffset = {0};
+
+ public:
+   PaletteSpinEffect(const String &strName, const CRGBPalette16 &palette, bool bReplace, float sparkleChance = 0.0)
+diff --git a/src/gfxbase.cpp b/src/gfxbase.cpp
+index a737bbc5..0170c311 100644
+--- a/src/gfxbase.cpp
++++ b/src/gfxbase.cpp
+@@ -34,6 +34,7 @@
+
+ #include <gfxfont.h>
+ #include <memory>
++#include <numbers>
+ #include <numeric>
+ #include <stdexcept>
+ #include <unordered_map>
+@@ -1439,7 +1440,7 @@ const GFXBase::PolarMapArray& GFXBase::getPolarMap()
+                     float angle_rad = atan2f(static_cast<float>(y), static_cast<float>(x));
+                     float radius_float = hypotf(static_cast<float>(x), static_cast<float>(y));
+
+-                    rMap[x + C_X][y + C_Y].angle = 128.0f * (angle_rad / (float)M_PI);
++                    rMap[x + C_X][y + C_Y].angle = 128.0f * (angle_rad / std::numbers::pi_v<float>);
+                     rMap[x + C_X][y + C_Y].scaled_radius = radius_float * mapp;
+                     rMap[x + C_X][y + C_Y].unscaled_radius = radius_float;
+                 }
+diff --git a/src/hub75gfx.cpp b/src/hub75gfx.cpp
+index 830ec20c..73f30d5e 100644
+--- a/src/hub75gfx.cpp
++++ b/src/hub75gfx.cpp
+@@ -80,23 +80,13 @@ void HUB75GFX::setLeds(CRGB *pLeds)
+
+ void HUB75GFX::fillLeds(std::unique_ptr<CRGB []> & pLEDs)
+ {
+-    // A mesmerizer panel has the same layout as in memory, so we can memcpy.
+-    memcpy(leds, pLEDs.get(), sizeof(CRGB) * GetLEDCount());
++    // A mesmerizer panel has the same layout as in memory, so we can use std::copy
++    std::copy(pLEDs.get(), pLEDs.get() + GetLEDCount(), leds);
+ }
+
+ void HUB75GFX::Clear(CRGB color)
+ {
+-    if (color.g == color.r && color.r == color.b)
+-    {
+-        memset((void *) leds, color.r, sizeof(CRGB) * _ledcount);
+-    }
+-    else
+-    {
+-        for (size_t i = 0; i < _ledcount; ++i)
+-        {
+-            leds[i] = color;
+-        }
+-    }
++    std::fill(leds, leds + _ledcount, color);
+ }
+
+ void HUB75GFX::MoveInwardX(int startY, int endY)
+diff --git a/src/ledbuffer.cpp b/src/ledbuffer.cpp
+index fe10daf3..f473fd42 100644
+--- a/src/ledbuffer.cpp
++++ b/src/ledbuffer.cpp
+@@ -99,7 +99,8 @@ bool LEDBuffer::UpdateFromWire(std::span<const uint8_t> payloadData)
+     }
+     debugV("PayloadLength: %zu, command16: %hu, Length32: %lu", payloadData.size(), command16, (unsigned long)length32);
+
+-    memcpy(_leds.get(), payloadData.data() + cbHeader, length32 * sizeof(CRGB));
++    const auto* srcBegin = reinterpret_cast<const CRGB*>(payloadData.data() + cbHeader);
++    std::copy(srcBegin, srcBegin + length32, _leds.get());
+     debugV("seconds, micros: %llu.%llu", seconds, micros);
+     debugV("Color0: %08lx", (unsigned long)(uint32_t) _leds[0]);
+     return true;
+diff --git a/src/remotecontrol.cpp b/src/remotecontrol.cpp
+index 6c77b1e3..0eeb576c 100644
+--- a/src/remotecontrol.cpp
++++ b/src/remotecontrol.cpp
+@@ -586,26 +586,26 @@ void RemoteControl::handle()
+         effectManager.ShowVU( !effectManager.IsVUVisible() );
+     }
+
+-    for (const auto & RemoteColorCode : RemoteColorCodes)
++    auto it = std::find_if(std::begin(RemoteColorCodes), std::end(RemoteColorCodes),
++        [result](const RemoteColorCode& code) { return code.code == result; });
++
++    if (it != std::end(RemoteColorCodes))
+     {
+-        if (RemoteColorCode.code == result)
++        debugI("Remote: Color %s (0x%08lX)", it->name, (unsigned long)(uint32_t) it->color);
++
++        // Only apply color if it's not Black (used as placeholder for command keys)
++        if (it->color != CRGB::Black)
+         {
+-            debugI("Remote: Color %s (0x%08lX)", RemoteColorCode.name, (unsigned long)(uint32_t) RemoteColorCode.color);
+-
+-            // Only apply color if it's not Black (used as placeholder for command keys)
+-            if (RemoteColorCode.color != CRGB::Black)
+-            {
+-                effectManager.ApplyGlobalColor(RemoteColorCode.color);
+-                #if FULL_COLOR_REMOTE_FILL
+-                    auto effect = make_shared_psram<ColorFillEffect>("Remote Color", RemoteColorCode.color, 1, true);
+-                    if (effect->Init(g_ptrSystem->GetEffectManager().GetBaseGraphics()))
+-                        g_ptrSystem->GetEffectManager().SetTempEffect(effect);
+-                    else
+-                        debugE("Could not initialize new color fill effect");
+-                #endif
+-            }
+-            return;
++            effectManager.ApplyGlobalColor(it->color);
++            #if FULL_COLOR_REMOTE_FILL
++                auto effect = make_shared_psram<ColorFillEffect>("Remote Color", it->color, 1, true);
++                if (effect->Init(g_ptrSystem->GetEffectManager().GetBaseGraphics()))
++                    g_ptrSystem->GetEffectManager().SetTempEffect(effect);
++                else
++                    debugE("Could not initialize new color fill effect");
++            #endif
+         }
++        return;
+     }
+
+     // Log unknown codes
+diff --git a/src/socketserver.cpp b/src/socketserver.cpp
+index 4d4e8d4d..9ba8845a 100644
+--- a/src/socketserver.cpp
++++ b/src/socketserver.cpp
+@@ -62,11 +62,11 @@ SocketServer::SocketServer(int port, int numLeds) :
+     _port(port),
+     _numLeds(numLeds),
+     _server_fd(-1),
+-    _cbReceived(0)
++    _cbReceived(0),
++    _address{}
+ {
+     _abOutputBuffer.resize(MAXIMUM_PACKET_SIZE+1);        // +1 for uzlib one byte overreach bug
+     _pBuffer.resize(MAXIMUM_PACKET_SIZE);
+-    memset(&_address, 0, sizeof(_address));
+ }
+
+ void SocketServer::release()
+@@ -104,7 +104,7 @@ bool SocketServer::begin()
+         return false;
+     }
+
+-    memset(&_address, 0, sizeof(_address));
++    _address = {};
+     _address.sin_family = AF_INET;
+     _address.sin_addr.s_addr = INADDR_ANY;
+     _address.sin_port = htons( _port );
+@@ -189,7 +189,7 @@ bool SocketServer::DecompressBuffer(std::span<const uint8_t> compressed, std::sp
+     // It's a small price to pay for a tiny embedded decompressor.
+
+     std::unique_ptr<uint8_t[]> pTemp = std::make_unique<uint8_t[]>(compressed.size() + 1);
+-    memcpy(pTemp.get(), compressed.data(), compressed.size());
++    std::copy(compressed.data(), compressed.data() + compressed.size(), pTemp.get());
+     pTemp[compressed.size()] = 0;
+
+     struct uzlib_uncomp d = { 0 };
+@@ -339,7 +339,7 @@ bool SocketServer::ProcessIncomingConnectionsLoop()
+
+             #if USE_PSRAM
+                 std::unique_ptr<uint8_t []> _abTempBuffer = std::make_unique<uint8_t []>(MAXIMUM_PACKET_SIZE+1);    // Plus one for uzlib buffer overreach bug
+-                memcpy(_abTempBuffer.get(), _pBuffer.data(), MAXIMUM_PACKET_SIZE);
++                std::copy(_pBuffer.data(), _pBuffer.data() + MAXIMUM_PACKET_SIZE, _abTempBuffer.get());
+                 auto pSourceBuffer = &_abTempBuffer[COMPRESSED_HEADER_SIZE];
+             #else
+                 auto pSourceBuffer = _pBuffer.data() + COMPRESSED_HEADER_SIZE;
+diff --git a/src/taskmgr.cpp b/src/taskmgr.cpp
+index 107f4ce7..e2da112c 100644
+--- a/src/taskmgr.cpp
++++ b/src/taskmgr.cpp
+@@ -184,13 +184,13 @@ NightDriverTaskManager::~NightDriverTaskManager()
+
+ void NightDriverTaskManager::EffectTaskEntry(void *pVoid)
+ {
+-    auto *pTaskParams = static_cast<EffectTaskParams *>(pVoid);
++    std::unique_ptr<EffectTaskParams> pTaskParams(static_cast<EffectTaskParams *>(pVoid));
+
+     EffectTaskFunction function = pTaskParams->function;
+     LEDStripEffect* pEffect = pTaskParams->pEffect;
+
+-    // Delete the params object before we invoke the actual function; they tend to run indefinitely
+-    delete pTaskParams;
++    // Release the unique_ptr and let it clean up before we invoke the actual function (if we wanted to explicit, but unique_ptr handles it when falling out of scope. But since function runs indefinitely, we should reset it here)
++    pTaskParams.reset();
+
+     function(*pEffect);
+ }
+@@ -330,18 +330,20 @@ String NightDriverTaskManager::GetStackUsageSummary() const
+
+ TaskHandle_t NightDriverTaskManager::StartEffectThread(EffectTaskFunction function, LEDStripEffect* pEffect, const char* name, UBaseType_t priority, BaseType_t core)
+ {
+-    // We use a raw pointer here just to cross the thread/task boundary. The EffectTaskEntry method
+-    //   deletes the object as soon as it can.
+-    auto* pTaskParams = new EffectTaskParams(std::move(function), pEffect);
++    // We use a unique_ptr here to manage lifetime, and release() to cross the thread/task boundary.
++    // The EffectTaskEntry method recaptures it in a unique_ptr to delete it as soon as it can.
++    auto pTaskParams = std::make_unique<EffectTaskParams>(std::move(function), pEffect);
+     TaskHandle_t effectTask = nullptr;
+
+     Serial.print( str_sprintf(">> Launching %s Effect Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", name, (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
+
+-    if (xTaskCreatePinnedToCore(EffectTaskEntry, name, DEFAULT_STACK_SIZE, pTaskParams, priority, &effectTask, core) == pdPASS)
++    if (xTaskCreatePinnedToCore(EffectTaskEntry, name, DEFAULT_STACK_SIZE, pTaskParams.get(), priority, &effectTask, core) == pdPASS)
+         _vEffectTasks.push_back(effectTask);
+-    else
+-        // Clean up the task params object if the thread was not actually created
+-        delete pTaskParams;
++
++    if (effectTask) {
++        // Ownership transferred successfully to the thread
++        pTaskParams.release();
++    }
+
+     CheckHeap();
+
+diff --git a/src/telnetserver.cpp b/src/telnetserver.cpp
+index 9849fa89..3f29b671 100644
+--- a/src/telnetserver.cpp
++++ b/src/telnetserver.cpp
+@@ -143,8 +143,7 @@ void DebugLoopTaskEntry(void* pvParameters)
+         return;
+     }
+
+-    struct sockaddr_in serv_addr;
+-    memset(&serv_addr, 0, sizeof(serv_addr));
++    struct sockaddr_in serv_addr = {};
+     serv_addr.sin_family = AF_INET;
+     serv_addr.sin_addr.s_addr = INADDR_ANY;
+     serv_addr.sin_port = htons(NetworkPort::Telnet);
