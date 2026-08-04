@@ -586,26 +586,26 @@ void RemoteControl::handle()
         effectManager.ShowVU( !effectManager.IsVUVisible() );
     }
 
-    auto it = std::find_if(std::begin(RemoteColorCodes), std::end(RemoteColorCodes),
-        [result](const RemoteColorCode& code) { return code.code == result; });
-
-    if (it != std::end(RemoteColorCodes))
+    for (const auto & RemoteColorCode : RemoteColorCodes)
     {
-        debugI("Remote: Color %s (0x%08lX)", it->name, (unsigned long)(uint32_t) it->color);
-
-        // Only apply color if it's not Black (used as placeholder for command keys)
-        if (it->color != CRGB::Black)
+        if (RemoteColorCode.code == result)
         {
-            effectManager.ApplyGlobalColor(it->color);
-            #if FULL_COLOR_REMOTE_FILL
-                auto effect = make_shared_psram<ColorFillEffect>("Remote Color", it->color, 1, true);
-                if (effect->Init(g_ptrSystem->GetEffectManager().GetBaseGraphics()))
-                    g_ptrSystem->GetEffectManager().SetTempEffect(effect);
-                else
-                    debugE("Could not initialize new color fill effect");
-            #endif
+            debugI("Remote: Color %s (0x%08lX)", RemoteColorCode.name, (unsigned long)(uint32_t) RemoteColorCode.color);
+
+            // Only apply color if it's not Black (used as placeholder for command keys)
+            if (RemoteColorCode.color != CRGB::Black)
+            {
+                effectManager.ApplyGlobalColor(RemoteColorCode.color);
+                #if FULL_COLOR_REMOTE_FILL
+                    auto effect = make_shared_psram<ColorFillEffect>("Remote Color", RemoteColorCode.color, 1, true);
+                    if (effect->Init(g_ptrSystem->GetEffectManager().GetBaseGraphics()))
+                        g_ptrSystem->GetEffectManager().SetTempEffect(effect);
+                    else
+                        debugE("Could not initialize new color fill effect");
+                #endif
+            }
+            return;
         }
-        return;
     }
 
     // Log unknown codes

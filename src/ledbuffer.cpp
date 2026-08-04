@@ -99,8 +99,7 @@ bool LEDBuffer::UpdateFromWire(std::span<const uint8_t> payloadData)
     }
     debugV("PayloadLength: %zu, command16: %hu, Length32: %lu", payloadData.size(), command16, (unsigned long)length32);
 
-    const auto* srcBegin = reinterpret_cast<const CRGB*>(payloadData.data() + cbHeader);
-    std::copy(srcBegin, srcBegin + length32, _leds.get());
+    memcpy(_leds.get(), payloadData.data() + cbHeader, length32 * sizeof(CRGB));
     debugV("seconds, micros: %llu.%llu", seconds, micros);
     debugV("Color0: %08lx", (unsigned long)(uint32_t) _leds[0]);
     return true;

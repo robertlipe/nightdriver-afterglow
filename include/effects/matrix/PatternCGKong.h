@@ -4,7 +4,6 @@
 #define PATTERN_CG_KONG_H
 
 #include "globals.h"
-#include <array>
 #include <vector>
 #include <chrono>
 #include <algorithm>
@@ -407,7 +406,7 @@ private:
         struct tm* t = localtime_r(&now, &tm_buf);
         int hours = t->tm_hour;
         int mins = t->tm_min;
-        std::array digits = {hours / 10, hours % 10, 10, mins / 10, mins % 10};
+        int digits[5] = {hours / 10, hours % 10, 10, mins / 10, mins % 10};
 
         if (_winTime > 0) { // v20: Spin digits on win!
              uint8_t spin = (millis() / 50) % 10;

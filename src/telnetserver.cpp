@@ -143,7 +143,8 @@ void DebugLoopTaskEntry(void* pvParameters)
         return;
     }
 
-    struct sockaddr_in serv_addr = {};
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(NetworkPort::Telnet);

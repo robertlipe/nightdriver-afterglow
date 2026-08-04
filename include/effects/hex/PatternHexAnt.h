@@ -32,7 +32,6 @@
 #include "gfxhex.h"
 #include "systemcontainer.h"
 
-#include <array>
 #include <vector>
 
 class PatternHexAnt : public EffectWithId<PatternHexAnt>
@@ -49,7 +48,7 @@ private:
     std::vector<Ant> ants;
     std::vector<uint8_t> gridState; // 0 to numColors-1
     int numColors = 4;
-    std::array rules = {1, -1, -2, 2}; // L60, R60, R120, L120
+    int rules[4] = {1, -1, -2, 2}; // L60, R60, R120, L120
     unsigned long lastUpdate = 0;
 
 public:

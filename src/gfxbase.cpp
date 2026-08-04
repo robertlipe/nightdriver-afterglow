@@ -34,7 +34,6 @@
 
 #include <gfxfont.h>
 #include <memory>
-#include <numbers>
 #include <numeric>
 #include <stdexcept>
 #include <unordered_map>
@@ -1440,7 +1439,7 @@ const GFXBase::PolarMapArray& GFXBase::getPolarMap()
                     float angle_rad = atan2f(static_cast<float>(y), static_cast<float>(x));
                     float radius_float = hypotf(static_cast<float>(x), static_cast<float>(y));
 
-                    rMap[x + C_X][y + C_Y].angle = 128.0f * (angle_rad / std::numbers::pi_v<float>);
+                    rMap[x + C_X][y + C_Y].angle = 128.0f * (angle_rad / (float)M_PI);
                     rMap[x + C_X][y + C_Y].scaled_radius = radius_float * mapp;
                     rMap[x + C_X][y + C_Y].unscaled_radius = radius_float;
                 }

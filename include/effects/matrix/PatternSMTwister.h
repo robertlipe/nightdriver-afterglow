@@ -1,7 +1,6 @@
 #pragma once
 
 #include "effectmanager.h"
-#include <numbers>
 
 // Derived from https://wokwi.com/projects/297732081748804105
 // High color barber-pole with varying Y-height stripes.
@@ -50,7 +49,7 @@ class PatternSMTwister : public EffectWithId<PatternSMTwister>
 
         for (int i = 0; i < MATRIX_HEIGHT; i++)
         {
-            uint8_t sinOff = sin8(i * 8 / std::numbers::pi_v<float> + cos8(a / 2 + i) / 4 + a / 3);
+            uint8_t sinOff = sin8(i * 8 / PI + cos8(a / 2 + i) / 4 + a / 3);
 
             int x1 = sin8(sinOff + a) * (MATRIX_WIDTH) / 255;
             int x2 = sin8(sinOff + a + 64) * (MATRIX_WIDTH) / 255;

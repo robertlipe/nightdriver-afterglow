@@ -63,10 +63,8 @@
 #define PatternCube_H
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <iterator>
-#include <numbers>
 
 #include "Geometry.h"
 
@@ -96,15 +94,15 @@ class PatternCube : public EffectWithId<PatternCube>
     int zCamera = 110;                   // distance from cube to the eye of the camera
 
     // Local vertices
-    std::array<Vertex, 8> local;
+    Vertex local[8];
     // Camera aligned vertices
-    std::array<Vertex, 8> aligned;
+    Vertex aligned[8];
     // On-screen projected vertices
-    std::array<Point, 8> screen;
+    Point screen[8];
     // Faces
-    std::array<squareFace, 6> face;
+    squareFace face[6];
     // Edges
-    std::array<EdgePoint, 12> edge;
+    EdgePoint edge[12];
     uint32_t nbEdges;
     // ModelView matrix
     float m00, m01, m02, m10, m11, m12, m20, m21, m22;
@@ -245,16 +243,14 @@ class PatternCube : public EffectWithId<PatternCube>
         Angx += AngxSpeed;
         Angy += AngySpeed;
 
-        constexpr float two_pi = 2.0f * std::numbers::pi_v<float>;
-
-        if (Angx >= two_pi)
+        if (Angx >= TWO_PI)
         {
-            Angx -= two_pi;
+            Angx -= TWO_PI;
         }
 
-        if (Angy >= two_pi)
+        if (Angy >= TWO_PI)
         {
-            Angy -= two_pi;
+            Angy -= TWO_PI;
         }
 
         // Determine tile size (the smaller of matrix width and height)

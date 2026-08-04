@@ -1,7 +1,6 @@
 #pragma once
 
 #include "effectmanager.h"
-#include <numbers>
 
 // Derived from https://editor.soulmatelights.com/gallery/916-tixyland
 // 37 (!) mathematically easy effects in one. Pick your favorites and extract
@@ -63,7 +62,7 @@ class PatternSMTixyLand : public EffectWithId<PatternSMTixyLand>
             return sinf(y * sinf(t / 2) * 2 + t + i * 6);
             break;
         case 6:
-            return fabs(7 - x) < 9 ? cosf(t + (x + y) * std::numbers::pi_v<float> / 8) : 0;
+            return fabs(7 - x) < 9 ? cosf(t + (x + y) * (float)PI / 8) : 0;
             break; // https://twitter.com/HiraginoYuki/status/1327166558955663362
         case 7:
             return !((int)(x + t * 50 / (fmod(y * y, 5.9f) + 1)) & 15) / (fmod(y * y, 5.9f) + 1);
@@ -97,8 +96,8 @@ class PatternSMTixyLand : public EffectWithId<PatternSMTixyLand>
             return sinf(x / 3 * sinf(t / 3) * 2) + cos(y / 4 * sin(t / 2) * 2);
             break;
         case 17:
-            return cosf(sinf((x * t * .1f)) * std::numbers::pi_v<float>) +
-                   cosf(sinf(y * t * .1f + (sqrtf(fabs(cosf(x * t * .1))))) * std::numbers::pi_v<float>);
+            return cosf(sinf((x * t * .1f)) * (float)PI) +
+                   cosf(sinf(y * t * .1f + (sqrtf(fabs(cosf(x * t * .1))))) * (float)PI);
             break;
         case 18:
             return x / t / sqrtf(55 - (x -= 8) * x - (y -= 8) * y);
@@ -130,8 +129,8 @@ class PatternSMTixyLand : public EffectWithId<PatternSMTixyLand>
             break; // i add move for
                    // //https://twitter.com/aemkei/status/1326637631409676291
         case 27:
-            //return sinf(std::numbers::pi_v<float> * 2 * atanf((y - 8) / (x - 8)) + 5 * t);
-            return sinf(std::numbers::pi_v<float> * 2 * atan2((y - 8) , (x - 8)) + 5 * t);
+            //return sinf((float)PI * 2 * atanf((y - 8) / (x - 8)) + 5 * t);
+            return sinf((float)PI * 2 * atan2((y - 8) , (x - 8)) + 5 * t);
             break;
         case 28:
             return sinf((t / 16) * i + x / y);

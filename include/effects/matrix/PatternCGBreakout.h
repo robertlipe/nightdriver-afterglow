@@ -113,7 +113,7 @@ public:
 
         // Add time digits at the very top (like Pong score)
         // Time digits are stored as individual pixels for collision detection
-        std::array digits = {
+        std::array<unsigned int, 5> digits = {
             (unsigned int)(t->tm_hour/10), (unsigned int)(t->tm_hour%10), 10u,
             (unsigned int)(t->tm_min/10), (unsigned int)(t->tm_min%10)
         };

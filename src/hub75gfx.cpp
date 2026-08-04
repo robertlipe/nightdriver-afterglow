@@ -80,13 +80,23 @@ void HUB75GFX::setLeds(CRGB *pLeds)
 
 void HUB75GFX::fillLeds(std::unique_ptr<CRGB []> & pLEDs)
 {
-    // A mesmerizer panel has the same layout as in memory, so we can use std::copy
-    std::copy(pLEDs.get(), pLEDs.get() + GetLEDCount(), leds);
+    // A mesmerizer panel has the same layout as in memory, so we can memcpy.
+    memcpy(leds, pLEDs.get(), sizeof(CRGB) * GetLEDCount());
 }
 
 void HUB75GFX::Clear(CRGB color)
 {
-    std::fill(leds, leds + _ledcount, color);
+    if (color.g == color.r && color.r == color.b)
+    {
+        memset((void *) leds, color.r, sizeof(CRGB) * _ledcount);
+    }
+    else
+    {
+        for (size_t i = 0; i < _ledcount; ++i)
+        {
+            leds[i] = color;
+        }
+    }
 }
 
 void HUB75GFX::MoveInwardX(int startY, int endY)
