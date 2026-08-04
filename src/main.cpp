@@ -591,9 +591,9 @@ void setup()
     // Onboard PWM LED
 
     #if ONBOARD_LED_R
-		    ledcAttach(ONBOARD_LED_R, 12000, 8); //
-	    ledcAttach(ONBOARD_LED_G, 12000, 8); //
-	    ledcAttach(ONBOARD_LED_B, 12000, 8); //
+        ledcAttach(ONBOARD_LED_R, 12000, 8); //
+        ledcAttach(ONBOARD_LED_G, 12000, 8); //
+        ledcAttach(ONBOARD_LED_B, 12000, 8); //
     #endif
 
     #if INCOMING_WIFI_ENABLED

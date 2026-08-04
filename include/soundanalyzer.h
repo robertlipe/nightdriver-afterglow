@@ -43,8 +43,8 @@
 #include <memory>
 
 
-    #include <driver/i2s_std.h>
-    #include <esp_adc/adc_continuous.h>
+#include <driver/i2s_std.h>
+#include <esp_adc/adc_continuous.h>
 
 #ifndef SPECTRUM_BAND_SCALE_MEL
 #define SPECTRUM_BAND_SCALE_MEL 1
