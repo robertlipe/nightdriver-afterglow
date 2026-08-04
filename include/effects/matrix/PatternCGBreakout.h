@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <vector>
 #include <chrono>
 #include <algorithm>
@@ -112,8 +113,8 @@ public:
 
         // Add time digits at the very top (like Pong score)
         // Time digits are stored as individual pixels for collision detection
-        unsigned int digits[5] = {
-            (unsigned int)(t->tm_hour/10), (unsigned int)(t->tm_hour%10), 10,
+        std::array digits = {
+            (unsigned int)(t->tm_hour/10), (unsigned int)(t->tm_hour%10), 10u,
             (unsigned int)(t->tm_min/10), (unsigned int)(t->tm_min%10)
         };
         unsigned int startX = (MATRIX_WIDTH - (5 * 4)) / 2;
