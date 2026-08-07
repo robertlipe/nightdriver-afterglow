@@ -35,15 +35,7 @@
 
 #if ENABLE_REMOTE
 
-#ifndef IS_IDF5
-#define IS_IDF5 (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0))
-#endif
-
-#if IS_IDF5
 #include <driver/rmt_rx.h>
-#else
-#include <driver/rmt.h>
-#endif
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/ringbuf.h>
@@ -230,8 +222,6 @@ static const RemoteColorCode RemoteColorCodes[] =
 #define NEC_DECODE_MARGIN 200  // Tolerance in microseconds
 #define RMT_RESOLUTION_HZ 1000000
 
-#if IS_IDF5
-
 class RemoteControlImpl
 {
 public:
@@ -340,110 +330,6 @@ private:
     }
 };
 
-#else
-
-// Legacy 4.x API
-
-#define NEC_DECODE_MARGIN 200  // Tolerance in microseconds
-#define RMT_RESOLUTION_HZ 1000000
-
-class RemoteControlImpl
-{
-public:
-    RemoteControlImpl(int pin) : _pin(pin), _channel(RMT_CHANNEL_0) {}
-
-    ~RemoteControlImpl() {
-        if (_channel) {
-            rmt_rx_stop(_channel);
-            rmt_driver_uninstall(_channel);
-        }
-    }
-
-    bool begin() {
-        rmt_config_t config = RMT_DEFAULT_CONFIG_RX((gpio_num_t)_pin, _channel);
-        config.clk_div = 80; // 80MHz / 80 = 1MHz resolution (1us per tick)
-        config.rx_config.filter_en = true;
-        config.rx_config.filter_ticks_thresh = 100; // Ignore pulses shorter than 100us
-        config.rx_config.idle_threshold = 20000;    // 20ms idle = end of frame
-
-        if (rmt_config(&config) != ESP_OK) return false;
-        if (rmt_driver_install(_channel, 1024, 0) != ESP_OK) return false;
-        if (rmt_get_ringbuf_handle(_channel, &_ringbuf) != ESP_OK) return false;
-        if (rmt_rx_start(_channel, true) != ESP_OK) return false;
-
-        return true;
-    }
-
-    bool decode(uint32_t &code, bool &isRepeat) {
-        if (!_ringbuf) return false;
-
-        size_t size = 0;
-        rmt_item32_t* items = (rmt_item32_t*)xRingbufferReceive(_ringbuf, &size, 0);
-        if (items) {
-            bool success = parseNecFrame(items, size / sizeof(rmt_item32_t), code, isRepeat);
-            vRingbufferReturnItem(_ringbuf, items);
-            return success;
-        }
-        return false;
-    }
-
-private:
-    int _pin;
-    rmt_channel_t _channel;
-    RingbufHandle_t _ringbuf = NULL;
-    RingbufHandle_t _ringbuf = NULL;
-
-    bool match(uint32_t measured, uint32_t target) {
-        return (measured >= (target - NEC_DECODE_MARGIN)) &&
-               (measured <= (target + NEC_DECODE_MARGIN));
-    }
-
-    bool parseNecFrame(rmt_item32_t* items, size_t count, uint32_t &code, bool &isRepeat) {
-        isRepeat = false; // Always reset first
-
-        // Linearized access to durations
-        auto get_time = [&](int i) -> uint32_t {
-            if (i % 2 == 0) return items[i/2].duration0;
-            else return items[i/2].duration1;
-        };
-
-        size_t symbol_count = count * 2;
-        if (symbol_count < 2) return false;
-
-        // Leader Code (9ms Mark, 4.5ms Space / 2.25ms Repeat)
-        if (!match(get_time(0), 9000)) return false;
-
-        if (match(get_time(1), 2250)) {
-            isRepeat = true;
-            return true;
-        }
-        if (!match(get_time(1), 4500)) return false;
-
-        if (symbol_count < 67) return false;
-
-        uint32_t data = 0;
-        int bit_idx = 0;
-
-        for (int i = 2; i < 66; i += 2) {
-            if (!match(get_time(i), 560)) return false;
-
-            data <<= 1;
-
-            // 560us space = '0', 1690us space = '1'
-            if (match(get_time(i+1), 1690)) {
-                data |= 1;
-            } else if (!match(get_time(i+1), 560)) {
-                return false;
-            }
-        }
-
-        code = data;
-        isRepeat = false;
-        return true;
-    }
-};
-
-#endif
 
 // ---------------------------------------------------------
 // RemoteControl Wrappers
@@ -457,11 +343,7 @@ RemoteControl::~RemoteControl() = default;
 // Starts the IR remote task and sets up the IR receiver
 
 bool RemoteControl::begin() {
-#if IS_IDF5
     debugW("Native Remote Control Decoding Started (RMT driver_ng)");
-#else
-    debugW("Native Remote Control Decoding Started (RMT Legacy)");
-#endif
     return _pImpl->begin();
 }
 

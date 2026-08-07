@@ -1321,12 +1321,8 @@ public:
 //
 // Callback function for ESPNOW that is called when a data packet is received
 
-#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
 #include <esp_now.h>
 void onReceiveESPNOW(const esp_now_recv_info_t *recvInfo, const uint8_t *data, int dataLen)
-#else
-void onReceiveESPNOW(const uint8_t *macAddr, const uint8_t *data, int dataLen)
-#endif
 {
     if (dataLen < sizeof(Message)) {
         debugE("ESPNOW Message received is too short: %d bytes", dataLen);

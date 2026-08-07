@@ -127,11 +127,7 @@ void TaskManager::begin()
     // and have to feed the watchdog on our own.
 
     for (int i = 0; i < CONFIG_FREERTOS_NUMBER_OF_CORES; ++i) {
-#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
         esp_task_wdt_delete(xTaskGetIdleTaskHandleForCore(i));
-#else
-        esp_task_wdt_delete(xTaskGetIdleTaskHandleForCPU(i));
-#endif
     }
     esp_task_wdt_add(_hIdle0);
 #if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
