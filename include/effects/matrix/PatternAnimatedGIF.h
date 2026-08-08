@@ -379,8 +379,8 @@ public:
             g()->Clear(_bkColor);
 
         if (_gifReadyToDraw) {
-            int result = GetGIFDecoder()->playFrame(true, NULL);
-            if (result == 0) { // EOF reached
+            int result = GetGIFDecoder()->playFrame(false, NULL);
+            if (result <= 0) { // EOF reached or error
                 GetGIFDecoder()->reset();
             }
         }
