@@ -130,63 +130,94 @@ TARGET_DIR = os.path.join(".pio", "shared_libdeps")
 if not os.path.exists(TARGET_DIR):
     os.makedirs(TARGET_DIR)
 
+import time
+
+# Simple lock mechanism to prevent race conditions when invoked concurrently by PIO
+def acquire_lock(lock_path, timeout=120):
+    start = time.time()
+    while True:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            return fd
+        except OSError:
+            if time.time() - start > timeout:
+                print(f"[Shared-Libs] Warning: Lock {lock_path} timed out. Forcing unlock...", file=sys.stderr)
+                try:
+                    os.remove(lock_path)
+                except Exception:
+                    pass
+            time.sleep(0.5)
+
+def release_lock(fd, lock_path):
+    try:
+        os.close(fd)
+        os.remove(lock_path)
+    except Exception:
+        pass
+
 # Install/upgrade all shared dependencies
-for lib in shared_libs:
-    expected_name = lib.split('/')[-1].split('@')[0].replace('.git', '').strip()
-    clean_name = expected_name.replace(' ', '_')
+lock_path = os.path.join(TARGET_DIR, ".install.lock")
+lock_fd = acquire_lock(lock_path)
 
-    lib_path = os.path.join(TARGET_DIR, clean_name)
-    expected_path = os.path.join(TARGET_DIR, expected_name)
-    version_file = os.path.join(lib_path, ".nd_version")
+try:
+    for lib in shared_libs:
+        expected_name = lib.split('/')[-1].split('@')[0].replace('.git', '').strip()
+        clean_name = expected_name.replace(' ', '_')
 
-    needs_install = True
-    if os.path.exists(lib_path) and os.path.exists(version_file):
-        try:
-            with open(version_file, "r") as f:
-                installed_version = f.read().strip()
-            if installed_version == lib:
-                needs_install = False
-        except Exception:
-            pass
+        lib_path = os.path.join(TARGET_DIR, clean_name)
+        expected_path = os.path.join(TARGET_DIR, expected_name)
+        version_file = os.path.join(lib_path, ".nd_version")
 
-    if needs_install:
-        if os.path.exists(lib_path):
-            print(f"[Shared-Libs] Upgrading/Reinstalling shared dependency: {lib}...", file=sys.stderr)
+        needs_install = True
+        if os.path.exists(lib_path) and os.path.exists(version_file):
             try:
-                shutil.rmtree(lib_path)
-            except Exception as e:
-                print(f"[Shared-Libs] Warning: failed to clean up directory {lib_path}: {e}", file=sys.stderr)
-        else:
-            print(f"[Shared-Libs] Installing shared dependency: {lib}...", file=sys.stderr)
+                with open(version_file, "r") as f:
+                    installed_version = f.read().strip()
+                if installed_version == lib:
+                    needs_install = False
+            except Exception:
+                pass
 
-        pio_bin = find_platformio_bin()
-
-        try:
-            # Use PlatformIO's package manager to install it
-            cmd = pio_bin if isinstance(pio_bin, list) else [pio_bin]
-            subprocess.run(cmd + [
-                "pkg", "install",
-                "--library", lib,
-                "--storage-dir", TARGET_DIR
-            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-            # Rename if expected_path != lib_path (spaces to underscores)
-            if expected_path != lib_path and os.path.exists(expected_path):
-                if os.path.exists(lib_path):
-                    shutil.rmtree(lib_path)
-                os.rename(expected_path, lib_path)
-
-            # Write version file
-            os.makedirs(lib_path, exist_ok=True)
-            with open(version_file, "w") as f:
-                f.write(lib)
-        except Exception as e:
-            print(f"[Shared-Libs] Error: failed to install dependency {lib}: {e}", file=sys.stderr)
+        if needs_install:
             if os.path.exists(lib_path):
-                shutil.rmtree(lib_path, ignore_errors=True)
-            if expected_path != lib_path and os.path.exists(expected_path):
-                shutil.rmtree(expected_path, ignore_errors=True)
-            sys.exit(1)
+                print(f"[Shared-Libs] Upgrading/Reinstalling shared dependency: {lib}...", file=sys.stderr)
+                try:
+                    shutil.rmtree(lib_path)
+                except Exception as e:
+                    print(f"[Shared-Libs] Warning: failed to clean up directory {lib_path}: {e}", file=sys.stderr)
+            else:
+                print(f"[Shared-Libs] Installing shared dependency: {lib}...", file=sys.stderr)
+
+            pio_bin = find_platformio_bin()
+
+            try:
+                # Use PlatformIO's package manager to install it
+                cmd = pio_bin if isinstance(pio_bin, list) else [pio_bin]
+                subprocess.run(cmd + [
+                    "pkg", "install",
+                    "--library", lib,
+                    "--storage-dir", TARGET_DIR
+                ], check=True, stdout=subprocess.DEVNULL) # Let stderr pass through for error visibility
+
+                # Rename if expected_path != lib_path (spaces to underscores)
+                if expected_path != lib_path and os.path.exists(expected_path):
+                    if os.path.exists(lib_path):
+                        shutil.rmtree(lib_path)
+                    os.rename(expected_path, lib_path)
+
+                # Write version file
+                os.makedirs(lib_path, exist_ok=True)
+                with open(version_file, "w") as f:
+                    f.write(lib)
+            except Exception as e:
+                print(f"[Shared-Libs] Error: failed to install dependency {lib}: {e}", file=sys.stderr)
+                if os.path.exists(lib_path):
+                    shutil.rmtree(lib_path, ignore_errors=True)
+                if expected_path != lib_path and os.path.exists(expected_path):
+                    shutil.rmtree(expected_path, ignore_errors=True)
+                sys.exit(1)
+finally:
+    release_lock(lock_fd, lock_path)
 
 # Read base_build_flags from [base]
 try:
