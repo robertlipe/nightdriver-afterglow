@@ -86,7 +86,14 @@ void HUB75GFX::fillLeds(std::unique_ptr<CRGB []> & pLEDs)
 
 void HUB75GFX::Clear(CRGB color)
 {
-    std::fill(leds, leds + _ledcount, color);
+    if (color.g == color.r && color.r == color.b)
+    {
+        memset((void *) leds, color.r, sizeof(CRGB) * _ledcount);
+    }
+    else
+    {
+        std::fill(leds, leds + _ledcount, color);
+    }
 }
 
 void HUB75GFX::MoveInwardX(int startY, int endY)

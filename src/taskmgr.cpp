@@ -339,10 +339,8 @@ TaskHandle_t NightDriverTaskManager::StartEffectThread(EffectTaskFunction functi
 
     Serial.print( str_sprintf(">> Launching %s Effect Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", name, (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
 
-    if (xTaskCreatePinnedToCore(EffectTaskEntry, name, DEFAULT_STACK_SIZE, pTaskParams.get(), priority, &effectTask, core) == pdPASS)
+    if (xTaskCreatePinnedToCore(EffectTaskEntry, name, DEFAULT_STACK_SIZE, pTaskParams.get(), priority, &effectTask, core) == pdPASS) {
         _vEffectTasks.push_back(effectTask);
-
-    if (effectTask) {
         // Ownership transferred successfully to the thread
         pTaskParams.release();
     }
