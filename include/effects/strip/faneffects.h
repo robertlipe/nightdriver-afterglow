@@ -32,6 +32,7 @@
 //---------------------------------------------------------------------------
 
 
+#include <array>
 #include <cmath>
 
 #include "effects.h"
@@ -486,8 +487,8 @@ class TapeReelEffect : public EffectWithId<TapeReelEffect>
 {
 private:
 
-  float ReelPos[NUM_FANS] = {0};
-  float ReelDir[NUM_FANS] = {0};
+  std::array<float, NUM_FANS> ReelPos = {0};
+  std::array<float, NUM_FANS> ReelDir = {0};
 
 public:
 
@@ -568,9 +569,9 @@ public:
 class PaletteReelEffect : public EffectWithId<PaletteReelEffect>
 {
 private:
-  float ReelPos[NUM_FANS] = {0};
-  float ReelDir[NUM_FANS] = {0};
-  int ColorOffset[NUM_FANS] = {0};
+  std::array<float, NUM_FANS> ReelPos = {0};
+  std::array<float, NUM_FANS> ReelDir = {0};
+  std::array<int, NUM_FANS> ColorOffset = {0};
 
 public:
   PaletteReelEffect(const String & strName) : EffectWithId<PaletteReelEffect>(strName) {}
@@ -666,8 +667,8 @@ private:
     const CRGBPalette16 _Palette;
     bool _bReplaceMagenta;
     float _sparkleChance;
-    float ReelPos[NUM_FANS] = {0};
-    int ColorOffset[NUM_FANS] = {0};
+    std::array<float, NUM_FANS> ReelPos = {0};
+    std::array<int, NUM_FANS> ColorOffset = {0};
 
 public:
   PaletteSpinEffect(const String &strName, const CRGBPalette16 &palette, bool bReplace, float sparkleChance = 0.0)

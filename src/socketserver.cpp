@@ -62,11 +62,11 @@ SocketServer::SocketServer(int port, int numLeds) :
     _port(port),
     _numLeds(numLeds),
     _server_fd(-1),
-    _cbReceived(0)
+    _cbReceived(0),
+    _address{}
 {
     _abOutputBuffer.resize(MAXIMUM_PACKET_SIZE+1);        // +1 for uzlib one byte overreach bug
     _pBuffer.resize(MAXIMUM_PACKET_SIZE);
-    memset(&_address, 0, sizeof(_address));
 }
 
 void SocketServer::release()
@@ -104,7 +104,7 @@ bool SocketServer::begin()
         return false;
     }
 
-    memset(&_address, 0, sizeof(_address));
+    _address = {};
     _address.sin_family = AF_INET;
     _address.sin_addr.s_addr = INADDR_ANY;
     _address.sin_port = htons( _port );
@@ -189,7 +189,7 @@ bool SocketServer::DecompressBuffer(std::span<const uint8_t> compressed, std::sp
     // It's a small price to pay for a tiny embedded decompressor.
 
     std::unique_ptr<uint8_t[]> pTemp = std::make_unique<uint8_t[]>(compressed.size() + 1);
-    memcpy(pTemp.get(), compressed.data(), compressed.size());
+    std::memcpy(pTemp.get(), compressed.data(), compressed.size());
     pTemp[compressed.size()] = 0;
 
     struct uzlib_uncomp d = { 0 };
@@ -339,7 +339,7 @@ bool SocketServer::ProcessIncomingConnectionsLoop()
 
             #if USE_PSRAM
                 std::unique_ptr<uint8_t []> _abTempBuffer = std::make_unique<uint8_t []>(MAXIMUM_PACKET_SIZE+1);    // Plus one for uzlib buffer overreach bug
-                memcpy(_abTempBuffer.get(), _pBuffer.data(), MAXIMUM_PACKET_SIZE);
+                std::memcpy(_abTempBuffer.get(), _pBuffer.data(), MAXIMUM_PACKET_SIZE);
                 auto pSourceBuffer = &_abTempBuffer[COMPRESSED_HEADER_SIZE];
             #else
                 auto pSourceBuffer = _pBuffer.data() + COMPRESSED_HEADER_SIZE;

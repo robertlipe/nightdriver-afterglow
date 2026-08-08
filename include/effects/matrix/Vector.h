@@ -1,5 +1,7 @@
 #pragma once
 
+#include <numbers>
+
 //+--------------------------------------------------------------------------
 //
 // File:        PatternSpiro.h
@@ -161,7 +163,7 @@ public:
 
     void rotate(float deg)
     {
-        float theta = deg / 180.0f * (float) M_PI;
+        float theta = deg / 180.0f * std::numbers::pi_v<float>;
         float c = cos(theta);
         float s = sin(theta);
         float tx = x * c - y * s;

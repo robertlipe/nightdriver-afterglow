@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <vector>
 #include <chrono>
 #include <algorithm>
@@ -93,7 +94,7 @@ public:
         struct tm tm_buf;
         struct tm* t = localtime_r(&now_t, &tm_buf);
         lastMin = t->tm_min;
-        unsigned int digits[5] = {(unsigned int)(t->tm_hour/10), (unsigned int)(t->tm_hour%10), 10, (unsigned int)(t->tm_min/10), (unsigned int)(t->tm_min%10)};
+        std::array digits = {(unsigned int)(t->tm_hour/10), (unsigned int)(t->tm_hour%10), 10u, (unsigned int)(t->tm_min/10), (unsigned int)(t->tm_min%10)};
         unsigned int startX = (MATRIX_WIDTH - (5 * 4)) / 2;
 
         for (unsigned int d = 0; d < 5; d++) {
