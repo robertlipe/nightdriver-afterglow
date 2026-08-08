@@ -27,7 +27,7 @@
 //
 //   Displays embedded GIF animations on the LED matrix.  GIF files
 //   are embedded in the flash image and are decoded on the fly.  The
-//   GIF decoder is from Louis Beaudoin's GifDecoder library.  We use
+//   GIF decoder is from Larry Bank's AnimatedGIF library.  We use
 //   that to extract frames from the GIF and then plot them on the
 //   LED matrix.  We do that by supplying callbacks to the GIF decoder
 //   that it calls to fetch the GIF data and to plot the pixels on the
@@ -45,7 +45,7 @@
 #include <map>
 
 #include "effects.h"
-#include "GifDecoder.h"
+#include <AnimatedGIF.h>
 #include "hub75gfx.h"
 #include "ledstripeffect.h"
 #include "systemcontainer.h"
@@ -139,9 +139,9 @@ struct
 }
 g_gifDecoderState;
 
-static GifDecoder<MATRIX_WIDTH, MATRIX_HEIGHT, 16, true>* GetGIFDecoder()
+static AnimatedGIF* GetGIFDecoder()
 {
-    static const auto g_ptrGIFDecoder = make_unique_psram<GifDecoder<MATRIX_WIDTH, MATRIX_HEIGHT, 16, true>>();
+    static const auto g_ptrGIFDecoder = make_unique_psram<AnimatedGIF>();
     return g_ptrGIFDecoder.get();
 }
 
@@ -162,54 +162,92 @@ class PatternAnimatedGIF : public EffectWithId<PatternAnimatedGIF>
     // have to be global.  We use the global g_gifDecoderState to track state.  The GifDecoder code calls back to
     // these callbacks to do the actual work of plotting them on the LED matrix.
 
-    // screenClearCallback - clears the screen with the color given to the constructor
-
-    static void screenClearCallback(void)
-    {
-        auto& g = *(g_ptrSystem->GetEffectManager().g());
-        g.Clear(g_gifDecoderState._bkColor);
-    }
-
-    // We decide when to update the screen, so this is a no-op
-
-    static void updateScreenCallback(void)
-    {
-        debugV("UpdateScreenCallback from AnimatedGIF decoder.");
-    }
-
-    // drawPixelCallback
+    // GIFDraw
     //
-    // This is called by the GIF decoder to draw a pixel.  We use scaling and offset to fit the GIF on the LED matrix.
+    // This is called by the GIF decoder to draw a line of pixels. We use scaling and offset to fit the GIF on the LED matrix.
 
-    static void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue)
+    static void GIFDraw(GIFDRAW *pDraw)
     {
         auto& g = *(g_ptrSystem->GetEffectManager().g(0));
 
-        // Apply scaling transformation
-        int scaledX = static_cast<int>(x * g_gifDecoderState._scaleX) + g_gifDecoderState._offsetX;
+        uint8_t *s;
+        uint8_t *usPalette;
+        int x, y, iWidth;
+
+        iWidth = pDraw->iWidth;
+        usPalette = pDraw->pPalette24;
+        y = pDraw->iY + pDraw->y; // current line in source coordinates
+        s = pDraw->pPixels;
+
+        // Apply scaling transformation for the whole line based on source Y
         int scaledY = static_cast<int>(y * g_gifDecoderState._scaleY) + g_gifDecoderState._offsetY;
 
-        if (false == g.isValidPixel(scaledX, scaledY))
+        if (pDraw->ucHasTransparency) // if transparency used
         {
-            debugV("drawPixelCallback: scaled pixel out of bounds: %d, %d (from source %d, %d)", scaledX, scaledY, x, y);
-            return;
+            uint8_t *pEnd, c, ucTransparent = pDraw->ucTransparent;
+            pEnd = s + iWidth;
+            x = 0;
+            while(x < iWidth)
+            {
+                c = ucTransparent - 1;
+                while (c != ucTransparent && s < pEnd)
+                {
+                    c = *s++;
+                    if (c == ucTransparent) // done, stop
+                    {
+                        s--; // back up to treat it like transparent
+                    }
+                    else // opaque
+                    {
+                        int scaledX = static_cast<int>((pDraw->iX + x) * g_gifDecoderState._scaleX) + g_gifDecoderState._offsetX;
+                        if (g.isValidPixel(scaledX, scaledY))
+                        {
+                            g.leds[XY(scaledX, scaledY)] = CRGB(usPalette[c*3 + 0], usPalette[c*3 + 1], usPalette[c*3 + 2]);
+                        }
+                        else
+                        {
+                            static uint32_t lastWarn = 0;
+                            if (millis() - lastWarn > 5000) {
+                                debugW("GIFDraw: scaled pixel out of bounds: %d, %d", scaledX, scaledY);
+                                lastWarn = millis();
+                            }
+                        }
+                        x++;
+                    }
+                } // while looking for opaque pixels
+
+                c = ucTransparent;
+                while (c == ucTransparent && s < pEnd)
+                {
+                    c = *s++;
+                    if (c == ucTransparent)
+                        x++;
+                    else
+                        s--;
+                }
+            }
         }
-
-        // If we're scaling down (scale < 1.0), we might want to sample multiple source pixels
-        // For now, we use simple nearest-neighbor scaling
-        g.leds[XY(scaledX, scaledY)] = CRGB(red, green, blue);
-    }
-
-    // drawLineCallback
-    //
-    // This is called by the GIF decoder to draw a line of pixels.
-
-    static void drawLineCallback(int16_t x, int16_t y, uint8_t *buf, int16_t w, uint16_t *palette, int16_t skip)
-    {
-        // I don't think this is ever called, but if it is, we may need to implement it.  For now, it seems they just
-        // call drawPixelCallback for each pixel in the image.
-
-        throw std::runtime_error("drawLineCallback not implemented for animated GIFs");
+        else // no transparency
+        {
+            s = pDraw->pPixels;
+            for (x = 0; x < iWidth; x++)
+            {
+                uint8_t c = *s++;
+                int scaledX = static_cast<int>((pDraw->iX + x) * g_gifDecoderState._scaleX) + g_gifDecoderState._offsetX;
+                if (g.isValidPixel(scaledX, scaledY))
+                {
+                    g.leds[XY(scaledX, scaledY)] = CRGB(usPalette[c*3 + 0], usPalette[c*3 + 1], usPalette[c*3 + 2]);
+                }
+                else
+                {
+                    static uint32_t lastWarn = 0;
+                    if (millis() - lastWarn > 5000) {
+                        debugW("GIFDraw: scaled pixel out of bounds: %d, %d", scaledX, scaledY);
+                        lastWarn = millis();
+                    }
+                }
+            }
+        }
     }
 
     // For slower animations that run at a lower framerate, we double the framerate by discarding every other frame,
@@ -311,14 +349,11 @@ public:
         g_gifDecoderState._dstWidth  = dstWidth;
         g_gifDecoderState._dstHeight = dstHeight;
 
-        // Set the GIF decoder callbacks to our static functions
+        // Initialize AnimatedGIF and set the GIFDraw callback.
+        // Note: we request the 24-bit RGB888 palette for accurate color rendering.
+        GetGIFDecoder()->begin(LITTLE_ENDIAN_PIXELS, GIF_PALETTE_RGB888);
 
-        GetGIFDecoder()->setScreenClearCallback( screenClearCallback );
-        GetGIFDecoder()->setUpdateScreenCallback( updateScreenCallback );
-        GetGIFDecoder()->setDrawPixelCallback( drawPixelCallback );
-        GetGIFDecoder()->setDrawLineCallback( drawLineCallback );
-
-        _gifReadyToDraw = (ERROR_NONE == GetGIFDecoder()->startDecoding(const_cast<uint8_t*>(gif->second.contents), gif->second.length));
+        _gifReadyToDraw = GetGIFDecoder()->open((uint8_t*)gif->second.contents, gif->second.length, GIFDraw);
         if (!_gifReadyToDraw)
             debugW("Failed to start decoding GIF");
     }
@@ -343,8 +378,12 @@ public:
         if (_preClear)
             g()->Clear(_bkColor);
 
-        if (_gifReadyToDraw)
-            GetGIFDecoder()->decodeFrame(false);
+        if (_gifReadyToDraw) {
+            int result = GetGIFDecoder()->playFrame(false, NULL);
+            if (result <= 0) { // EOF reached or error
+                GetGIFDecoder()->reset();
+            }
+        }
 
     }
 };
