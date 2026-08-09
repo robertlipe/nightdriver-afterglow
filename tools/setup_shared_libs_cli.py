@@ -216,15 +216,3 @@ try:
 finally:
     release_lock(lock_fd, lock_path)
 
-# Read base_build_flags from [base]
-try:
-    base_flags_raw = config.get("base", "base_build_flags")
-    if isinstance(base_flags_raw, list):
-        base_flags_str = " ".join([f.strip() for f in base_flags_raw if f.strip()])
-    else:
-        base_flags_str = " ".join([f.strip() for f in base_flags_raw.split('\n') if f.strip()])
-except Exception:
-    base_flags_str = "-std=gnu++2a -g3 -Ofast -ffunction-sections -fdata-sections -include string.h"
-
-# Print a dummy flag and all base build flags for build_flags
-print(f"-DSHARED_LIBS_OK {base_flags_str}")
