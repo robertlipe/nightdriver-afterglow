@@ -234,10 +234,6 @@ void ConfirmUpdate();
 #endif
 #endif
 
-
-
-void ScreenUpdateLoopEntry(void *);
-
 #if ENABLE_ESPNOW
 void onReceiveESPNOW(const esp_now_recv_info_t *recvInfo, const uint8_t *data, int dataLen);
 #endif
@@ -358,11 +354,9 @@ void setup()
     if (!UserFS.begin(true))
         Serial.println("WARNING: UserFS could not be initialized!");
 
-    // Enabling PSRAM allows us to use the extra 4MB of RAM on the ESP32-WROVER chip, but it caused
-    // problems with the S3 rebooting when WiFi connected, so for now, I've limited the default
-    // allocator to be PSRAM only on the MESMERIZER project where it's well tested.
-
-        heap_caps_malloc_extmem_enable(16);
+    // Enabling PSRAM is benign if we don't have it.
+    // Ensure that essentially ALL allocations are put in PSRAM if we can.
+    heap_caps_malloc_extmem_enable(16);
 
     // Initialize LZ library for decompressing compressed wifi packets
 #if INCOMING_WIFI_ENABLED
