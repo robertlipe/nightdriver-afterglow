@@ -133,7 +133,7 @@ if not os.path.exists(TARGET_DIR):
 import time
 
 # Simple lock mechanism to prevent race conditions when invoked concurrently by PIO
-def acquire_lock(lock_path, timeout=120):
+def acquire_lock(lock_path, timeout=300):
     start = time.time()
     while True:
         try:
@@ -141,12 +141,9 @@ def acquire_lock(lock_path, timeout=120):
             return fd
         except OSError:
             if time.time() - start > timeout:
-                print(f"[Shared-Libs] Warning: Lock {lock_path} timed out. Forcing unlock...", file=sys.stderr)
-                try:
-                    os.remove(lock_path)
-                except Exception:
-                    pass
-            time.sleep(0.5)
+                print(f"[Shared-Libs] Warning: Lock {lock_path} timed out after {timeout}s. Still waiting...", file=sys.stderr)
+                start = time.time() # Reset timer to avoid spam
+            time.sleep(0.5 + (os.getpid() % 10) / 10.0) # Add jitter to prevent thundering herd
 
 def release_lock(fd, lock_path):
     try:
