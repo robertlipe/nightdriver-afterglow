@@ -112,7 +112,7 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
         // This is a fragile way to to it, but we fill the top line of
         // the display with fresh snowflakes to be scrolled down later.
         uint8_t posX = random(MATRIX_WIDTH);
-        for (uint8_t x = 0U; x < MATRIX_WIDTH; x++)
+        for (int x = 0U; x < MATRIX_WIDTH; x++)
         {
             // randomly fill in the top row
             snowAt(x, top_line_offset) = (posX == x) && (step % 3 == 0);
@@ -170,7 +170,7 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
         const uint8_t rows = (MATRIX_HEIGHT + 1) / 3U;
         uint8_t deltaHue = floor(Speed / 64) * 64;
         bool dir = false;
-        for (uint8_t y = 0; y < rows; y++)
+        for (int y = 0; y < rows; y++)
         {
             if (dir)
             {
@@ -196,7 +196,7 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
             }
 
             // Shift layers ------------------
-            for (uint8_t x = 1U; x < MATRIX_WIDTH; x++)
+            for (int x = 1U; x < MATRIX_WIDTH; x++)
             {
                 if (dir)
                 { // <==

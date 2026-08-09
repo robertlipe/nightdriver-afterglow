@@ -138,7 +138,7 @@ private:
 
         void shuffleDown()
         {
-            for (uint8_t i = SNAKE_LENGTH - 1; i > 0; i--)
+            for (int i = SNAKE_LENGTH - 1; i > 0; i--)
             {
                 pixels[i] = pixels[i - 1];
             }
@@ -175,7 +175,7 @@ private:
 
         void draw(std::shared_ptr<GFXBase> graphics, CRGB colors[SNAKE_LENGTH])
         {
-            for (uint8_t i = 0; i < SNAKE_LENGTH; i++)
+            for (int i = 0; i < SNAKE_LENGTH; i++)
                 graphics->leds[XY(pixels[i].x, pixels[i].y)] = colors[i] %= (255 - i * (255 / SNAKE_LENGTH / 4));
 
             uint8_t m = random(20, 100);

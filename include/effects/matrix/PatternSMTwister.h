@@ -17,7 +17,7 @@ class PatternSMTwister : public EffectWithId<PatternSMTwister>
 
         int steps = abs(x1 - x) + 1;
 
-        for (uint16_t i = 1; i <= steps; i++)
+        for (int i = 1; i <= steps; i++)
         {
             int dx = x1 + (x - x1) * i / steps;
             uint16_t index = XY(dx, y);

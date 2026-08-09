@@ -119,7 +119,7 @@ class PatternRose : public EffectWithId<PatternRose>
         g()->DimAll(dim);
 
 
-        for (uint16_t i = 0; i < MATRIX_HEIGHT; i++)
+        for (int i = 0; i < MATRIX_HEIGHT; i++)
         {
             CRGB color;
 
@@ -168,7 +168,7 @@ class PatternPinwheel : public EffectWithId<PatternPinwheel>
         uint8_t dim = beatsin8(2, 30, 70);
         fadeAllChannelsToBlackBy(dim);
 
-        for (uint8_t i = 0; i < 64; i++)
+        for (int i = 0; i < 64; i++)
         {
             CRGB color;
 

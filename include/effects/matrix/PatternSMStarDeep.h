@@ -58,7 +58,7 @@ class PatternSMStarDeep : public EffectWithId<PatternSMStarDeep>
         const CRGB starColor = g()->IsPalettePaused() ? g()->ColorFromCurrentPalette(colorIndex) : ColorFromPalette(*curPalette, colorIndex);
         const uint8_t angle_step = 255 / numPoints;
 
-        for (uint8_t i = 0; i < numPoints; i++)
+        for (int i = 0; i < numPoints; i++)
         {
             const uint8_t outer_angle = i * angle_step - angleOffset;
             const int16_t outer_x = centerX + ((outerRadius * (sin8(outer_angle) - 128.0f)) / 128.0f);
@@ -139,7 +139,7 @@ class PatternSMStarDeep : public EffectWithId<PatternSMStarDeep>
         if (nStars > kMaxStars)
             nStars = kMaxStars;
 
-        for (uint8_t num = 0; num < nStars; num++)
+        for (int num = 0; num < nStars; num++)
         {
             stars[num].corners = random8(3, 9);
             stars[num].position = counter + (num << 3) + 1U;
@@ -173,7 +173,7 @@ class PatternSMStarDeep : public EffectWithId<PatternSMStarDeep>
             y_drift_countdown = kCenterDriftSpeed;
         }
 
-        for (uint8_t num = 0; num < nStars; num++)
+        for (int num = 0; num < nStars; num++)
         {
             if (counter >= stars[num].position)
             {

@@ -183,7 +183,7 @@ void GFXBase::drawPixelXYF_Wu(float x, float y, CRGB color)
 {
     uint8_t xx = (x - (int)x) * 255, yy = (y - (int)y) * 255, ix = 255 - xx, iy = 255 - yy;
     uint8_t wu[4] = {WU_WEIGHT(ix, iy), WU_WEIGHT(xx, iy), WU_WEIGHT(ix, yy), WU_WEIGHT(xx, yy)};
-    for (uint8_t i = 0; i < 4; i++)
+    for (int i = 0; i < 4; i++)
     {
         int16_t xn = x + (i & 1), yn = y + ((i >> 1) & 1);
         if (isValidPixel(xn, yn)) {
@@ -387,10 +387,10 @@ void GFXBase::blurRows(CRGB *leds, uint16_t width, uint16_t height, uint16_t fir
     // blur rows same as columns, for irregular matrix
     uint8_t keep = 255 - blur_amount;
     uint8_t seep = blur_amount >> 1;
-    for (uint16_t row = 0; row < height; row++)
+    for (int row = 0; row < height; row++)
     {
         CRGB carryover = CRGB::Black;
-        for (uint16_t i = first; i < width; i++)
+        for (int i = first; i < width; i++)
         {
             CRGB cur = leds[XY(i, row)];
             CRGB part = cur;
@@ -412,10 +412,10 @@ void GFXBase::blurColumns(CRGB *leds, uint16_t width, uint16_t height, uint16_t 
     // blur columns
     uint8_t keep = 255 - blur_amount;
     uint8_t seep = blur_amount >> 1;
-    for (uint16_t col = 0; col < width; ++col)
+    for (int col = 0; col < width; ++col)
     {
         CRGB carryover = CRGB::Black;
-        for (uint16_t i = first; i < height; ++i)
+        for (int i = first; i < height; ++i)
         {
             CRGB cur = leds[XY(col, i)];
             CRGB part = cur;

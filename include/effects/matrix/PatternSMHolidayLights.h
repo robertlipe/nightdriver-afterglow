@@ -58,7 +58,7 @@ class PatternSMHolidayLights : public EffectWithId<PatternSMHolidayLights>
     else
         z = beatsin8(1, 1, 255);  // Otherwise, set 'z' to a value calculated using 'beatsin8'.
 
-    for (uint8_t i = 0; i < minDim; i++)
+    for (int i = 0; i < minDim; i++)
     {
         // Calculate 'x' based on various factors.
         unsigned x = beatsin16(i * (::map(speed, 1, 255, 3, 20)), i * 2, (minDim * 4 - 2) - (i * 2 + 2));

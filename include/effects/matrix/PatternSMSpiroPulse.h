@@ -53,7 +53,7 @@ class PatternSMSpiroPulse : public EffectWithId<PatternSMSpiroPulse>
         // Originally /3. Let's go all the way to the edges.
         float radX = CalcRad * CenterY / 2;
         float radY = CalcRad * CenterY / 2;
-        for (uint8_t i = 0; i < AM; i++)
+        for (int i = 0; i < AM; i++)
         {
             g()->drawPixelXYF_Wu((CenterX + sin(t + (Angle * i)) * radX),
                 MATRIX_HEIGHT - 1 - (CenterY + cos(t + (Angle * i)) * radY),

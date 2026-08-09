@@ -499,7 +499,7 @@ class PatternSMNoise : public EffectWithId<PatternSMNoise>
         // 'black out' all 16 palette entries...
         fill_solid(blackAndBlueStripedPalette, 16, CRGB::Black);
 
-        for (uint8_t i = 0; i < 6; i++)
+        for (int i = 0; i < 6; i++)
         {
             blackAndBlueStripedPalette[i] = CRGB::Blue;
         }

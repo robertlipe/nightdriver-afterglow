@@ -50,7 +50,7 @@ class PatternSMPicasso3in1 : public EffectWithId<PatternSMPicasso3in1>
 
             float minSpeed = 0.2, maxSpeed = 0.8;
 
-            for (uint8_t i = 0; i < enlargedObjectNUM; i++)
+            for (int i = 0; i < enlargedObjectNUM; i++)
             {
                 trackingObjects[i].posX = random8(MATRIX_WIDTH);
                 trackingObjects[i].posY = random8(MATRIX_HEIGHT);
@@ -67,7 +67,7 @@ class PatternSMPicasso3in1 : public EffectWithId<PatternSMPicasso3in1>
                 trackingObjects[i].state = trackingObjects[i].hue;
             }
         }
-        for (uint8_t i = 0; i < enlargedObjectNUM; i++)
+        for (int i = 0; i < enlargedObjectNUM; i++)
         {
             if (reset)
             {
@@ -83,7 +83,7 @@ class PatternSMPicasso3in1 : public EffectWithId<PatternSMPicasso3in1>
 
     void PicassoPosition()
     {
-        for (uint8_t i = 0; i < enlargedObjectNUM; i++)
+        for (int i = 0; i < enlargedObjectNUM; i++)
         {
             if (trackingObjects[i].posX + trackingObjects[i].speedY > MATRIX_WIDTH ||
                 trackingObjects[i].posX + trackingObjects[i].speedY < 0)
@@ -107,7 +107,7 @@ class PatternSMPicasso3in1 : public EffectWithId<PatternSMPicasso3in1>
         PicassoGenerate(false);
         PicassoPosition();
 
-        for (uint8_t i = 0; i < enlargedObjectNUM - 2U; i += 2)
+        for (int i = 0; i < enlargedObjectNUM - 2U; i += 2)
         {
             g()->drawLine(trackingObjects[i].posX, trackingObjects[i].posY, trackingObjects[i + 1U].posX,
                      trackingObjects[i + 1U].posY, CHSV(trackingObjects[i].hue, 255U, 255U));
@@ -126,7 +126,7 @@ class PatternSMPicasso3in1 : public EffectWithId<PatternSMPicasso3in1>
 
         g()->DimAll(180);
 
-        for (uint8_t i = 0; i < enlargedObjectNUM - 1U; i++)
+        for (int i = 0; i < enlargedObjectNUM - 1U; i++)
             g()->drawLine(trackingObjects[i].posX, trackingObjects[i].posY, trackingObjects[i + 1U].posX,
                       trackingObjects[i + 1U].posY, CHSV(trackingObjects[i].hue, 255U, 255U));
 
@@ -143,7 +143,7 @@ class PatternSMPicasso3in1 : public EffectWithId<PatternSMPicasso3in1>
         PicassoPosition();
         g()->DimAll(180);
 
-        for (uint8_t i = 0; i < enlargedObjectNUM - 2U; i += 2)
+        for (int i = 0; i < enlargedObjectNUM - 2U; i += 2)
             g()->DrawSafeCircle(fabs(trackingObjects[i].posX - trackingObjects[i + 1U].posX),
                        fabs(trackingObjects[i].posY - trackingObjects[i + 1U].posX),
                        fabs(trackingObjects[i].posX - trackingObjects[i].posY), CHSV(trackingObjects[i].hue, 255U, 255U));

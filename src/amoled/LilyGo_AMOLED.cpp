@@ -668,8 +668,8 @@ void LilyGo_AMOLED::pushColors(uint16_t x, uint16_t y, uint16_t width, uint16_t 
         uint16_t _w = hight;
         uint16_t *p = data;
         uint32_t cum = 0;
-        for (uint16_t j = 0; j < width; j++) {
-            for (uint16_t i = 0; i < hight; i++) {
+        for (int j = 0; j < width; j++) {
+            for (int i = 0; i < hight; i++) {
                 pBuffer[cum] = ((uint16_t)p[width * (hight - i - 1) + j]);
                 cum++;
             }
