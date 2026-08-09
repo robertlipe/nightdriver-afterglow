@@ -178,6 +178,9 @@ This file documents the custom reliability, diagnostic, and performance improvem
 - **Animation Framework**: Migrated from the legacy `GIFDecoder` to the more robust `AnimatedGIF` library, fixing frame blocking issues and improving decode stability.
 - **Security & Code Health**: Squashed command injection vulnerabilities in Python build scripts (`bake_site.py`) and eliminated unsafe `sprintf` usages (like in `PatternPongClock`) to ensure rock-solid stability and secure builds.
 
+### 4. Arduino2/ESP-IDF4 Turndown Completed
+- **ESP-IDF Modernization**: Migrated from unsupported Arduino2 and ESP-IDF4 completely to Arduino3 and ESP-IDF5. This gives more modern language support, regular updates from Espressif, provides for newer chips like ESP32-C5, ESP32-C6, ESP32-P4 and lays the groundwork to move to Arduino4 and ESP-IDF6 for upcoming chips like ESP32-P4X and ESP32-S3.
+
 ## ⚡ Hardware Upgrades
 
 ### 1. YULC Support
