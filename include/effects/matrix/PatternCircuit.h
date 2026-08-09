@@ -147,10 +147,10 @@ private:
         void reset()
         {
             direction = UP;
-            for (int i = 0; i < SNAKE_LENGTH; i++)
+            for (auto & pixel : pixels)
             {
-                pixels[i].x = 0;
-                pixels[i].y = 0;
+                pixel.x = 0;
+                pixel.y = 0;
             }
         }
 

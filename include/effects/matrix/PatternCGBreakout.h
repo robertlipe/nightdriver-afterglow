@@ -184,7 +184,7 @@ public:
         g()->drawPixelXYF_Wu(ball.x, ball.y + yOffset, CRGB::White);
 
         // Draw paddle
-        int16_t px = (int16_t)lroundf(paddle.x);
+        auto px = (int16_t)lroundf(paddle.x);
         for (int16_t i = -4; i <= 3; i++) {
             g()->setPixel(px + i, kPaddleY + yOffset, CRGB(CRGB::Red));
         }

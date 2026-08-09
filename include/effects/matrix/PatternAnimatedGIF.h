@@ -328,8 +328,8 @@ public:
         }
 
         // Calculate the destination dimensions after scaling
-        uint16_t dstWidth = (uint16_t)(gifWidth * scaleX);
-        uint16_t dstHeight = (uint16_t)(gifHeight * scaleY);
+        auto dstWidth = (uint16_t)(gifWidth * scaleX);
+        auto dstHeight = (uint16_t)(gifHeight * scaleY);
 
         // Center the scaled GIF on the matrix
         int offsetX = (MATRIX_WIDTH - dstWidth) / 2;
@@ -379,7 +379,7 @@ public:
             g()->Clear(_bkColor);
 
         if (_gifReadyToDraw) {
-            int result = GetGIFDecoder()->playFrame(false, NULL);
+            int result = GetGIFDecoder()->playFrame(false, nullptr);
             if (result <= 0) { // EOF reached or error
                 GetGIFDecoder()->reset();
             }

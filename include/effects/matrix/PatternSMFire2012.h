@@ -43,7 +43,7 @@ class PatternSMFire2012 : public EffectWithId<PatternSMFire2012>
         if (Scale > 100)
             Scale = 100; // чтобы не было проблем при прошивке без очистки памяти
         float ratio = (Scale > 50) ? (Scale - 50) / 50.0f : Scale / 50.0f;
-        size_t idx = static_cast<size_t>(ratio * (palette_arr.size() - 1));
+        auto idx = static_cast<size_t>(ratio * (palette_arr.size() - 1));
         curPalette = palette_arr[idx];
     }
 

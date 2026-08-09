@@ -92,9 +92,9 @@ class PatternSMAmberRain : public EffectWithId<PatternSMAmberRain>
     void Start() override
     {
         g()->Clear();
-        for (int i = 0; i < NUMBER_OF_CIRCLES; i++)
+        for (auto & circle : circles)
         {
-            circles[i].reset();
+            circle.reset();
         }
     }
 
@@ -102,13 +102,13 @@ class PatternSMAmberRain : public EffectWithId<PatternSMAmberRain>
     {
         fadeAllChannelsToBlackBy(32);
 
-        for (unsigned int i = 0; i < NUMBER_OF_CIRCLES; i++)
+        for (auto & circle : circles)
         {
-            if (circles[i].radius() < 0.001)
+            if (circle.radius() < 0.001)
             {
-                circles[i].move();
+                circle.move();
             }
-            drawCircle(circles[i]);
+            drawCircle(circle);
         }
     }
 };

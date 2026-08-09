@@ -16,7 +16,7 @@ class PatternSMEyeTunnel : public EffectWithId<PatternSMEyeTunnel>
         // Extract the four most significant bits of the index as a palette index.
         uint8_t index_4bit = (index >> 12);
         // Calculate the 8-bit offset from the palette index.
-        uint8_t offset = (uint8_t)(index >> 4);
+        auto offset = (uint8_t)(index >> 4);
         // Get the palette entry from the 4-bit index
         const CRGB *entry = &(pal[0]) + index_4bit;
         uint8_t red1 = entry->red;

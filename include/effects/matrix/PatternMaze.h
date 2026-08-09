@@ -242,10 +242,8 @@ private:
         g()->drawPixel(imagePoint.x, imagePoint.y, color);
         g()->drawPixel(MATRIX_WIDTH - 1 - imagePoint.x, imagePoint.y, color);
 
-        for (int i = 0; i < 4; i++)
+        for (auto direction : directions)
         {
-            Directions direction = directions[i];
-
             Point newPoint = point.Move(direction);
             if (newPoint.x >= 0 && newPoint.y >= 0 && newPoint.x < width && newPoint.y < height && grid[newPoint.x][newPoint.y] == None)
             {
@@ -289,8 +287,8 @@ public:
 
             // reset the maze grid
             for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    grid[x][y] = None;
+                for (auto & x : grid) {
+                    x[y] = None;
                 }
             }
 
