@@ -32,6 +32,7 @@
 
 
 #include <numeric>
+#include <new>
 
 #include "musiceffect.h"
 #include "random_utils.h"
@@ -525,7 +526,7 @@ class SmoothFireEffect : public EffectWithId<SmoothFireEffect>
     bool Init(std::vector<std::shared_ptr<GFXBase>>& gfx) override
     {
         LEDStripEffect::Init(gfx);
-        _Temperatures = (float *)PreferPSRAMAlloc(sizeof(float) * _cLEDs);
+        _Temperatures = new (std::nothrow) float[_cLEDs];
         if (!_Temperatures)
         {
             Serial.println("ERROR: Could not allocate memory for FireEffect");
@@ -536,7 +537,7 @@ class SmoothFireEffect : public EffectWithId<SmoothFireEffect>
 
     ~SmoothFireEffect()
     {
-        free(_Temperatures);
+        delete[] _Temperatures;
     }
 
     void Draw() override

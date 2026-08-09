@@ -22,7 +22,8 @@ This file contains critical context, constraints, and architectural information 
 *   **Data Types:** ESP32 has hardware floating point but emulates double. **Prefer `float`** data types and function calls over `double`.
 *   **Memory:**
     *   ESP32 Targets vary between 320K and 16MB (PSRAM) of RAM.
-    *   Use `make_unique_psram<T>()` or `make_shared_psram<T>()` for large object allocations to prefer PSRAM when available.
+    *   `src/main.cpp` sets `heap_caps_malloc_extmem_enable(16);`. This means any dynamic allocation (`new`, `malloc`, `std::make_unique`) over 16 bytes will automatically route to PSRAM first, seamlessly falling back to Internal SRAM if PSRAM is full.
+    *   Prefer embedding large arrays as member variables inside `Effect` classes. Since `Effect` objects are dynamically allocated and large, they will automatically land in PSRAM, saving you the overhead of managing a second heap pointer.
     *   Avoid large stack allocations.
 *   **Concurrency:** Multiple tasks run on potentially multiple cores. The design generally assumes only one task clearly owns each data. There are very few `std::lock_guard` or `std::mutex` locks needed.
 *   **Best Practices:** Use C++20 best practices, like returning `std::optional`, relying upon RVO and NVRO, not using in/out parameters. Prefer constant, smart data structures and containers and `<algorithm>` over manually coded loops.
@@ -122,7 +123,7 @@ To maintain build stability across Av2 and Av3, adhere to these strict rules:
 2.  **`globals.h` Precedence**: `globals.h` MUST be the first "local" (quoted) include in any `.cpp` or non-leaf header. This establishes feature macros before logic is parsed.
     *   **Exception**: Leaf headers in `include/effects/` do not include `globals.h` directly as they are only ever included into units where it is already established.
 3.  **`globals.h` Minimalism**: Keep it restricted to configuration macros and constants. Do not add system logic headers.
-4.  **Interface Decoupling**: Use `interfaces.h` for core types (`IJSONSerializable`, `SettingSpec`, `psram_allocator`). This prevents pulling `ledstripeffect.h` or `jsonserializer.h` into low-level components.
+4.  **Interface Decoupling**: Use `interfaces.h` for core types (`IJSONSerializable`, `SettingSpec`). This prevents pulling `ledstripeffect.h` or `jsonserializer.h` into low-level components.
 5.  **Include Skepticism**: Prefer forward declarations over includes in headers. Keep heavy display/driver includes in `.cpp` files.
 6.  **Non-Trivial Classes**: Class method implementations MUST reside in `.cpp` files. Headers should be declaration-only.
 7.  **Arduino3 Collisions**: Use `nd_network.h` for project networking; `network.h` is reserved for the Arduino framework.

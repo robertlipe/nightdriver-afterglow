@@ -38,7 +38,7 @@ LEDBuffer::LEDBuffer(std::shared_ptr<GFXBase> pStrand) :
              _timeStampMicroseconds(0),
              _timeStampSeconds(0)
 {
-    _leds.reset(psram_allocator<CRGB>().allocate(NUM_LEDS));
+    _leds.reset(new CRGB[NUM_LEDS]);
 }
 
 uint64_t LEDBuffer::Seconds()      const  { return _timeStampSeconds;      }

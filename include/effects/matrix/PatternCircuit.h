@@ -185,18 +185,18 @@ private:
     };
 
     static const int snakeCount = 20;
-    Path *snakes;
+    Path snakes[snakeCount];
 
     void construct()
     {
-        snakes = (Path *) PreferPSRAMAlloc(snakeCount * sizeof(Path)); //
+
     }
 
 public:
 
     PatternCircuit() : EffectWithId<PatternCircuit>("Circuit") { construct(); }
     PatternCircuit(const JsonObjectConst& jsonObject) : EffectWithId<PatternCircuit>(jsonObject) { construct(); }
-    ~PatternCircuit() { free(snakes); }
+    ~PatternCircuit() {}
 
     unsigned long msStart;
 

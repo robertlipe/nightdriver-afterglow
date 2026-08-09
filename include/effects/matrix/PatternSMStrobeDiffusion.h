@@ -26,7 +26,7 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
     uint8_t step { 0 }; // some counter of frames or sequences of operations
     // Locations of snowflakes stored in a single flattened bitset (X-major).
     // Index calculation: idx = y * MATRIX_WIDTH + x
-    std::unique_ptr<std::bitset<MATRIX_WIDTH * MATRIX_HEIGHT>> snowBits = std::make_unique<std::bitset<MATRIX_WIDTH * MATRIX_HEIGHT>>();
+    std::bitset<MATRIX_WIDTH * MATRIX_HEIGHT> snowBits;
     uint8_t Speed = 150;                                                             // 1-255 is speed
     uint8_t Scale = 90;                                                              // 1-100 is something parameter
 
@@ -46,12 +46,12 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
     // const overload returns a bool for read-only contexts.
     inline std::bitset<MATRIX_WIDTH * MATRIX_HEIGHT>::reference snowAt(uint8_t x, uint8_t y)
     {
-        return (*snowBits)[bitIndex(x, y)];
+        return snowBits[bitIndex(x, y)];
     }
 
     inline bool snowAt(uint8_t x, uint8_t y) const
     {
-        return snowBits->test(bitIndex(x, y));
+        return snowBits.test(bitIndex(x, y));
     }
 
   public:

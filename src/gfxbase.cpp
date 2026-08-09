@@ -1383,7 +1383,7 @@ GFXBase::GFXBase(int w, int h) : Adafruit_GFX(w, h),
     // Allocate boids for matrix effects (like PatternBounce) when we have matrix dimensions
     #if MATRIX_HEIGHT > 1
         debugV("Allocating boids for matrix effects");
-        _boids.reset(psram_allocator<Boid>().allocate(MATRIX_WIDTH));
+        _boids.reset(new Boid[MATRIX_WIDTH]);
         assert(_boids);
     #endif
 

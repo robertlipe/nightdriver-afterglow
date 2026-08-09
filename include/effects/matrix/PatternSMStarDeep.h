@@ -23,7 +23,7 @@ class PatternSMStarDeep : public EffectWithId<PatternSMStarDeep>
         int position;    // delay the start of the star relative to the counter
     };
 
-    std::unique_ptr<StarData[]> stars; // Dynamically allocated in PSRAM
+    StarData stars[kMaxStars];
     uint8_t nStars;            // number of active stars
 
     float driftx, drifty;
@@ -45,8 +45,8 @@ class PatternSMStarDeep : public EffectWithId<PatternSMStarDeep>
 
   public:
 
-    PatternSMStarDeep() : EffectWithId<PatternSMStarDeep>("Star Deep"), stars(std::make_unique<StarData[]>(kMaxStars)) {}
-    PatternSMStarDeep(const JsonObjectConst &jsonObject) : EffectWithId<PatternSMStarDeep>(jsonObject), stars(std::make_unique<StarData[]>(kMaxStars)) {}
+    PatternSMStarDeep() : EffectWithId<PatternSMStarDeep>("Star Deep") {}
+    PatternSMStarDeep(const JsonObjectConst &jsonObject) : EffectWithId<PatternSMStarDeep>(jsonObject) {}
 
     // Draws a multi-point star.
     // This code can draw outside of the matrix boundaries, but DrawStarLine() is expected to handle clipping.
