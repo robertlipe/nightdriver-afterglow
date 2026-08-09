@@ -66,7 +66,7 @@ void HexagonGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devic
     {
         debugW("Allocating HexagonGFX for channel %d", i);
         // Allocate exact number of pixels now that isValidPixel handles out of bounds safely
-        devices.push_back(make_shared_psram<HexagonGFX>(TOTAL_LEDS_IN_HEX));
+        devices.push_back(std::make_shared<HexagonGFX>(TOTAL_LEDS_IN_HEX));
     }
 
     AddLEDs(devices);

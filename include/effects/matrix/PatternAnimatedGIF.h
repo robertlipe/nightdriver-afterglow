@@ -101,9 +101,9 @@ struct GIFInfo : public EmbeddedFile
     {}
 };
 
-static const std::map<GIFIdentifier, const GIFInfo, std::less<GIFIdentifier>, psram_allocator<std::pair<const GIFIdentifier, const GIFInfo>>>& GetAnimatedGIFs()
+static const std::map<GIFIdentifier, const GIFInfo, std::less<GIFIdentifier>>& GetAnimatedGIFs()
 {
-    static const std::map<GIFIdentifier, const GIFInfo, std::less<GIFIdentifier>, psram_allocator<std::pair<const GIFIdentifier, const GIFInfo>>> AnimatedGIFs =
+    static const std::map<GIFIdentifier, const GIFInfo, std::less<GIFIdentifier>> AnimatedGIFs =
     {
         // Banana has 8 frames.  Most music is around 120BPM, so we need to play each frame for 1/15th of a second to somewhat align with a typical beat
         { GIFIdentifier::Banana,       GIFInfo(banana_start,      banana_end,      32, 32, 10 ) },      //  4 KB
@@ -141,7 +141,7 @@ g_gifDecoderState;
 
 static AnimatedGIF* GetGIFDecoder()
 {
-    static const auto g_ptrGIFDecoder = make_unique_psram<AnimatedGIF>();
+    static const auto g_ptrGIFDecoder = std::make_unique<AnimatedGIF>();
     return g_ptrGIFDecoder.get();
 }
 

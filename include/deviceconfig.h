@@ -149,7 +149,7 @@ class DeviceConfig : public IJSONSerializable
     #endif
 
 
-    std::vector<SettingSpec, psram_allocator<SettingSpec>> settingSpecs;
+    std::vector<SettingSpec> settingSpecs;
     std::vector<std::reference_wrapper<SettingSpec>> settingSpecReferences;
     size_t writerIndex;
 

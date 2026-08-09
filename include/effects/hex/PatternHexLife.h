@@ -148,7 +148,7 @@ public:
         LEDStripEffect::Init(gfx);
 
         totalHexes = TOTAL_LEDS_IN_HEX;
-        world = make_unique_psram<HexCell[]>(totalHexes);
+        world = std::make_unique<HexCell[]>(totalHexes);
 
         return true;
     }

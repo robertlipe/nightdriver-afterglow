@@ -45,8 +45,8 @@ class PatternSMStarDeep : public EffectWithId<PatternSMStarDeep>
 
   public:
 
-    PatternSMStarDeep() : EffectWithId<PatternSMStarDeep>("Star Deep"), stars(make_unique_psram<StarData[]>(kMaxStars)) {}
-    PatternSMStarDeep(const JsonObjectConst &jsonObject) : EffectWithId<PatternSMStarDeep>(jsonObject), stars(make_unique_psram<StarData[]>(kMaxStars)) {}
+    PatternSMStarDeep() : EffectWithId<PatternSMStarDeep>("Star Deep"), stars(std::make_unique<StarData[]>(kMaxStars)) {}
+    PatternSMStarDeep(const JsonObjectConst &jsonObject) : EffectWithId<PatternSMStarDeep>(jsonObject), stars(std::make_unique<StarData[]>(kMaxStars)) {}
 
     // Draws a multi-point star.
     // This code can draw outside of the matrix boundaries, but DrawStarLine() is expected to handle clipping.

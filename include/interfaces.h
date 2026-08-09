@@ -106,7 +106,7 @@ make_unique_psram(Args&&... args)
     return std::unique_ptr<T>(ptr);
 }
 
-// Overload for unknown-bound arrays: make_unique_psram<U[]>(n)
+// Overload for unknown-bound arrays: std::make_unique<U[]>(n)
 template<typename T>
 std::enable_if_t<std::is_array<T>::value && std::extent<T>::value == 0, std::unique_ptr<T>>
 make_unique_psram(size_t size)

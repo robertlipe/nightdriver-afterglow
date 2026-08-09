@@ -1136,7 +1136,7 @@ CRGB GFXBase::HsvToRgb(uint8_t h, uint8_t s, uint8_t v)
     template<>
     void GFXBase::MoveFractionalNoiseX<NoiseApproach::MRI>(uint8_t amt, uint8_t shift)
     {
-        std::unique_ptr<CRGB[]> ledsTemp = make_unique_psram<CRGB[]>(_ledcount);
+        std::unique_ptr<CRGB[]> ledsTemp = std::make_unique<CRGB[]>(_ledcount);
 
         // move delta pixelwise
         for (uint32_t y = 0; y < _height; y++)
@@ -1227,7 +1227,7 @@ CRGB GFXBase::HsvToRgb(uint8_t h, uint8_t s, uint8_t v)
     template<>
     void GFXBase::MoveFractionalNoiseY<NoiseApproach::MRI>(uint8_t amt, uint8_t shift)
     {
-        std::unique_ptr<CRGB[]> ledsTemp = make_unique_psram<CRGB[]>(_ledcount);
+        std::unique_ptr<CRGB[]> ledsTemp = std::make_unique<CRGB[]>(_ledcount);
 
         // move delta pixelwise
         for (uint32_t x = 0; x < _width; x++)
@@ -1425,8 +1425,7 @@ const GFXBase::PolarMapArray& GFXBase::getPolarMap()
         std::lock_guard lock(rMap_mutex);
         if (!rMap_ptr)
         {
-            // Allocate from PSRAM using the project's helper
-            rMap_ptr = make_unique_psram<PolarMapArray>();
+            rMap_ptr.reset(reinterpret_cast<PolarMapArray*>(new PolarMapArray));
 
             auto& rMap = *rMap_ptr;
             const uint16_t C_X = kMatrixWidth / 2;

@@ -92,8 +92,8 @@ private:
     int                         _numLeds;
     int                         _server_fd;
     struct sockaddr_in          _address;
-    std::vector<uint8_t, psram_allocator<uint8_t>> _pBuffer;
-    std::vector<uint8_t, psram_allocator<uint8_t>> _abOutputBuffer;
+    std::vector<uint8_t> _pBuffer;
+    std::vector<uint8_t> _abOutputBuffer;
 
 public:
 
