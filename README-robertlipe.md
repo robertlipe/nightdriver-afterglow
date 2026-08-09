@@ -4,6 +4,8 @@ This file documents the custom reliability, diagnostic, and performance improvem
 
 (This file is extensively AI generated. #sorrynotsorry.)
 
+*Last Updated: August 09, 2024*
+
 ---
 
 ## 🛠️ Reliability & Crash Fixes
@@ -150,7 +152,7 @@ This file documents the custom reliability, diagnostic, and performance improvem
 ## ⬡ First-Class Hexagon Matrix Math & Visuals
 
 ### 1. The Hexagon Graphics Pipeline (`gfxhex.h`)
-- **Feature**: NightDriverStrip now boasts arguably the most advanced open-source hexagonal LED matrix math pipeline available on a microcontroller. Unlike WLED or FastLED (which natively only understand 1D strips or 2D Cartesian X/Y grids), this fork implements a full Q/R/S axial coordinate system mapped seamlessly to physical space.
+- **Feature**: NightDriverStrip now boasts arguably the most advanced open-source hexagonal LED matrix math pipeline available on a microcontroller. Unlike WLED or FastLED (which natively only understand 1D strips or 2D Cartesian X/Y grids), this fork implements a full Q/R/S axial coordinate system mapped seamlessly to physical space. Because Pythagorean math will beat you up and leave you for dead when your axes aren't 90 degrees, moving from an X/Y system to a Q-R-S coordinate space prevents visual tearing and Cartesian stretching. The result is smooth, geometrically perfect mapping of effects to physical hexagon panels.
 - **Support**: Designed specifically for flat-topped hexagonal serpentine matrices (e.g., the 271-pixel hexagon).
 
 ### 2. Hex-Native Visual Effects
@@ -162,6 +164,19 @@ This file documents the custom reliability, diagnostic, and performance improvem
   - **Math & Noise**: Voronoi, Plasma, Flow Field, Terrain, and more.
 
 ---
+
+## 🏗️ Codebase Modernization & Performance
+
+### 1. Embracing C++20/C++26 Features
+- **Range-Based Loops & Idiomatic C++ (`modernize-loop-convert`)**: Transitioned legacy `for` loops (using raw indexes) to C++ range-based `for` loops. This eliminates off-by-one fencepost errors and allows the compiler's optimizer to fully understand the bounds. On hardware with SIMD capabilities, this translates to automatic loop unrolling and parallelization.
+- **Modern Data Structures (`std::array` & `<algorithm>`)**: Replaced raw C-style arrays with `std::array` and replaced manual loops with classic C++ algorithms (like `std::copy`, `std::fill`). This makes the codebase much safer, more idiomatic, and highly optimized for ESP32 flash and memory constraints.
+
+### 2. The Great `psram_allocator` Purge
+- **Simplification**: Removed the heavy, template-complex `psram_allocator`. Ripping this out eliminated hundreds of lines of confusing boilerplate, resulting in cleaner, more idiomatic C++ code without sacrificing performance.
+
+### 3. Rendering Enhancements & Security Fixes
+- **Animation Framework**: Migrated from the legacy `GIFDecoder` to the more robust `AnimatedGIF` library, fixing frame blocking issues and improving decode stability.
+- **Security & Code Health**: Squashed command injection vulnerabilities in Python build scripts (`bake_site.py`) and eliminated unsafe `sprintf` usages (like in `PatternPongClock`) to ensure rock-solid stability and secure builds.
 
 ## ⚡ Hardware Upgrades
 
