@@ -111,7 +111,7 @@ public:
 
                 // Map noise to color
                 uint8_t hue = (hueOffset + static_cast<uint8_t>((n + 1.0f) * 127.5f)) % 256;
-                uint8_t brightness = static_cast<uint8_t>((n + 1.0f) * 127.5f);
+                auto brightness = static_cast<uint8_t>((n + 1.0f) * 127.5f);
 
                 if (brightness > 30) {
                     CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, brightness, LINEARBLEND);

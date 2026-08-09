@@ -124,7 +124,7 @@ public:
 
             intensity *= falloff;
 
-            uint8_t brightness = static_cast<uint8_t>(intensity * 255.0f);
+            auto brightness = static_cast<uint8_t>(intensity * 255.0f);
 
             // Color shifts towards white/blue at the center, red at the edges
             uint8_t hue = hueOffset + static_cast<uint8_t>(dist * 10);
