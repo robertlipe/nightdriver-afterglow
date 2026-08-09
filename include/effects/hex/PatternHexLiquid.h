@@ -100,8 +100,8 @@ public:
             float y = 1.5f * hex.r;
 
             // Scale coordinates
-            uint32_t nx = static_cast<uint32_t>((x + 20.0f) * scale * 256);
-            uint32_t ny = static_cast<uint32_t>((y + 20.0f) * scale * 256);
+            auto nx = static_cast<uint32_t>((x + 20.0f) * scale * 256);
+            auto ny = static_cast<uint32_t>((y + 20.0f) * scale * 256);
 
             // Get 3D noise
             uint8_t noiseVal = inoise8(nx, ny, z_offset);

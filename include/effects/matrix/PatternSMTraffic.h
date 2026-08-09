@@ -161,7 +161,7 @@ class PatternSMTraffic : public EffectWithId<PatternSMTraffic>
             }
 
             // [T] ****
-            for (uint8_t y = centerY + 2; y < MATRIX_HEIGHT - 1; y++)
+            for (int y = centerY + 2; y < MATRIX_HEIGHT - 1; y++)
             {
                 g()->drawPixel((center - 1), y, g()->getPixel((center - 1U), y + 1U));
             }
@@ -187,7 +187,7 @@ class PatternSMTraffic : public EffectWithId<PatternSMTraffic>
             g()->drawPixel(0, centerY - 1, color);
 
             // сдвигаем поток влево ---------- [TL] <==
-            for (uint8_t x = center - 2; x < (MATRIX_WIDTH - 1); x++)
+            for (int x = center - 2; x < (MATRIX_WIDTH - 1); x++)
             {
                 g()->drawPixel(x, centerY + 1, g()->getPixel(x + 1, centerY + 1));
             }
@@ -201,7 +201,7 @@ class PatternSMTraffic : public EffectWithId<PatternSMTraffic>
             }
 
             // сдвигаем поток вправо ---------- [BR] ==>
-            for (uint8_t x = center - 2; x > 0; x--)
+            for (int x = center - 2; x > 0; x--)
             {
                 g()->drawPixel(x, centerY - 1U, g()->getPixel(x - 1U, centerY - 1U));
             }
@@ -217,22 +217,22 @@ class PatternSMTraffic : public EffectWithId<PatternSMTraffic>
 
         // *********
         // сдвигаем поток вверх -----------
-        for (uint8_t y = MATRIX_HEIGHT - 1; y > centerY; y--)
+        for (int y = MATRIX_HEIGHT - 1; y > centerY; y--)
         {
             g()->drawPixel((center + 1), y, g()->getPixel((center + 1U), y - 1U));
         }
         // сдвигаем поток вниз -----------
-        for (uint8_t y = 0U; y < centerY; y++)
+        for (int y = 0U; y < centerY; y++)
         {
             g()->drawPixel((center - 1), y, g()->getPixel((center - 1U), y + 1U));
         }
         // сдвигаем поток вправо ---------- [BR] ==>
-        for (uint8_t x = MATRIX_WIDTH - 1; x > center; x--)
+        for (int x = MATRIX_WIDTH - 1; x > center; x--)
         {
             g()->drawPixel(x, centerY - 1U, g()->getPixel(x - 1U, centerY - 1U));
         }
         // сдвигаем поток влево ---------- [TL] <==
-        for (uint8_t x = 0U; x < center; x++)
+        for (int x = 0U; x < center; x++)
         {
             g()->drawPixel(x, centerY + 1, g()->getPixel(x + 1, centerY + 1));
         }

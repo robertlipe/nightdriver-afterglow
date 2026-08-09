@@ -26,7 +26,7 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
     uint8_t step { 0 }; // some counter of frames or sequences of operations
     // Locations of snowflakes stored in a single flattened bitset (X-major).
     // Index calculation: idx = y * MATRIX_WIDTH + x
-    std::unique_ptr<std::bitset<MATRIX_WIDTH * MATRIX_HEIGHT>> snowBits = make_unique_psram<std::bitset<MATRIX_WIDTH * MATRIX_HEIGHT>>();
+    std::bitset<MATRIX_WIDTH * MATRIX_HEIGHT> snowBits;
     uint8_t Speed = 150;                                                             // 1-255 is speed
     uint8_t Scale = 90;                                                              // 1-100 is something parameter
 
@@ -46,12 +46,12 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
     // const overload returns a bool for read-only contexts.
     inline std::bitset<MATRIX_WIDTH * MATRIX_HEIGHT>::reference snowAt(uint8_t x, uint8_t y)
     {
-        return (*snowBits)[bitIndex(x, y)];
+        return snowBits[bitIndex(x, y)];
     }
 
     inline bool snowAt(uint8_t x, uint8_t y) const
     {
-        return snowBits->test(bitIndex(x, y));
+        return snowBits.test(bitIndex(x, y));
     }
 
   public:
@@ -112,7 +112,7 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
         // This is a fragile way to to it, but we fill the top line of
         // the display with fresh snowflakes to be scrolled down later.
         uint8_t posX = random(MATRIX_WIDTH);
-        for (uint8_t x = 0U; x < MATRIX_WIDTH; x++)
+        for (int x = 0U; x < MATRIX_WIDTH; x++)
         {
             // randomly fill in the top row
             snowAt(x, top_line_offset) = (posX == x) && (step % 3 == 0);
@@ -170,7 +170,7 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
         const uint8_t rows = (MATRIX_HEIGHT + 1) / 3U;
         uint8_t deltaHue = floor(Speed / 64) * 64;
         bool dir = false;
-        for (uint8_t y = 0; y < rows; y++)
+        for (int y = 0; y < rows; y++)
         {
             if (dir)
             {
@@ -196,7 +196,7 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
             }
 
             // Shift layers ------------------
-            for (uint8_t x = 1U; x < MATRIX_WIDTH; x++)
+            for (int x = 1U; x < MATRIX_WIDTH; x++)
             {
                 if (dir)
                 { // <==

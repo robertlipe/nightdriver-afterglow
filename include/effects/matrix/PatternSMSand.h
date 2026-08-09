@@ -70,8 +70,8 @@ class PatternSMSand : public EffectWithId<PatternSMSand>
                     temp = 2U;
                 else
                     temp = 3U;
-            for (uint8_t y = 1; y < pcnt; y++)
-                for (uint8_t x = 0; x < WIDTH; x++)
+            for (int y = 1; y < pcnt; y++)
+                for (int x = 0; x < WIDTH; x++)
                     if (!random8(temp))
                         g()->drawPixel(x, MATRIX_HEIGHT - 1 - y, CRGB::Black);
         }
@@ -82,8 +82,8 @@ class PatternSMSand : public EffectWithId<PatternSMSand>
         //
         // 1 skips the bottom line, so sand will accumulate.
         // HEIGHT - top_reserve == our top drawable line, respecting VU meter.
-        for (uint8_t y = 1; y < HEIGHT - top_reserve; y++) // Skip audio line
-            for (uint8_t x = 0; x < WIDTH; x++)
+        for (int y = 1; y < HEIGHT - top_reserve; y++) // Skip audio line
+            for (int x = 0; x < WIDTH; x++)
             {
                 CRGB me = g()->getPixel(x, MATRIX_HEIGHT - 1 - y);
                 if (me)
@@ -137,7 +137,7 @@ class PatternSMSand : public EffectWithId<PatternSMSand>
     {
         // Force deletion (on the next Draw()) of the bottom row. It's simple,
         // but it's enough to make the pyramid visibly respond to ambient sounds.
-        for (uint8_t x = 0; x < WIDTH; x++)
+        for (int x = 0; x < WIDTH; x++)
         {
             g()->drawPixel(x, MATRIX_HEIGHT - 1 - 0, CRGB::Black);
         }

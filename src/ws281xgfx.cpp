@@ -118,7 +118,7 @@ void WS281xGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& device
     for (int i = 0; i < NUM_CHANNELS; i++)
     {
         debugW("Allocating WS281xGFX for channel %d", i);
-        devices.push_back(make_shared_psram<WS281xGFX>(MATRIX_WIDTH, MATRIX_HEIGHT));
+        devices.push_back(std::make_shared<WS281xGFX>(MATRIX_WIDTH, MATRIX_HEIGHT));
     }
 
     AddLEDs(devices);

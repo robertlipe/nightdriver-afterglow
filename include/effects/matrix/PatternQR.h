@@ -40,7 +40,7 @@ class PatternQR : public EffectWithId<PatternQR>
     void construct()
     {
         // Allocate buffer and ensure it is freed on destruction.
-        qrcodeData.reset((uint8_t *) PreferPSRAMAlloc(qrcode_getBufferSize(kQrVersion)));
+        qrcodeData.reset(new uint8_t[qrcode_getBufferSize(kQrVersion)]);
         lastData = "";
     }
 
@@ -48,7 +48,7 @@ protected:
 
     String lastData;
     QRCode qrcode;
-    std::unique_ptr<uint8_t[], decltype(&free)> qrcodeData{nullptr, free};
+    std::unique_ptr<uint8_t[]> qrcodeData;
     static constexpr int kQrVersion = 2;
 
 public:

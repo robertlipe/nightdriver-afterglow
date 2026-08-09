@@ -480,7 +480,7 @@ void RemoteControl::handle()
         {
             effectManager.ApplyGlobalColor(it->color);
             #if FULL_COLOR_REMOTE_FILL
-                auto effect = make_shared_psram<ColorFillEffect>("Remote Color", it->color, 1, true);
+                auto effect = std::make_shared<ColorFillEffect>("Remote Color", it->color, 1, true);
                 if (effect->Init(g_ptrSystem->GetEffectManager().GetBaseGraphics()))
                     g_ptrSystem->GetEffectManager().SetTempEffect(effect);
                 else

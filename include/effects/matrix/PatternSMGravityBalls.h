@@ -41,13 +41,13 @@ class PatternSMGravityBalls : public EffectWithId<PatternSMGravityBalls>
     void Start() override
     {
         g()->Clear();
-        for (int i = 0; i < COUNT; i++)
+        for (auto & ball : balls)
         {
-            balls[i].velx = (beatsin16(random(1, 2) + balls[i].vely, 0, MATRIX_WIDTH, MATRIX_HEIGHT) / (float)MATRIX_HEIGHT) + 0.1F;
-            balls[i].vely = (beatsin16(5 + balls[i].vely, 0, MATRIX_WIDTH, MATRIX_HEIGHT) / (float)MATRIX_HEIGHT) + 0.5F;
-            balls[i].posx = random(1.01F, float(MATRIX_HEIGHT));
-            balls[i].posy = random(1.0F, float(MATRIX_WIDTH));
-            balls[i].accel = random(0.1F, 1.0F);
+            ball.velx = (beatsin16(random(1, 2) + ball.vely, 0, MATRIX_WIDTH, MATRIX_HEIGHT) / (float)MATRIX_HEIGHT) + 0.1F;
+            ball.vely = (beatsin16(5 + ball.vely, 0, MATRIX_WIDTH, MATRIX_HEIGHT) / (float)MATRIX_HEIGHT) + 0.5F;
+            ball.posx = random(1.01F, float(MATRIX_HEIGHT));
+            ball.posy = random(1.0F, float(MATRIX_WIDTH));
+            ball.accel = random(0.1F, 1.0F);
         }
     }
 

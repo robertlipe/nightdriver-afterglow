@@ -38,7 +38,7 @@ LEDBuffer::LEDBuffer(std::shared_ptr<GFXBase> pStrand) :
              _timeStampMicroseconds(0),
              _timeStampSeconds(0)
 {
-    _leds.reset(psram_allocator<CRGB>().allocate(NUM_LEDS));
+    _leds.reset(new CRGB[NUM_LEDS]);
 }
 
 uint64_t LEDBuffer::Seconds()      const  { return _timeStampSeconds;      }
@@ -129,7 +129,7 @@ LEDBufferManager::LEDBufferManager(uint32_t cBuffers, const std::shared_ptr<GFXB
     // are returned back out to callers so they must be shared pointers.
 
     for (uint32_t i = 0; i < _cBuffers; i++)
-        _ppBuffers->push_back(make_shared_psram<LEDBuffer>(pGFX));
+        _ppBuffers->push_back(std::make_shared<LEDBuffer>(pGFX));
 }
 
 double LEDBufferManager::AgeOfOldestBuffer() const

@@ -23,7 +23,7 @@ class PatternSMStarDeep : public EffectWithId<PatternSMStarDeep>
         int position;    // delay the start of the star relative to the counter
     };
 
-    std::unique_ptr<StarData[]> stars; // Dynamically allocated in PSRAM
+    StarData stars[kMaxStars];
     uint8_t nStars;            // number of active stars
 
     float driftx, drifty;
@@ -45,8 +45,8 @@ class PatternSMStarDeep : public EffectWithId<PatternSMStarDeep>
 
   public:
 
-    PatternSMStarDeep() : EffectWithId<PatternSMStarDeep>("Star Deep"), stars(make_unique_psram<StarData[]>(kMaxStars)) {}
-    PatternSMStarDeep(const JsonObjectConst &jsonObject) : EffectWithId<PatternSMStarDeep>(jsonObject), stars(make_unique_psram<StarData[]>(kMaxStars)) {}
+    PatternSMStarDeep() : EffectWithId<PatternSMStarDeep>("Star Deep") {}
+    PatternSMStarDeep(const JsonObjectConst &jsonObject) : EffectWithId<PatternSMStarDeep>(jsonObject) {}
 
     // Draws a multi-point star.
     // This code can draw outside of the matrix boundaries, but DrawStarLine() is expected to handle clipping.
@@ -58,7 +58,7 @@ class PatternSMStarDeep : public EffectWithId<PatternSMStarDeep>
         const CRGB starColor = g()->IsPalettePaused() ? g()->ColorFromCurrentPalette(colorIndex) : ColorFromPalette(*curPalette, colorIndex);
         const uint8_t angle_step = 255 / numPoints;
 
-        for (uint8_t i = 0; i < numPoints; i++)
+        for (int i = 0; i < numPoints; i++)
         {
             const uint8_t outer_angle = i * angle_step - angleOffset;
             const int16_t outer_x = centerX + ((outerRadius * (sin8(outer_angle) - 128.0f)) / 128.0f);
@@ -139,7 +139,7 @@ class PatternSMStarDeep : public EffectWithId<PatternSMStarDeep>
         if (nStars > kMaxStars)
             nStars = kMaxStars;
 
-        for (uint8_t num = 0; num < nStars; num++)
+        for (int num = 0; num < nStars; num++)
         {
             stars[num].corners = random8(3, 9);
             stars[num].position = counter + (num << 3) + 1U;
@@ -173,7 +173,7 @@ class PatternSMStarDeep : public EffectWithId<PatternSMStarDeep>
             y_drift_countdown = kCenterDriftSpeed;
         }
 
-        for (uint8_t num = 0; num < nStars; num++)
+        for (int num = 0; num < nStars; num++)
         {
             if (counter >= stars[num].position)
             {

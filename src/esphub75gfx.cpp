@@ -110,12 +110,12 @@ void ESPHUB75GFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devi
     driver->begin();
 
     // Allocate frame drawing buffer in PSRAM
-    drawBuffer = make_unique_psram<CRGB[]>(MATRIX_WIDTH * MATRIX_HEIGHT);
+    drawBuffer = std::make_unique<CRGB[]>(MATRIX_WIDTH * MATRIX_HEIGHT);
     if (!drawBuffer) throw std::runtime_error("Failed to allocate drawBuffer!");
 
     for (int i = 0; i < NUM_CHANNELS; i++)
     {
-        auto tmp_matrix = make_shared_psram<ESPHUB75GFX>(MATRIX_WIDTH, MATRIX_HEIGHT);
+        auto tmp_matrix = std::make_shared<ESPHUB75GFX>(MATRIX_WIDTH, MATRIX_HEIGHT);
         devices.push_back(tmp_matrix);
         tmp_matrix->loadPalette(0);
     }

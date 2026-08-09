@@ -32,6 +32,7 @@
 
 
 #include <numeric>
+#include <new>
 
 #include "musiceffect.h"
 #include "random_utils.h"
@@ -44,7 +45,7 @@ class FireEffect : public EffectWithId<FireEffect>
 
     void construct()
     {
-        heat.reset( psram_allocator<uint8_t>().allocate(CellCount()) );
+        heat.reset( new uint8_t[CellCount()] );
     }
 
   protected:
@@ -361,7 +362,7 @@ class ClassicFireEffect : public EffectWithId<ClassicFireEffect>
 
     void Fire(int Cooling, int Sparking, int Sparks)
     {
-        static std::unique_ptr<uint8_t[]> heat = make_unique_psram<uint8_t[]>(NUM_LEDS);
+        static std::unique_ptr<uint8_t[]> heat = std::make_unique<uint8_t[]>(NUM_LEDS);
         setAllOnAllChannels(0,0,0);
 
         // Step 1.  Cool down every cell a little
@@ -525,7 +526,7 @@ class SmoothFireEffect : public EffectWithId<SmoothFireEffect>
     bool Init(std::vector<std::shared_ptr<GFXBase>>& gfx) override
     {
         LEDStripEffect::Init(gfx);
-        _Temperatures = (float *)PreferPSRAMAlloc(sizeof(float) * _cLEDs);
+        _Temperatures = new (std::nothrow) float[_cLEDs];
         if (!_Temperatures)
         {
             Serial.println("ERROR: Could not allocate memory for FireEffect");
@@ -536,7 +537,7 @@ class SmoothFireEffect : public EffectWithId<SmoothFireEffect>
 
     ~SmoothFireEffect()
     {
-        free(_Temperatures);
+        delete[] _Temperatures;
     }
 
     void Draw() override

@@ -146,7 +146,7 @@ class PatternSMStarshipTroopers : public EffectWithId<PatternSMStarshipTroopers>
                     count++;
                     break;
                 }
-                for (uint8_t y = HEIGHT - 1; y > 0; y--)
+                for (int y = HEIGHT - 1; y > 0; y--)
                 {
                     g()->drawPixel((int)x, MATRIX_HEIGHT - 1 - y, ((y == 0 or (int) x == 0) ? CRGB::Black : g()->getPixel((int)x - 1, MATRIX_HEIGHT - 1 - (y - 1))));
                 }
@@ -160,7 +160,7 @@ class PatternSMStarshipTroopers : public EffectWithId<PatternSMStarshipTroopers>
                     count++;
                     break;
                 }
-                for (uint8_t y = HEIGHT - 1; y > 0; y--)
+                for (int y = HEIGHT - 1; y > 0; y--)
                 {
                     g()->drawPixel((int)x, MATRIX_HEIGHT - 1 - y, ((int)x == 0 ? CRGB::Black : g()->getPixel((int)x - 1, MATRIX_HEIGHT - 1 - y)));
                 }
@@ -174,7 +174,7 @@ class PatternSMStarshipTroopers : public EffectWithId<PatternSMStarshipTroopers>
                     count++;
                     break;
                 }
-                for (uint8_t y = HEIGHT - 1; y > 0; y--)
+                for (int y = HEIGHT - 1; y > 0; y--)
                 {
                     g()->drawPixel((int)x, MATRIX_HEIGHT - 1 - y, ((y == HEIGHT - 1 or (int) x == 0) ? CRGB::Black : g()->getPixel((int)x - 1, MATRIX_HEIGHT - 1 - (y + 1))));
                 }
@@ -182,7 +182,7 @@ class PatternSMStarshipTroopers : public EffectWithId<PatternSMStarshipTroopers>
             break;
         }
 
-        for (uint8_t i = 0; i < scale; i++)
+        for (int i = 0; i < scale; i++)
         {
             x1 = (float)beatsin88(3840 * speedFactor + i * 256, 0, (WIDTH - 1) * 4, 0, scale * i * 256) / 4;
             y1 = (float)beatsin88(3072 * speedFactor + i * 256, 0, (HEIGHT - 1) * 4, 0, 0) / 4;

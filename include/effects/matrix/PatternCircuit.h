@@ -138,7 +138,7 @@ private:
 
         void shuffleDown()
         {
-            for (uint8_t i = SNAKE_LENGTH - 1; i > 0; i--)
+            for (int i = SNAKE_LENGTH - 1; i > 0; i--)
             {
                 pixels[i] = pixels[i - 1];
             }
@@ -147,10 +147,10 @@ private:
         void reset()
         {
             direction = UP;
-            for (int i = 0; i < SNAKE_LENGTH; i++)
+            for (auto & pixel : pixels)
             {
-                pixels[i].x = 0;
-                pixels[i].y = 0;
+                pixel.x = 0;
+                pixel.y = 0;
             }
         }
 
@@ -175,7 +175,7 @@ private:
 
         void draw(std::shared_ptr<GFXBase> graphics, CRGB colors[SNAKE_LENGTH])
         {
-            for (uint8_t i = 0; i < SNAKE_LENGTH; i++)
+            for (int i = 0; i < SNAKE_LENGTH; i++)
                 graphics->leds[XY(pixels[i].x, pixels[i].y)] = colors[i] %= (255 - i * (255 / SNAKE_LENGTH / 4));
 
             uint8_t m = random(20, 100);
@@ -185,18 +185,18 @@ private:
     };
 
     static const int snakeCount = 20;
-    Path *snakes;
+    Path snakes[snakeCount];
 
     void construct()
     {
-        snakes = (Path *) PreferPSRAMAlloc(snakeCount * sizeof(Path)); //
+
     }
 
 public:
 
     PatternCircuit() : EffectWithId<PatternCircuit>("Circuit") { construct(); }
     PatternCircuit(const JsonObjectConst& jsonObject) : EffectWithId<PatternCircuit>(jsonObject) { construct(); }
-    ~PatternCircuit() { free(snakes); }
+    ~PatternCircuit() {}
 
     unsigned long msStart;
 

@@ -266,7 +266,7 @@ public:
                 int cx = (int)_dk.x;
                 float yOffset = (MATRIX_HEIGHT - 32) / 2.0f;
                 int cy = (int)(_dk.y + _dkBreath + yOffset);
-                uint8_t v = uint8_t(255 * strength);
+                auto v = uint8_t(255 * strength);
                 CRGB c(v, v, v);
 
                 g()->DrawSafeCircle(cx, cy, (int)radius, c);

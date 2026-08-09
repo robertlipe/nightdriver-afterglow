@@ -234,10 +234,6 @@ void ConfirmUpdate();
 #endif
 #endif
 
-
-
-void ScreenUpdateLoopEntry(void *);
-
 #if ENABLE_ESPNOW
 void onReceiveESPNOW(const esp_now_recv_info_t *recvInfo, const uint8_t *data, int dataLen);
 #endif
@@ -358,13 +354,9 @@ void setup()
     if (!UserFS.begin(true))
         Serial.println("WARNING: UserFS could not be initialized!");
 
-    // Enabling PSRAM allows us to use the extra 4MB of RAM on the ESP32-WROVER chip, but it caused
-    // problems with the S3 rebooting when WiFi connected, so for now, I've limited the default
-    // allocator to be PSRAM only on the MESMERIZER project where it's well tested.
-
-    #if MESMERIZER
-        heap_caps_malloc_extmem_enable(96);
-    #endif
+    // Enabling PSRAM is benign if we don't have it.
+    // Ensure that essentially ALL allocations are put in PSRAM if we can.
+    heap_caps_malloc_extmem_enable(16);
 
     // Initialize LZ library for decompressing compressed wifi packets
 #if INCOMING_WIFI_ENABLED
@@ -372,7 +364,7 @@ void setup()
 #endif
 
     // Create the SystemContainer that holds primary device management objects.
-    g_ptrSystem = make_unique_psram<SystemContainer>();
+    g_ptrSystem = std::make_unique<SystemContainer>();
 
     // Start the Task Manager which takes over the watchdog role and measures CPU usage
     auto& taskManager = g_ptrSystem->SetupTaskManager();
@@ -465,7 +457,7 @@ void setup()
 #if ENABLE_WIFI && !defined(ENABLE_WIFI_TEST_MODE)
         debugW("Starting ImprovSerial for %s", family.c_str());
         String name = "NDESP32" + nd_network::GetMacAddress().substring(6);
-        g_pImprovSerial = make_unique_psram<ImprovSerial<typeof(Serial)>>();
+        g_pImprovSerial = std::make_unique<ImprovSerial<typeof(Serial)>>();
         g_pImprovSerial->setup(PROJECT_NAME, FLASH_VERSION_NAME, family, name.c_str(), &Serial);
 
         // Improv will feed unknown bytes to the Serial session's CLI processor

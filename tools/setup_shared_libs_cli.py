@@ -133,7 +133,7 @@ if not os.path.exists(TARGET_DIR):
 import time
 
 # Simple lock mechanism to prevent race conditions when invoked concurrently by PIO
-def acquire_lock(lock_path, timeout=120):
+def acquire_lock(lock_path, timeout=300):
     start = time.time()
     while True:
         try:
@@ -141,12 +141,9 @@ def acquire_lock(lock_path, timeout=120):
             return fd
         except OSError:
             if time.time() - start > timeout:
-                print(f"[Shared-Libs] Warning: Lock {lock_path} timed out. Forcing unlock...", file=sys.stderr)
-                try:
-                    os.remove(lock_path)
-                except Exception:
-                    pass
-            time.sleep(0.5)
+                print(f"[Shared-Libs] Warning: Lock {lock_path} timed out after {timeout}s. Still waiting...", file=sys.stderr)
+                start = time.time() # Reset timer to avoid spam
+            time.sleep(0.5 + (os.getpid() % 10) / 10.0) # Add jitter to prevent thundering herd
 
 def release_lock(fd, lock_path):
     try:
@@ -219,15 +216,3 @@ try:
 finally:
     release_lock(lock_fd, lock_path)
 
-# Read base_build_flags from [base]
-try:
-    base_flags_raw = config.get("base", "base_build_flags")
-    if isinstance(base_flags_raw, list):
-        base_flags_str = " ".join([f.strip() for f in base_flags_raw if f.strip()])
-    else:
-        base_flags_str = " ".join([f.strip() for f in base_flags_raw.split('\n') if f.strip()])
-except Exception:
-    base_flags_str = "-std=gnu++2a -g3 -Ofast -ffunction-sections -fdata-sections -include string.h"
-
-# Print a dummy flag and all base build flags for build_flags
-print(f"-DSHARED_LIBS_OK {base_flags_str}")

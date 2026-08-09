@@ -133,9 +133,9 @@ constexpr auto CRC_LENGTH = (std::max(MATRIX_HEIGHT, MATRIX_WIDTH) * 4 + 1);
 class PatternLife : public EffectWithId<PatternLife>
 {
 private:
-    std::unique_ptr<Cell [][MATRIX_HEIGHT]> world;
-    std::unique_ptr<uint32_t []> checksums;
-    std::unique_ptr<bool[]> aliveData;
+    Cell world[MATRIX_WIDTH][MATRIX_HEIGHT]{};
+    uint32_t checksums[CRC_LENGTH]{};
+    bool aliveData[MATRIX_WIDTH * MATRIX_HEIGHT]{};
     int iChecksum = 0;
     uint32_t bStuckInLoop = 0;
     unsigned int density = 50;
@@ -150,9 +150,6 @@ private:
         // Note: placing the world in PSRAM may slow this effect down, but it's currently running
         //       fast enough (30+ fps) that we can afford to use it
 
-        world = make_unique_psram<Cell[][MATRIX_HEIGHT]>(MATRIX_WIDTH);
-        checksums = make_unique_psram<uint32_t[]>(CRC_LENGTH);
-        aliveData = make_unique_psram<bool[]>(MATRIX_WIDTH * MATRIX_HEIGHT);
 
         return true;
     }
@@ -276,7 +273,7 @@ public:
             for (int j = 0; j < MATRIX_HEIGHT; j++)
                 aliveData[i * MATRIX_HEIGHT + j] = world[i][j].alive;
 
-        auto crc = uzlib_crc32(aliveData.get(), MATRIX_WIDTH * MATRIX_HEIGHT * sizeof(bool), 0xffffffff);
+        auto crc = uzlib_crc32(aliveData, MATRIX_WIDTH * MATRIX_HEIGHT * sizeof(bool), 0xffffffff);
         for (int i = 0; i < CRC_LENGTH - 1; i++)
             checksums[i] = checksums[i+1];
         checksums[CRC_LENGTH - 1] = crc;

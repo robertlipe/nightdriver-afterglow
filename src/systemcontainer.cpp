@@ -210,7 +210,7 @@ SystemContainer::BufferManagerContainer& SystemContainer::SetupBufferManagers()
 
     debugW("Reserving %lu LED buffers for a total of %lu bytes...", (unsigned long)cBuffers, (unsigned long)(memtoalloc * cBuffers));
 
-    _ptrBufferManagers = make_unique_psram<BufferManagerContainer>();
+    _ptrBufferManagers = std::make_unique<BufferManagerContainer>();
 
     for (auto& device : *_ptrDevices)
         _ptrBufferManagers->emplace_back(cBuffers, device);
@@ -221,21 +221,21 @@ SystemContainer::BufferManagerContainer& SystemContainer::SetupBufferManagers()
 EffectManager& SystemContainer::SetupEffectManager(const std::shared_ptr<LEDStripEffect>& effect, DeviceContainer& devices)
 {
     if (!_ptrEffectManager)
-        _ptrEffectManager = make_unique_psram<EffectManager>(effect, devices);
+        _ptrEffectManager = std::make_unique<EffectManager>(effect, devices);
     return *_ptrEffectManager;
 }
 
 EffectManager& SystemContainer::SetupEffectManager(DeviceContainer& devices)
 {
     if (!_ptrEffectManager)
-        _ptrEffectManager = make_unique_psram<EffectManager>(devices);
+        _ptrEffectManager = std::make_unique<EffectManager>(devices);
     return *_ptrEffectManager;
 }
 
 EffectManager& SystemContainer::SetupEffectManager(const ArduinoJson::JsonObjectConst& jsonObject, DeviceContainer& devices)
 {
     if (!_ptrEffectManager)
-        _ptrEffectManager = make_unique_psram<EffectManager>(jsonObject, devices);
+        _ptrEffectManager = std::make_unique<EffectManager>(jsonObject, devices);
     return *_ptrEffectManager;
 }
 
@@ -244,7 +244,7 @@ NightDriverTaskManager& SystemContainer::SetupTaskManager()
 {
     if (!_ptrTaskManager)
     {
-        _ptrTaskManager = make_unique_psram<NightDriverTaskManager>();
+        _ptrTaskManager = std::make_unique<NightDriverTaskManager>();
         _ptrTaskManager->begin();
     }
 
@@ -264,20 +264,20 @@ void SystemContainer::SetupConfig()
     // Create the JSON writer and start its background thread
     if (!_ptrJSONWriter)
     {
-        _ptrJSONWriter = make_unique_psram<JSONWriter>();
+        _ptrJSONWriter = std::make_unique<JSONWriter>();
         _ptrTaskManager->StartJSONWriterThread();
     }
 
     // Create and load device config from UserFS if possible
     if (!_ptrDeviceConfig)
-        _ptrDeviceConfig = make_unique_psram<DeviceConfig>();
+        _ptrDeviceConfig = std::make_unique<DeviceConfig>();
 }
 
 #if ENABLE_WIFI
 NetworkReader& SystemContainer::SetupNetworkReader()
 {
     if (!_ptrNetworkReader)
-        _ptrNetworkReader = make_unique_psram<NetworkReader>();
+        _ptrNetworkReader = std::make_unique<NetworkReader>();
     return *_ptrNetworkReader;
 }
 #endif
@@ -286,7 +286,7 @@ NetworkReader& SystemContainer::SetupNetworkReader()
 CWebServer& SystemContainer::SetupWebServer()
 {
     if (!_ptrWebServer)
-        _ptrWebServer = make_unique_psram<CWebServer>();
+        _ptrWebServer = std::make_unique<CWebServer>();
     return *_ptrWebServer;
 }
 #endif
@@ -295,7 +295,7 @@ CWebServer& SystemContainer::SetupWebServer()
 RemoteControl& SystemContainer::SetupRemoteControl()
 {
     if (!_ptrRemoteControl)
-        _ptrRemoteControl = make_unique_psram<RemoteControl>();
+        _ptrRemoteControl = std::make_unique<RemoteControl>();
     return *_ptrRemoteControl;
 }
 #endif
@@ -304,7 +304,7 @@ RemoteControl& SystemContainer::SetupRemoteControl()
 SocketServer& SystemContainer::SetupSocketServer(NetworkPort port, int ledCount)
 {
     if (!_ptrSocketServer)
-        _ptrSocketServer = make_unique_psram<SocketServer>(port, ledCount);
+        _ptrSocketServer = std::make_unique<SocketServer>(port, ledCount);
     return *_ptrSocketServer;
 }
 #endif
@@ -313,7 +313,7 @@ SocketServer& SystemContainer::SetupSocketServer(NetworkPort port, int ledCount)
 WebSocketServer& SystemContainer::SetupWebSocketServer(CWebServer& webServer)
 {
     if (!_ptrWebSocketServer)
-        _ptrWebSocketServer = make_unique_psram<WebSocketServer>(webServer);
+        _ptrWebSocketServer = std::make_unique<WebSocketServer>(webServer);
     return *_ptrWebSocketServer;
 }
 #endif

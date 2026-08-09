@@ -125,7 +125,7 @@ public:
             if (angleDiff <= beamWidth) {
                 // Calculate brightness (1.0 at leading edge, 0.0 at trailing edge of beamWidth)
                 float intensity = 1.0f - (angleDiff / beamWidth);
-                uint8_t brightness = static_cast<uint8_t>(intensity * 255.0f);
+                auto brightness = static_cast<uint8_t>(intensity * 255.0f);
 
                 // Add distance-based variation to hue
                 float dist = sqrtf(x*x + y*y);
@@ -151,7 +151,7 @@ public:
             float distDiff = fabsf(dist - ringPulse);
 
             if (distDiff < 0.8f) {
-                uint8_t ringBright = static_cast<uint8_t>((1.0f - distDiff / 0.8f) * 80.0f);
+                auto ringBright = static_cast<uint8_t>((1.0f - distDiff / 0.8f) * 80.0f);
                 CRGB existing = g()->getPixel(index);
                 CRGB ringColor = CRGB(ringBright, ringBright, ringBright);
                 hexGfx->drawHexPixel(hex, existing + ringColor);

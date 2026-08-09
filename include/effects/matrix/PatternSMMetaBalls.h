@@ -39,7 +39,7 @@ class PatternSMMetaBalls : public EffectWithId<PatternSMMetaBalls>
 
     void Draw() override
     {
-        for (uint8_t a = 0; a < 5; a++)
+        for (int a = 0; a < 5; a++)
         {
             bx[a] = beatsin16(15 + a * 2, 0, MATRIX_WIDTH - 1, 0, a * 32);
             by[a] = beatsin16(18 + a * 2, 0, MATRIX_HEIGHT - 1, 0, a * 32);
@@ -49,7 +49,7 @@ class PatternSMMetaBalls : public EffectWithId<PatternSMMetaBalls>
             for (unsigned j = 0; j < MATRIX_HEIGHT - 1; j++)
             {
                 uint8_t sum = dist(i, j, bx[0], by[0]);
-                for (uint8_t a = 1; a < 5; a++)
+                for (int a = 1; a < 5; a++)
                 {
                     sum = std::add_sat<uint8_t>(sum, dist(i, j, bx[a], by[a]));
                 }

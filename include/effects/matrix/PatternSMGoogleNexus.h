@@ -71,14 +71,14 @@ class PatternSMGoogleNexus : public EffectWithId<PatternSMGoogleNexus>
     {
         g()->Clear();
         randomSeed(micros());
-        for (int i = 0; i < GOOGLE_NEXUS; i++)
+        for (auto & dot : dots)
         {
-            dots[i].direct = random(0, 4);           // Set direction
-            dots[i].posX = random(0, MATRIX_WIDTH);  // Scatter particles across width
-            dots[i].posY = random(0, MATRIX_HEIGHT); // and height
-            dots[i].color = ColorFromPalette(RainbowColors_p, random8(0, 9) * 31,
+            dot.direct = random(0, 4);           // Set direction
+            dot.posX = random(0, MATRIX_WIDTH);  // Scatter particles across width
+            dot.posY = random(0, MATRIX_HEIGHT); // and height
+            dot.color = ColorFromPalette(RainbowColors_p, random8(0, 9) * 31,
                                            255);     // dot color
-            dots[i].accel = (float)random(5, 11) / 70; // make particles each slightly different speed
+            dot.accel = (float)random(5, 11) / 70; // make particles each slightly different speed
         }
     }
 

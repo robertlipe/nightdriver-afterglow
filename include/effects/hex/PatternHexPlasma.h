@@ -105,7 +105,7 @@ public:
 
                 // Map to color
                 uint8_t hue = (hueOffset + static_cast<uint8_t>((value + 1.0f) * 127.5f)) % 256;
-                uint8_t brightness = static_cast<uint8_t>((value + 1.0f) * 127.5f);
+                auto brightness = static_cast<uint8_t>((value + 1.0f) * 127.5f);
 
                 CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, brightness, LINEARBLEND);
                 hexGfx->drawHexPixel(hex, color);
