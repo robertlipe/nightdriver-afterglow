@@ -133,6 +133,9 @@ public:
 
                     // We only want to draw a few rings behind the leading edge
                     if (phase < 2.5f) {
+                        // Note: ESP32-S3 and other modern ESP32 chips have hardware FPUs that can compute `std::cos`
+                        // very quickly (~121 clocks). FastLED's 8-bit approximation `cos8` was evaluated here but found
+                        // not worth the loss in precision for the minimal performance gain on this hardware.
                         // Cosine wave for the rings, mapped from [-1, 1] to [0, 1]
                         const float intensity = (std::cos(phase * 2.0f * std::numbers::pi_v<float>) + 1.0f) * 0.5f;
 

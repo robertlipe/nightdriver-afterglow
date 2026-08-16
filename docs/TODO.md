@@ -41,6 +41,7 @@ Finally: Run  locate gfxbase.cpp - find yet OTHER trees to salvage
 
 Low priority
   /Users/robertlipe/src/tmp/src/build - see if anything is worth salvaging.
+- [x] Trig Performance Optimization (HexRipple/General): Investigated replacing `std::cos` and `std::sin` with FastLED `cos8`/`sin8` table lookups for performance. Found that modern ESP32 targets (like ESP32-S3) have hardware FPUs that execute trig functions extremely fast (~121 clocks). The minimal speedup from 8-bit table lookups is not worth the loss in precision. Closed as a false positive. Do not implement custom sin/cos.
 - [ ] FastLED Tech Debt: Refactor the 'bottom half' of FastLED to address reinterpret_cast warnings/errors.
 - [x] sensors.cpp Surgery: Refactor the merge-collision issue in sensors.cpp.
 - [ ] FFT Optimization: Evaluate replacing kosme/arduinoFFT with Espressif’s esp-dsp (LX7 PIE optimized).
