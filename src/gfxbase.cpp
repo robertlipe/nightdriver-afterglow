@@ -438,8 +438,8 @@ void GFXBase::blur2d(CRGB *leds, uint16_t width, uint16_t firstColumn, uint16_t 
 
 void GFXBase::BlurFrame(int amount)
 {
-    // BUGBUG (davepl) Needs to call isVuVisible on the effects manager to find out if it starts at row 1 or 0
-    blur2d(leds, _width, 0, _height, 1, amount);
+    int firstRow = g_ptrSystem->GetEffectManager().IsVUVisible() ? 1 : 0;
+    blur2d(leds, _width, 0, _height, firstRow, amount);
 }
 
 void GFXBase::CyclePalette(int offset)
