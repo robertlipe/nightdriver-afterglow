@@ -6,7 +6,6 @@
 
 // Derived from https://wokwi.com/projects/289218075224441356
 // N Glowing balls in orbit around each other around a rotating plane.
-// BUGBUG: Harvest possible speed fx from https://pastebin.com/VTAg4QAZ
 
 class PatternSMMetaBalls : public EffectWithId<PatternSMMetaBalls>
 {
