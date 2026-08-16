@@ -18,7 +18,9 @@ This file contains critical context, constraints, and architectural information 
 
 **C++ Coding Standards**
 *   **Standard:** Uses **C++20**, but defers to Arduino conventions for compatibility. Prefer industry-standard C++ operations for containers, summations, time, etc. over Arduino.
-*   **Exceptions:** ❌ **Do not use try-catch blocks or C++ exceptions.** Unrecoverable, fatal errors should call `throw std::runtime_error()`.
+*   **Exceptions & Error Handling:** ❌ **Do not use try-catch blocks or C++ exceptions for control flow.** Unrecoverable, fatal errors (e.g., OTA failures, critical allocation failures) MUST call `throw std::runtime_error("message")`.
+    *   **Architecture Note:** This intentional `throw` is caught by a top-level `std::set_terminate(TerminateHandler)` which logs the panic and forces a system reboot.
+    *   **AI Agent Rule:** 🛑 Do NOT flag `throw std::runtime_error()` paths as "missing error path tests" or "missing test coverage." Do not attempt to write unit tests for these terminal states. It is a false positive; this is the intended terminal recovery path.
 *   **Data Types:** ESP32 has hardware floating point but emulates double. **Prefer `float`** data types and function calls over `double`.
 *   **Memory:**
     *   ESP32 Targets vary between 320K and 16MB (PSRAM) of RAM.
