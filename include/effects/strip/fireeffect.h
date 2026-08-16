@@ -45,7 +45,7 @@ class FireEffect : public EffectWithId<FireEffect>
 
     void construct()
     {
-        heat.reset( new uint8_t[CellCount()] );
+        heat = std::make_unique<uint8_t[]>(CellCount());
     }
 
   protected:

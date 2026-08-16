@@ -568,9 +568,10 @@ size_t SoundAnalyzerBase::SampleI2S()
     esp_err_t err = i2s_channel_read(_rx_handle, (void *)tempBuffer, bytesToRead, &bytesRead, 100 / portTICK_PERIOD_MS);
     if (err != ESP_OK) return 0;
 
+    auto wordsRead = bytesRead / 4;
     for (int i = 0; i < MAX_SAMPLES; i++)
     {
-        if (i * kChannels >= (bytesRead / 4)) break;
+        if (i * kChannels >= wordsRead) break;
         int32_t s32 = tempBuffer[i * kChannels]; // Left channel
         ptrSampleBuffer[i] = (int16_t)std::clamp((int)(s32 >> 15), -32768, 32767);
     }
