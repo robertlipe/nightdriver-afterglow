@@ -706,6 +706,7 @@ void loop()
             if (g_Values.ShowStatusLog)
             {
                 String strOutput;
+                strOutput.reserve(240);
 
                 #if ENABLE_WIFI
                     strOutput += str_sprintf("WiFi: %s, MAC: %s, IP: %s ", nd_network::WLtoString(nd_network::GetWiFiStatus()), nd_network::GetMacAddress(":").c_str(), nd_network::GetWiFiLocalIP().c_str());

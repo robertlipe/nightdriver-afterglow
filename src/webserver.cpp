@@ -628,7 +628,7 @@ void CWebServer::HandleWifiSave(AsyncWebServerRequest *request)
 
     if (ssid.length() > 0)
     {
-        debugI("Captive portal received new WiFi credentials for SSID: %s", ssid.c_str());
+        // Don't log PII:  debugI("Captive portal received new WiFi credentials for SSID: %s", ssid.c_str());
 
         g_Analyzer.Pause();
         // Clear old credentials to make space

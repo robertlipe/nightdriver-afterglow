@@ -144,12 +144,8 @@ private:
         }
     };
 
-//    int width = 16;
-//    int height = 16;
-
     static const int width = MATRIX_WIDTH / 4;
     static const int height = MATRIX_HEIGHT / 2;
-
 
     Directions grid[width][height];
 
