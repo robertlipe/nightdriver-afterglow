@@ -294,26 +294,18 @@ std::string_view TabComplete(std::string_view partial, std::string_view full_lin
     {
         std::string_view match = "";
         int matches = 0;
+        size_t common_len = 0;
 
         for (const auto *cmd : g_CommandTable)
         {
             if (StringStartsWithInsensitive(cmd->command, partial))
             {
-                match = cmd->command;
-                matches++;
-            }
-        }
-
-        if (matches == 1)
-            return match.substr(partial.length());
-
-        if (matches > 1)
-        {
-            // Calculate longest common prefix among all matching commands
-            size_t common_len = match.length();
-            for (const auto *cmd : g_CommandTable)
-            {
-                if (StringStartsWithInsensitive(cmd->command, partial))
+                if (matches == 0)
+                {
+                    match = cmd->command;
+                    common_len = match.length();
+                }
+                else
                 {
                     size_t j = partial.length();
                     while (j < common_len && j < strlen(cmd->command) &&
@@ -321,10 +313,12 @@ std::string_view TabComplete(std::string_view partial, std::string_view full_lin
                         j++;
                     common_len = j;
                 }
+                matches++;
             }
-            if (common_len > partial.length())
-                return match.substr(partial.length(), common_len - partial.length());
         }
+
+        if (matches > 0 && common_len > partial.length())
+            return match.substr(partial.length(), common_len - partial.length());
     }
     // If we're completing an argument for 'effect'
     else if (full_line.starts_with("effect"))
