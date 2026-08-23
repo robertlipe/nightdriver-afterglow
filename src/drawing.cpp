@@ -101,7 +101,6 @@ uint16_t WiFiDraw()
             }
         }
     }
-//    debugV("WifIDraw claims to have drawn %d pixels", pixelsDrawn);
     return pixelsDrawn;
 }
 
@@ -136,7 +135,6 @@ uint16_t LocalDraw()
                     #endif
                 #endif
 
-//                debugV("LocalDraw claims to have drawn %d pixels", NUM_LEDS);
                 return NUM_LEDS;
             }
             else

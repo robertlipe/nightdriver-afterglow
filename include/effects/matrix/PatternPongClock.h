@@ -241,7 +241,7 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
         if (ballvel_x < 0 && ballpos_x > leftEdge  && ballpos_x < rightEdge)
         {
 
-            int end_ball_y = pong_get_ball_endpoint(ballpos_x, ballpos_y, ballvel_x, ballvel_y);
+            int end_ball_y = PongGetBallEndpoint(ballpos_x, ballpos_y, ballvel_x, ballvel_y);
 
             // if the miss flag is set,  then the bat needs to miss the ball when it gets to end_ball_y
             if (bat1miss == 1)
@@ -273,7 +273,7 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
 
         if (ballvel_x > 0 && ballpos_x > leftEdge && ballpos_x < rightEdge)
         {
-            int end_ball_y = pong_get_ball_endpoint(ballpos_x, ballpos_y, ballvel_x, ballvel_y);
+            int end_ball_y = PongGetBallEndpoint(ballpos_x, ballpos_y, ballvel_x, ballvel_y);
 
             // if flag set to miss, move bat out way of ball
             if (bat2miss == 1)
@@ -487,22 +487,16 @@ class PatternPongClock : public EffectWithId<PatternPongClock>
         }
     }
 
-    float pong_get_ball_endpoint(float xpos, float ypos, float xspeed, float yspeed)
+    float PongGetBallEndpoint(float xpos, float ypos, float xspeed, float yspeed)
     {
-        // In the following, the fabs() mirrors it over the bottom wall.  The fmod wraps it when it exceeds twice
-        // the top wall.  If the ball ends up in the top half of the double height section, we reflect it back
-        //
-        // auto deltaX = (xspeed > 0) ? (BAT2_X - xpos) : -(xpos - BAT1_X);        // How far from ball to opponent bat
-        // auto slope = yspeed / xspeed;                                           // Rise over run, ie: deltaY per X
-        // float newY = fmod(fabs(ypos + deltaX * slope), (2 * MATRIX_HEIGHT));    // New Y, but wrappped every 2*height
-        //
-        // if (newY > MATRIX_HEIGHT)                                               // If in top half, reflect to bottom
-        //    newY = 2 * MATRIX_HEIGHT - newY;
-        // return newY;
+        // fabs() mirrors the ball when it bounces off the y=0 wall.
+        // fmod() wraps the trajectory into a virtual space of twice the screen height.
+        // If the ball lands in the second half of that virtual space, we reflect it back
+        // to simulate bouncing off the y=MATRIX_HEIGHT wall.
         auto deltaX = (xspeed > 0) ? (BAT2_X - xpos) : -(xpos - BAT1_X);        // How far from ball to opponent bat
         auto slope = yspeed / xspeed;                                           // Rise over run, ie: deltaY per X
         float newY = fmod(fabs(ypos + deltaX * slope), (2 * MATRIX_HEIGHT));    // New Y, but wrappped every 2*height
-        if (newY > MATRIX_HEIGHT)                                               // If in top half, reflect to bottom
+        if (newY > MATRIX_HEIGHT)                                               // If in bottom half of virtual space, reflect
             newY = 2 * MATRIX_HEIGHT - newY;
         return newY;
     }

@@ -1103,10 +1103,6 @@ public:
 
     for (int i = 0; i < LEDCount; i++)
     {
-      // uint8_t maxv = 0;
-      // for (int iCell = 0; iCell < CellsPerLED; iCell++)
-      //   maxv = max(maxv, heat[i * CellsPerLED + iCell]);
-
       for (int iChannel = 0; iChannel < num_channels; iChannel++)
       {
         CRGB color = GetBlackBodyHeatColorByte(abHeat[i * CellsPerLED]);

@@ -123,8 +123,6 @@ class Boid
     void run(Boid boids [], uint8_t boidCount) {
       flock(boids, boidCount);
       update();
-      // wrapAroundBorders();
-      // render();
     }
 
     // Method to update location

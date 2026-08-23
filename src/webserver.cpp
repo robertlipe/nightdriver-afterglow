@@ -757,8 +757,6 @@ void CWebServer::GetEffectListText(AsyncWebServerRequest * pRequest)
 
 void CWebServer::GetStatistics(AsyncWebServerRequest * pRequest, StatisticsType statsType) const
 {
-//    debugV("GetStatistics");
-
     auto response = std::make_unique<AsyncJsonResponse>();
     auto& j = response->getRoot();
 
@@ -977,8 +975,6 @@ void CWebServer::GetSettingSpecs(AsyncWebServerRequest * pRequest)
 // Responds with current config, excluding any sensitive values
 void CWebServer::GetSettings(AsyncWebServerRequest * pRequest)
 {
-//    debugV("GetSettings");
-
     auto response = std::make_unique<AsyncJsonResponse>();
     response->addHeader("Server", "NightDriverStrip");
     auto root = response->getRoot();

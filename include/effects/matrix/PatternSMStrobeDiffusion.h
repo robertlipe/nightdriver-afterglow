@@ -106,9 +106,6 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
             }
         }
 
-        // Scroll the flakes above more often than we add new flakes below.
-        //		  if ((ct & 0x07) != 0) return;
-
         // This is a fragile way to to it, but we fill the top line of
         // the display with fresh snowflakes to be scrolled down later.
         uint8_t posX = random(MATRIX_WIDTH);
@@ -137,14 +134,7 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
             // diffusion ---
             // The offset is to skip the VU meter.
             g()->blur2d(g()->leds, MATRIX_WIDTH, 0, MATRIX_HEIGHT, top_line_offset, beatsin8(3, 64, 80));
-            // g()->blur2d(g()->leds, MATRIX_WIDTH, 0, MATRIX_HEIGHT, top_line_offset,
-            // 24);
             STEP = 1U;
-            if (Scale < 75)
-            {
-                // chaos ---
-                //      VirtualSnow();
-            }
         }
         else
         {

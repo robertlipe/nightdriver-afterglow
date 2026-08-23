@@ -708,8 +708,6 @@ void IRAM_ATTR Screen::Update(bool bRedraw)
 
 void IRAM_ATTR Screen::RunUpdateLoop()
 {
-    // debugI(">> ScreenUpdateLoopEntry\n");
-
     bool bRedraw = true;
     // Lazy init of buttons when loop starts (after hardware/defines are known)
     static bool s_buttonsInited = false;

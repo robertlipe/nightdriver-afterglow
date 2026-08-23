@@ -294,37 +294,34 @@ std::string_view TabComplete(std::string_view partial, std::string_view full_lin
     {
         std::string_view match = "";
         int matches = 0;
+        size_t common_len = 0;
 
         for (const auto *cmd : g_CommandTable)
         {
-            if (StringStartsWithInsensitive(cmd->command, partial))
+            std::string_view cmd_view{cmd->command};
+            if (StringStartsWithInsensitive(cmd_view, partial))
             {
-                match = cmd->command;
+                if (matches == 0)
+                {
+                    match = cmd_view;
+                    common_len = match.length();
+                }
+                else
+                {
+                    size_t j = partial.length();
+                    size_t max_len = std::min(common_len, cmd_view.length());
+                    while (j < max_len && tolower(match[j]) == tolower(cmd_view[j]))
+                    {
+                        j++;
+                    }
+                    common_len = j;
+                }
                 matches++;
             }
         }
 
-        if (matches == 1)
-            return match.substr(partial.length());
-
-        if (matches > 1)
-        {
-            // Calculate longest common prefix among all matching commands
-            size_t common_len = match.length();
-            for (const auto *cmd : g_CommandTable)
-            {
-                if (StringStartsWithInsensitive(cmd->command, partial))
-                {
-                    size_t j = partial.length();
-                    while (j < common_len && j < strlen(cmd->command) &&
-                           tolower(match[j]) == tolower(cmd->command[j]))
-                        j++;
-                    common_len = j;
-                }
-            }
-            if (common_len > partial.length())
-                return match.substr(partial.length(), common_len - partial.length());
-        }
+        if (matches > 0 && common_len > partial.length())
+            return match.substr(partial.length(), common_len - partial.length());
     }
     // If we're completing an argument for 'effect'
     else if (full_line.starts_with("effect"))

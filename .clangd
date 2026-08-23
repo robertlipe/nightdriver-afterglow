@@ -4,6 +4,6 @@ CompileFlags:
     - -fno-tree-switch-conversion
     - -fstrict-volatile-bitfields
     - -Wno-frame-address
+
   Add:
-    - -nostdlibinc
-    - -nostdinc++
+    - -std=gnu++2b

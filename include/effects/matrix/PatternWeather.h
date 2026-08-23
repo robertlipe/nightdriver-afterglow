@@ -140,6 +140,8 @@ class PatternWeather : public EffectWithId<PatternWeather>
     int    dayOfWeek          = 0;
     String iconToday          = "";
     String iconTomorrow       = "";
+    const EmbeddedFile* iconTodayFile    = nullptr;
+    const EmbeddedFile* iconTomorrowFile = nullptr;
     float  temperature        = 0.0f;
     float  highToday          = 0.0f;
     float  loToday            = 0.0f;
@@ -305,6 +307,7 @@ class PatternWeather : public EffectWithId<PatternWeather>
             int slot = 0;
 
             iconTomorrow = "";
+            iconTomorrowFile = nullptr;
 
             // Look for the temperature data for tomorrow
             for (size_t i = 0; i < list.size(); ++i)
@@ -334,7 +337,11 @@ class PatternWeather : public EffectWithId<PatternWeather>
 
                     // Use the noon slot for the icon
                     if (slot == 4)
+                    {
                         iconTomorrow = entry["weather"][0]["icon"].as<String>();
+                        auto dictEntry = GetWeatherIcons().find(iconTomorrow);
+                        iconTomorrowFile = (dictEntry != GetWeatherIcons().end()) ? &dictEntry->second : nullptr;
+                    }
                 }
             }
 
@@ -373,6 +380,7 @@ class PatternWeather : public EffectWithId<PatternWeather>
         if (httpResponseCode > 0)
         {
             iconToday = "";
+            iconTodayFile = nullptr;
             auto jsonDoc = CreateJsonDocument();
             deserializeJson(jsonDoc, http.getString());
 
@@ -385,6 +393,8 @@ class PatternWeather : public EffectWithId<PatternWeather>
             loToday     = KelvinToLocal(jsonDoc["main"]["temp_min"]);
 
             iconToday = jsonDoc["weather"][0]["icon"].as<String>();
+            auto dictEntry = GetWeatherIcons().find(iconToday);
+            iconTodayFile = (dictEntry != GetWeatherIcons().end()) ? &dictEntry->second : nullptr;
             debugI("Got today's temps: Now %d Lo %d, Hi %d, Icon %s", (int)temperature, (int)loToday, (int)highToday, iconToday.c_str());
 
             const char * pszName = jsonDoc["name"];
@@ -512,19 +522,15 @@ public:
         }
 
         // Draw the graphics
-        auto iconEntry = GetWeatherIcons().find(iconToday);
-        if (iconEntry != GetWeatherIcons().end())
+        if (iconTodayFile)
         {
-            auto icon = iconEntry->second;
-            if (JDR_OK != TJpgDec.drawJpg(0, 10, icon.contents, icon.length))        // Draw the image
+            if (JDR_OK != TJpgDec.drawJpg(0, 10, iconTodayFile->contents, iconTodayFile->length))        // Draw the image
                 debugW("Could not display icon %s", iconToday.c_str());
         }
 
-        iconEntry = GetWeatherIcons().find(iconTomorrow);
-        if (iconEntry != GetWeatherIcons().end())
+        if (iconTomorrowFile)
         {
-            auto icon = iconEntry->second;
-            if (JDR_OK != TJpgDec.drawJpg(xHalf+1, 10, icon.contents, icon.length))        // Draw the image
+            if (JDR_OK != TJpgDec.drawJpg(xHalf+1, 10, iconTomorrowFile->contents, iconTomorrowFile->length))        // Draw the image
                 debugW("Could not display icon %s", iconTomorrow.c_str());
         }
 

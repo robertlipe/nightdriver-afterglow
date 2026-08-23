@@ -69,7 +69,6 @@ class PatternSMTixyLand : public EffectWithId<PatternSMTixyLand>
             return !((int)(x + t * 50 / (fmod(y * y, 5.9f) + 1)) & 15) / (fmod(y * y, 5.9f) + 1);
             break;
         case 8:
-            //return sinf(atanf((y - 7.5f) / (x - 7.5f)) + t * 6);
             return sinf(atan2((y - 7.5f) , (x - 7.5f)) + t * 6);
             break;
         case 9:
@@ -119,7 +118,6 @@ class PatternSMTixyLand : public EffectWithId<PatternSMTixyLand>
             return 1 - fabs((x - 6) * cosf(t) + (y - 6) * sinf(t));
             break; // https://twitter.com/maettig/status/1326163017533419529
         case 24:
-            //return atanf((x - 7.5f) * (y - 7.5f)) - 2.5f * sinf(t);
             return atan2((x - 7.5f) , (y - 7.5f)) - 2.5f * sinf(t);
             break; // https://twitter.com/maettig/status/1326163136559403015
         case 25:
@@ -130,7 +128,6 @@ class PatternSMTixyLand : public EffectWithId<PatternSMTixyLand>
             break; // i add move for
                    // //https://twitter.com/aemkei/status/1326637631409676291
         case 27:
-            //return sinf(std::numbers::pi_v<float> * 2 * atanf((y - 8) / (x - 8)) + 5 * t);
             return sinf(std::numbers::pi_v<float> * 2 * atan2((y - 8) , (x - 8)) + 5 * t);
             break;
         case 28:
