@@ -127,8 +127,6 @@ class PatternSMTraffic : public EffectWithId<PatternSMTraffic>
         stop_light = colors[divider][2];
         atr_stop = colors[divider][3];
 
-        //  drawPixelXY(center, centerY, 0x747474);
-
         if (hue == 1)
         {
             // Green Traffic -------

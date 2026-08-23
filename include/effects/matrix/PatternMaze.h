@@ -208,10 +208,6 @@ private:
             case 1:
                 // choose random(Prim's)
                 return random(max);
-
-            //case 2:
-                // choose oldest (not good, so disabling)
-            //    return 0;
         }
     }
 

@@ -110,10 +110,7 @@ class PatternSMPicasso3in1 : public EffectWithId<PatternSMPicasso3in1>
         for (int i = 0; i < enlargedObjectNUM - 2U; i += 2)
         {
             g()->drawLine(trackingObjects[i].posX, trackingObjects[i].posY, trackingObjects[i + 1U].posX,
-                     trackingObjects[i + 1U].posY, CHSV(trackingObjects[i].hue, 255U, 255U));
-            // DrawLine(trackingObjectPosX[i], trackingObjectPosY[i],
-            // trackingObjectPosX[i+1U], trackingObjectPosY[i+1U],
-            // ColorFromPalette(*curPalette, trackingObjectHue[i]));
+                          trackingObjects[i + 1U].posY, CHSV(trackingObjects[i].hue, 255U, 255U));
         }
 
         g()->BlurFrame(80);

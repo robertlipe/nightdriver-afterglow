@@ -49,6 +49,8 @@
 
 #include "effects/strip/misceffects.h"
 
+#define DebugCodes false
+
 // RemoteColorCode
 //
 // Maps an IR remote code to a color and a name
@@ -377,7 +379,7 @@ void RemoteControl::handle()
 
     if (result == 0) return;
 
-    // debugI("Received IR Remote Code: 0x%08lX %s\n", (unsigned long)result, isRepeat ? "(Repeat)" : "");
+    if constexpr(DebugCodes) debugI("Received IR Remote Code: 0x%08lX %s\n", (unsigned long)result, isRepeat ? "(Repeat)" : "");
 
     if (isRepeat || result == lastResult)
     {

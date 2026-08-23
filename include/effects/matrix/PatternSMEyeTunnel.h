@@ -58,7 +58,6 @@ class PatternSMEyeTunnel : public EffectWithId<PatternSMEyeTunnel>
         }
         if (brightness != 255)
         {
-            // nscale8x3_video(red1, green1, blue1, brightness);
             nscale8x3(red1, green1, blue1, brightness);
         }
 

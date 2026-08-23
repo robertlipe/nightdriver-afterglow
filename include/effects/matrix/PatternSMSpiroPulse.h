@@ -30,7 +30,6 @@ class PatternSMSpiroPulse : public EffectWithId<PatternSMSpiroPulse>
 
     void Draw() override
     {
-        // fadeToBlackBy(leds, NUM_LEDS, 8);
         fadeAllChannelsToBlackBy(8);
 
         float t = (float)millis() / 500.0f;
