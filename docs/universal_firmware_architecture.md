@@ -28,9 +28,10 @@ These flags are intercepted by `include/globals.h` and used in `#ifdef` blocks t
 
 We shift the hardware definition from **Compile-Time** to **Runtime**.
 
-We will compile exactly **two** universal binaries:
+We will compile exactly **one universal binary per architecture family**:
 1. `nightdriver_esp32_universal.bin`
 2. `nightdriver_esp32s3_universal.bin`
+3. `nightdriver_esp32c3_universal.bin` (and other RISC-V mutants as needed: C6, P4, etc.)
 
 These binaries contain the code for *all* features (Screens, HUB75, WS2812, Audio). When the ESP32 boots, it reads a tiny configuration file (e.g., `board_config.json`) from a specific LittleFS or NVS partition to decide *who it is* and *which features to activate*.
 
