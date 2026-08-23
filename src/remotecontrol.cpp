@@ -49,7 +49,7 @@
 
 #include "effects/strip/misceffects.h"
 
-#define DebugCodes false
+constexpr bool DebugCodes = false;
 
 // RemoteColorCode
 //
