@@ -24,11 +24,13 @@ esp32_paths = get_cpppath(esp32_py)
 def clean_path(p):
     return p.strip().replace('"esp32s3"', '"{board}"').replace('"esp32"', '"{board}"').strip(',')
 
-s3_clean = [clean_path(p) for p in s3_paths if p.strip()]
-esp32_clean = [clean_path(p) for p in esp32_paths if p.strip()]
+esp32_clean = set(clean_path(p) for p in esp32_paths if p.strip())
 
 missing = []
-for orig, clean in zip(s3_paths, s3_clean):
+for orig in s3_paths:
+    if not orig.strip():
+        continue
+    clean = clean_path(orig)
     if clean not in esp32_clean and clean != "CPPPATH=[":
         missing.append(orig.replace('"esp32s3"', '"esp32"'))
 
