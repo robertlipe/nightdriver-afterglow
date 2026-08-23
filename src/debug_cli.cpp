@@ -298,19 +298,22 @@ std::string_view TabComplete(std::string_view partial, std::string_view full_lin
 
         for (const auto *cmd : g_CommandTable)
         {
-            if (StringStartsWithInsensitive(cmd->command, partial))
+            std::string_view cmd_view{cmd->command};
+            if (StringStartsWithInsensitive(cmd_view, partial))
             {
                 if (matches == 0)
                 {
-                    match = cmd->command;
+                    match = cmd_view;
                     common_len = match.length();
                 }
                 else
                 {
                     size_t j = partial.length();
-                    while (j < common_len && j < strlen(cmd->command) &&
-                           tolower(match[j]) == tolower(cmd->command[j]))
+                    size_t max_len = std::min(common_len, cmd_view.length());
+                    while (j < max_len && tolower(match[j]) == tolower(cmd_view[j]))
+                    {
                         j++;
+                    }
                     common_len = j;
                 }
                 matches++;
