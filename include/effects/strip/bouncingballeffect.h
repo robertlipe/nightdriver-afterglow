@@ -58,7 +58,7 @@ class BouncingBallEffect : public EffectWithId<BouncingBallEffect>
     size_t  _cBalls;
     size_t  _cBallSize;
     bool    _bMirrored;
-    int     speed = 30;
+    int     _speed = 30;
 
     const bool _bErase;
 
@@ -94,7 +94,7 @@ class BouncingBallEffect : public EffectWithId<BouncingBallEffect>
           _bMirrored(jsonObject[PTY_MIRORRED]),
           _bErase(jsonObject[PTY_ERASE])
     {
-        if (jsonObject[PTY_SPEED].is<int>()) speed = jsonObject[PTY_SPEED].as<int>();
+        if (jsonObject[PTY_SPEED].is<int>()) _speed = jsonObject[PTY_SPEED].as<int>();
     }
 
     EffectSettingSpecs* FillSettingSpecs() override
@@ -108,7 +108,7 @@ class BouncingBallEffect : public EffectWithId<BouncingBallEffect>
 
     bool SetSetting(const String& name, const String& value) override
     {
-        RETURN_IF_SET(name, PTY_SPEED, speed, value);
+        RETURN_IF_SET(name, PTY_SPEED, _speed, value);
         return LEDStripEffect::SetSetting(name, value);
     }
 
@@ -123,7 +123,7 @@ class BouncingBallEffect : public EffectWithId<BouncingBallEffect>
         jsonDoc["bls"] = _cBallSize;
         jsonDoc[PTY_MIRORRED] = _bMirrored;
         jsonDoc[PTY_ERASE] = _bErase;
-        jsonDoc[PTY_SPEED] = speed;
+        jsonDoc[PTY_SPEED] = _speed;
 
         return SetIfNotOverflowed(jsonDoc, jsonObject, __PRETTY_FUNCTION__);
     }
@@ -178,7 +178,7 @@ class BouncingBallEffect : public EffectWithId<BouncingBallEffect>
         }
 
         // Draw each of the the balls
-        const float timeScale = speed / 300.0f;
+        const float timeScale = _speed / 300.0f;
         for (size_t i = 0; i < _cBalls; i++)
         {
             TimeSinceLastBounce[i] = (g_Values.AppTime.FrameStartTime() - ClockTimeSinceLastBounce[i]) * timeScale;
