@@ -89,37 +89,31 @@ void RecordPanicMessage(const char* message)
 static std::vector<std::string_view> Tokenize(std::string_view input)
 {
     std::vector<std::string_view> output;
+    constexpr std::string_view whitespace = " \t\r\n\f\v";
 
-    while (!input.empty())
+    while (true)
     {
-        while (!input.empty() && std::isspace(static_cast<unsigned char>(input.front())))
-        {
-            input.remove_prefix(1);
-        }
-
-        if (input.empty())
+        size_t start = input.find_first_not_of(whitespace);
+        if (start == std::string_view::npos)
             break;
+
+        input.remove_prefix(start);
 
         if (input.front() == '"')
         {
             input.remove_prefix(1);
             size_t end = input.find('"');
-            if (end == std::string_view::npos)
-            {
-                output.push_back(input);
-                break;
-            }
             output.push_back(input.substr(0, end));
+            if (end == std::string_view::npos)
+                break;
             input.remove_prefix(end + 1);
         }
         else
         {
-            size_t end = 0;
-            while (end < input.length() && !std::isspace(static_cast<unsigned char>(input[end])) && input[end] != '"')
-            {
-                end++;
-            }
+            size_t end = input.find_first_of(" \t\r\n\f\v\"");
             output.push_back(input.substr(0, end));
+            if (end == std::string_view::npos)
+                break;
             input.remove_prefix(end);
         }
     }
