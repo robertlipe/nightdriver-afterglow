@@ -210,6 +210,8 @@
     INIT_EFFECT_SETTING_SPECS(PatternStocks, mySettingSpecs);
 #endif
 
+    INIT_EFFECT_SETTING_SPECS(BouncingBallEffect, mySettingSpecs);
+
 #if HEXAGON
     INIT_EFFECT_SETTING_SPECS(PatternHexMath, mySettingSpecs);
     INIT_EFFECT_SETTING_SPECS(PatternHexSpiral, mySettingSpecs);

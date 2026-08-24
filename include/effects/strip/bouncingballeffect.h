@@ -178,9 +178,9 @@ class BouncingBallEffect : public EffectWithId<BouncingBallEffect>
         }
 
         // Draw each of the the balls
+        const float timeScale = speed / 300.0f;
         for (size_t i = 0; i < _cBalls; i++)
         {
-            float timeScale = speed / 300.0f;
             TimeSinceLastBounce[i] = (g_Values.AppTime.FrameStartTime() - ClockTimeSinceLastBounce[i]) * timeScale;
             Height[i] = 0.5f * Gravity * powf(TimeSinceLastBounce[i], 2.0f) + ImpactVelocity[i] * TimeSinceLastBounce[i];
 
