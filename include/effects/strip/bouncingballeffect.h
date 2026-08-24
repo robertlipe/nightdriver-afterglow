@@ -58,8 +58,11 @@ class BouncingBallEffect : public EffectWithId<BouncingBallEffect>
     size_t  _cBalls;
     size_t  _cBallSize;
     bool    _bMirrored;
+    int     speed = 30;
 
     const bool _bErase;
+
+    DECLARE_EFFECT_SETTING_SPECS(mySettingSpecs);
 
     static constexpr float Gravity = -9.81f;
     static constexpr float StartHeight = 1.0f;
@@ -91,6 +94,22 @@ class BouncingBallEffect : public EffectWithId<BouncingBallEffect>
           _bMirrored(jsonObject[PTY_MIRORRED]),
           _bErase(jsonObject[PTY_ERASE])
     {
+        if (jsonObject[PTY_SPEED].is<int>()) speed = jsonObject[PTY_SPEED].as<int>();
+    }
+
+    EffectSettingSpecs* FillSettingSpecs() override
+    {
+        if (mySettingSpecs.size() == 0)
+        {
+            mySettingSpecs.emplace_back(PTY_SPEED, "Speed", SettingSpec::SettingType::Integer, 1.0, 100.0);
+        }
+        return &mySettingSpecs;
+    }
+
+    bool SetSetting(const String& name, const String& value) override
+    {
+        RETURN_IF_SET(name, PTY_SPEED, speed, value);
+        return LEDStripEffect::SetSetting(name, value);
     }
 
     bool SerializeToJSON(JsonObject& jsonObject) override
@@ -104,6 +123,7 @@ class BouncingBallEffect : public EffectWithId<BouncingBallEffect>
         jsonDoc["bls"] = _cBallSize;
         jsonDoc[PTY_MIRORRED] = _bMirrored;
         jsonDoc[PTY_ERASE] = _bErase;
+        jsonDoc[PTY_SPEED] = speed;
 
         return SetIfNotOverflowed(jsonDoc, jsonObject, __PRETTY_FUNCTION__);
     }
@@ -160,7 +180,8 @@ class BouncingBallEffect : public EffectWithId<BouncingBallEffect>
         // Draw each of the the balls
         for (size_t i = 0; i < _cBalls; i++)
         {
-            TimeSinceLastBounce[i] = (g_Values.AppTime.FrameStartTime() - ClockTimeSinceLastBounce[i]) / 10.0;        // BUGBUG hardcoded was 3 but was too fast
+            float timeScale = speed / 300.0f;
+            TimeSinceLastBounce[i] = (g_Values.AppTime.FrameStartTime() - ClockTimeSinceLastBounce[i]) * timeScale;
             Height[i] = 0.5f * Gravity * powf(TimeSinceLastBounce[i], 2.0f) + ImpactVelocity[i] * TimeSinceLastBounce[i];
 
             if (Height[i] < 0)
