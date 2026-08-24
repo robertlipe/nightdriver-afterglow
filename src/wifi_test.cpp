@@ -314,11 +314,10 @@ WiFiTestCase* g_wifiTestCases[] = {
 size_t g_numWiFiTestCases = sizeof(g_wifiTestCases) / sizeof(WiFiTestCase*);
 
 
-// --- WiFi Test Loop Task Entry Point ---
-void WiFiTestLoopEntry(void* pvParameters) {
-    debugI("Starting WiFi Test Loop Task.");
 
-    // Setup dynamic credentials
+// --- Test Environment Setup / Teardown ---
+
+static void SetupDynamicCredentials() {
     if (cszPassword && strlen(cszPassword) > 0) {
         g_mistypedPassword = String(cszPassword) + "_broken";
     } else {
@@ -328,7 +327,9 @@ void WiFiTestLoopEntry(void* pvParameters) {
     // Inject dynamic broken password into the mistyped case steps
     mistypedPasswordCaseSteps[2].password = g_mistypedPassword.c_str(); // SET_CREDENTIALS
     mistypedPasswordCaseSteps[3].password = g_mistypedPassword.c_str(); // EXPECT_STA_CONNECTION
+}
 
+static void PauseAdcForTesting() {
     // WiFi.mode(WIFI_STA) in setup() starts the RF radio, which continuously
     // scans for networks in the background. Each scan briefly disables the
     // flash cache. adc_hal_get_reading_result() is in flash (missing IRAM_ATTR
@@ -338,19 +339,117 @@ void WiFiTestLoopEntry(void* pvParameters) {
     // The test thread does not need audio. Hold the ADC paused for the entire
     // test run. The audio task initializes the ADC handle, so wait until it has
     // done so before calling Pause().
-    {
-        constexpr uint32_t kAdcInitWaitMs = 2000;
-        uint32_t waitStart = millis();
-        while (!g_Analyzer.IsADCHandleValid() && (millis() - waitStart < kAdcInitWaitMs)) {
-            delay(50);
-        }
-        if (g_Analyzer.IsADCHandleValid()) {
-            debugI("TEST: Pausing ADC for test duration (adc_hal IRAM_ATTR bug workaround).");
-            g_Analyzer.Pause();
+    constexpr uint32_t kAdcInitWaitMs = 2000;
+    uint32_t waitStart = millis();
+    while (!g_Analyzer.IsADCHandleValid() && (millis() - waitStart < kAdcInitWaitMs)) {
+        delay(50);
+    }
+    if (g_Analyzer.IsADCHandleValid()) {
+        debugI("TEST: Pausing ADC for test duration (adc_hal IRAM_ATTR bug workaround).");
+        g_Analyzer.Pause();
+    } else {
+        debugW("TEST: ADC handle not valid after %u ms; skipping pause.", kAdcInitWaitMs);
+    }
+}
+
+static void ResumeAdcFromTesting() {
+    g_Analyzer.Resume();
+    debugI("TEST: ADC resumed.");
+}
+
+// --- Step and Case Execution ---
+
+static bool ExecuteTestStep(const WiFiTestStep& step) {
+    bool stepPassed = false;
+    switch (step.command) {
+        case WiFiTestCommand::LOG_MESSAGE:
+            debugI("TEST MESSAGE: %s", step.message);
+            stepPassed = true; // Logging always passes
+            break;
+
+        case WiFiTestCommand::SET_CREDENTIALS:
+            stepPassed = setWiFiCredentials(step.ssid, step.password);
+            break;
+
+        case WiFiTestCommand::CLEAR_ALL_CREDENTIALS:
+            clearAllWiFiCredentials();
+            stepPassed = true; // Clear credentials always passes unless NVS fails
+            break;
+
+        case WiFiTestCommand::EXPECT_STA_CONNECTION:
+            stepPassed = expectStaConnection(step.ssid, step.password, step.timeoutMs, step.expectedStatus);
+            break;
+
+        case WiFiTestCommand::EXPECT_AP_MODE:
+            stepPassed = expectAPMode(step.timeoutMs);
+            // After expecting AP mode, make sure to kick the webserver to start it
+            if (stepPassed && !g_ptrSystem->GetWebServer().IsCaptivePortalActive()) {
+                debugI("TEST: WebServer not active, starting Captive Portal WebServer explicitly.");
+                nd_network::StartCaptivePortal(); // This call will initiate the AP, if not already
+            }
+            break;
+
+        case WiFiTestCommand::DISABLE_AP_MODE:
+            stepPassed = disableAPMode();
+            break;
+
+        case WiFiTestCommand::START_CAPTIVE_PORTAL:
+            debugI("TEST: Explicitly starting Captive Portal.");
+            nd_network::StartCaptivePortal();
+            delay(1000); // Give the captive portal time to start and stabilize
+            stepPassed = true; // Assume success for now, expectAPMode will verify
+            break;
+
+        case WiFiTestCommand::WAIT_FOR_MS:
+            debugI("TEST: Waiting for %u ms.", (unsigned int)step.timeoutMs);
+            delay(step.timeoutMs);
+            stepPassed = true;
+            break;
+
+        case WiFiTestCommand::REBOOT_DEVICE:
+            debugI("TEST: Requesting device reboot for next test phase.");
+            // This will restart the system, so the next loop iteration won't happen.
+            // The next test phase would start after reboot.
+            esp_restart();
+            break;
+
+        case WiFiTestCommand::WAIT_FOR_CAPTIVE_PORTAL_SUBMISSION:
+            stepPassed = waitForCaptivePortalSubmission(step.timeoutMs);
+            break;
+
+        default:
+            debugE("TEST ERROR: Unknown command in test step.");
+            stepPassed = false;
+            break;
+    }
+    return stepPassed;
+}
+
+static bool RunTestCase(WiFiTestCase* currentCase) {
+    bool testCasePassed = true;
+    for (size_t j = 0; j < currentCase->numSteps; ++j) {
+        const WiFiTestStep& step = currentCase->steps[j];
+        debugI("--- Step %u of %u: Command %d ---", (unsigned int)(j + 1), (unsigned int)currentCase->numSteps, (int)step.command);
+
+        bool stepPassed = ExecuteTestStep(step);
+
+        if (!stepPassed) {
+            testCasePassed = false;
+            debugE("===== Test Step FAILED in %s: Command %d =====", currentCase->name, (int)step.command);
+            break;
         } else {
-            debugW("TEST: ADC handle not valid after %u ms; skipping pause.", kAdcInitWaitMs);
+             debugI("TEST Step PASSED in %s: Command %d", currentCase->name, (int)step.command);
         }
     }
+    return testCasePassed;
+}
+
+// --- WiFi Test Loop Task Entry Point ---
+void WiFiTestLoopEntry(void* pvParameters) {
+    debugI("Starting WiFi Test Loop Task.");
+
+    SetupDynamicCredentials();
+    PauseAdcForTesting();
 
     // Give some time for system to fully initialize
     delay(TEST_BOOT_STABILIZE_MS);
@@ -363,83 +462,8 @@ void WiFiTestLoopEntry(void* pvParameters) {
     for (size_t i = 0; i < g_numWiFiTestCases; ++i) {
         WiFiTestCase* currentCase = g_wifiTestCases[i];
         debugI("===== Running Test Case %u of %u: %s =====", (unsigned int)(i + 1), (unsigned int)g_numWiFiTestCases, currentCase->name);
-        bool testCasePassed = true;
 
-        for (size_t j = 0; j < currentCase->numSteps; ++j) {
-            WiFiTestStep& step = currentCase->steps[j];
-            debugI("--- Step %u of %u: Command %d ---", (unsigned int)(j + 1), (unsigned int)currentCase->numSteps, (int)step.command);
-            bool stepPassed = false;
-
-            switch (step.command) {
-                case WiFiTestCommand::LOG_MESSAGE:
-                    debugI("TEST MESSAGE: %s", step.message);
-                    stepPassed = true; // Logging always passes
-                    break;
-
-                case WiFiTestCommand::SET_CREDENTIALS:
-                    stepPassed = setWiFiCredentials(step.ssid, step.password);
-                    break;
-
-                case WiFiTestCommand::CLEAR_ALL_CREDENTIALS:
-                    clearAllWiFiCredentials();
-                    stepPassed = true; // Clear credentials always passes unless NVS fails
-                    break;
-
-                case WiFiTestCommand::EXPECT_STA_CONNECTION:
-                    stepPassed = expectStaConnection(step.ssid, step.password, step.timeoutMs, step.expectedStatus);
-                    break;
-
-                case WiFiTestCommand::EXPECT_AP_MODE:
-                    stepPassed = expectAPMode(step.timeoutMs);
-                    // After expecting AP mode, make sure to kick the webserver to start it
-                    if (stepPassed && !g_ptrSystem->GetWebServer().IsCaptivePortalActive()) {
-                        debugI("TEST: WebServer not active, starting Captive Portal WebServer explicitly.");
-                        nd_network::StartCaptivePortal(); // This call will initiate the AP, if not already
-                    }
-                    break;
-
-                case WiFiTestCommand::DISABLE_AP_MODE:
-                    stepPassed = disableAPMode();
-                    break;
-
-                case WiFiTestCommand::START_CAPTIVE_PORTAL:
-                    debugI("TEST: Explicitly starting Captive Portal.");
-                    nd_network::StartCaptivePortal();
-                    delay(1000); // Give the captive portal time to start and stabilize
-                    stepPassed = true; // Assume success for now, expectAPMode will verify
-                    break;
-
-                case WiFiTestCommand::WAIT_FOR_MS:
-                    debugI("TEST: Waiting for %u ms.", (unsigned int)step.timeoutMs);
-                    delay(step.timeoutMs);
-                    stepPassed = true;
-                    break;
-
-                case WiFiTestCommand::REBOOT_DEVICE:
-                    debugI("TEST: Requesting device reboot for next test phase.");
-                    // This will restart the system, so the next loop iteration won't happen.
-                    // The next test phase would start after reboot.
-                    esp_restart();
-                    break;
-
-                case WiFiTestCommand::WAIT_FOR_CAPTIVE_PORTAL_SUBMISSION:
-                    stepPassed = waitForCaptivePortalSubmission(step.timeoutMs);
-                    break;
-
-                default:
-                    debugE("TEST ERROR: Unknown command in test step.");
-                    stepPassed = false;
-                    break;
-            }
-
-            if (!stepPassed) {
-                testCasePassed = false;
-                debugE("===== Test Step FAILED in %s: Command %d =====", currentCase->name, (int)step.command);
-                break; // Exit current test case on first failure
-            } else {
-                 debugI("TEST Step PASSED in %s: Command %d", currentCase->name, (int)step.command);
-            }
-        }
+        bool testCasePassed = RunTestCase(currentCase);
 
         if (testCasePassed) {
             debugI("===== Test Case %s: PASSED =====", currentCase->name);
@@ -456,8 +480,7 @@ void WiFiTestLoopEntry(void* pvParameters) {
     restoreWiFiCredentials();
 
     // Resume ADC before handing back to the normal network thread.
-    g_Analyzer.Resume();
-    debugI("TEST: ADC resumed.");
+    ResumeAdcFromTesting();
 
     debugI("TEST: Starting main network loop to connect with restored credentials or run captive portal.");
     g_ptrSystem->GetTaskManager().StartNetworkThread();
