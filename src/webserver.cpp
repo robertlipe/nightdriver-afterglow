@@ -388,7 +388,7 @@ void CWebServer::RegisterApiEndpoints()
         ArRequestHandlerFunction handler;
     };
 
-    const std::array<ApiRoute, 24> routes = {{
+    const std::array<ApiRoute, 19> routes = {{
         {"/effects",               HTTP_GET,  GetEffectListText},
         {"/getEffectList",         HTTP_GET,  GetEffectListText},
         {"/nextEffect",            HTTP_POST, NextEffect},
