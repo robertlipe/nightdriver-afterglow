@@ -89,48 +89,39 @@ void RecordPanicMessage(const char* message)
 static std::vector<std::string_view> Tokenize(std::string_view input)
 {
     std::vector<std::string_view> output;
-    size_t start = 0;
-    bool in_quotes = false;
 
-    const size_t input_len = input.length();
-    for (size_t i = 0; i < input_len; ++i)
+    while (!input.empty())
     {
-        char c = input[i];
-
-        if (in_quotes)
+        while (!input.empty() && std::isspace(static_cast<unsigned char>(input.front())))
         {
-            if (c == '"')
-            {
-                size_t len = i - start;
-                output.push_back(input.substr(start, len));
-                in_quotes = false;
-                start = i + 1;
-            }
-            continue;
+            input.remove_prefix(1);
         }
 
-        if (std::isspace(c))
-        {
-            if (i > start)
-            {
-                output.push_back(input.substr(start, i - start));
-            }
-            start = i + 1;
-        }
-        else if (c == '"')
-        {
-            if (i > start)
-            {
-                output.push_back(input.substr(start, i - start));
-            }
-            start = i + 1;
-            in_quotes = true;
-        }
-    }
+        if (input.empty())
+            break;
 
-    if (start < input.length())
-    {
-        output.push_back(input.substr(start));
+        if (input.front() == '"')
+        {
+            input.remove_prefix(1);
+            size_t end = input.find('"');
+            if (end == std::string_view::npos)
+            {
+                output.push_back(input);
+                break;
+            }
+            output.push_back(input.substr(0, end));
+            input.remove_prefix(end + 1);
+        }
+        else
+        {
+            size_t end = 0;
+            while (end < input.length() && !std::isspace(static_cast<unsigned char>(input[end])) && input[end] != '"')
+            {
+                end++;
+            }
+            output.push_back(input.substr(0, end));
+            input.remove_prefix(end);
+        }
     }
 
     return output;
