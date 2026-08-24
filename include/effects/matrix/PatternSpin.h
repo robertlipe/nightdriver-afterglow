@@ -75,8 +75,8 @@ class PatternSpin : public EffectWithId<PatternSpin>
   public:
 
     PatternSpin() : EffectWithId<PatternSpin>("Spin") {}
-    PatternSpin(const String& friendlyName) : EffectWithId<PatternSpin>(friendlyName) {}
-    PatternSpin(const JsonObjectConst& jsonObject) : EffectWithId<PatternSpin>(jsonObject) {}
+    explicit PatternSpin(const String& friendlyName) : EffectWithId<PatternSpin>(friendlyName) {}
+    explicit PatternSpin(const JsonObjectConst& jsonObject) : EffectWithId<PatternSpin>(jsonObject) {}
 
     void Start() override
     {
