@@ -324,28 +324,8 @@ void CWebServer::AddCORSHeaderAndSendResponse<AsyncJsonResponse>(AsyncWebServerR
 // Member function implementations
 
 // begin - register page load handlers and start serving pages
-void CWebServer::SetupStationMode()
-
+void CWebServer::RegisterSystemEndpoints()
 {
-    [[maybe_unused]] extern const uint8_t html_start[] asm("_binary_site_dist_index_html_gz_start");
-    [[maybe_unused]] extern const uint8_t html_end[] asm("_binary_site_dist_index_html_gz_end");
-    [[maybe_unused]] extern const uint8_t js_start[] asm("_binary_site_dist_index_js_gz_start");
-    [[maybe_unused]] extern const uint8_t js_end[] asm("_binary_site_dist_index_js_gz_end");
-    [[maybe_unused]] extern const uint8_t ico_start[] asm("_binary_site_dist_favicon_ico_gz_start");
-    [[maybe_unused]] extern const uint8_t ico_end[] asm("_binary_site_dist_favicon_ico_gz_end");
-    [[maybe_unused]] extern const uint8_t timezones_start[] asm("_binary_config_timezones_json_start");
-    [[maybe_unused]] extern const uint8_t timezones_end[] asm("_binary_config_timezones_json_end");
-
-    EmbeddedWebFile html_file(html_start, html_end, "text/html", "gzip");
-    EmbeddedWebFile js_file(js_start, js_end, "application/javascript", "gzip");
-    EmbeddedWebFile ico_file(ico_start, ico_end, "image/vnd.microsoft.icon", "gzip");
-    EmbeddedWebFile timezones_file(timezones_start, timezones_end - 1, "text/json"); // end - 1 because of zero-termination
-
-    debugI("Embedded html file size: %zu", (size_t)html_file.length);
-    debugI("Embedded jsx file size: %zu", (size_t)js_file.length);
-    debugI("Embedded ico file size: %zu", (size_t)ico_file.length);
-    debugI("Embedded timezones file size: %zu", (size_t)timezones_file.length);
-
     _staticStats.HeapSize = ESP.getHeapSize();
     _staticStats.DmaHeapSize = heap_caps_get_total_size(MALLOC_CAP_DMA);
     _staticStats.PsramSize = ESP.getPsramSize();
@@ -356,17 +336,13 @@ void CWebServer::SetupStationMode()
     _staticStats.FreeSketchSpace = 0; // ESP.getFreeSketchSpace();
     _staticStats.FlashChipSize = ESP.getFlashChipSize();
 
-    debugI("Connecting Web Endpoints");
-
     // UserFS file requests
-
     _server.on("/effectsConfig",         HTTP_GET,  [](AsyncWebServerRequest* pRequest) { pRequest->send(UserFS, EFFECTS_CONFIG_FILE,   "text/json"); });
     #if ENABLE_IMPROV_LOGGING
         _server.on(IMPROV_LOG_FILE,      HTTP_GET,  [](AsyncWebServerRequest* pRequest) { pRequest->send(UserFS, IMPROV_LOG_FILE,       "text/plain"); });
     #endif
 
     // Instance handler requests
-
     _server.on("/statistics/static",     HTTP_GET,  [this](AsyncWebServerRequest* pRequest)
                                                     { this->GetStatistics(pRequest, StatisticsType::Static); });
     _server.on("/statistics/dynamic",    HTTP_GET,  [this](AsyncWebServerRequest* pRequest)
@@ -402,33 +378,68 @@ void CWebServer::SetupStationMode()
             request->send(404, "text/plain", "Coredump partition not found");
         }
     });
+}
 
-    // Static handler requests
+void CWebServer::RegisterApiEndpoints()
+{
+    struct ApiRoute {
+        const char* path;
+        WebRequestMethodComposite method;
+        ArRequestHandlerFunction handler;
+    };
 
-    _server.on("/effects",               HTTP_GET,  GetEffectListText);
-    _server.on("/getEffectList",         HTTP_GET,  GetEffectListText);
-    _server.on("/nextEffect",            HTTP_POST, NextEffect);
-    _server.on("/previousEffect",        HTTP_POST, PreviousEffect);
+    const std::array<ApiRoute, 24> routes = {{
+        {"/effects",               HTTP_GET,  GetEffectListText},
+        {"/getEffectList",         HTTP_GET,  GetEffectListText},
+        {"/nextEffect",            HTTP_POST, NextEffect},
+        {"/previousEffect",        HTTP_POST, PreviousEffect},
 
-    _server.on("/currentEffect",         HTTP_POST, SetCurrentEffectIndex);
-    _server.on("/setCurrentEffectIndex", HTTP_POST, SetCurrentEffectIndex);
-    _server.on("/enableEffect",          HTTP_POST, EnableEffect);
-    _server.on("/disableEffect",         HTTP_POST, DisableEffect);
-    _server.on("/moveEffect",            HTTP_POST, MoveEffect);
-    _server.on("/copyEffect",            HTTP_POST, CopyEffect);
-    _server.on("/deleteEffect",          HTTP_POST, DeleteEffect);
+        {"/currentEffect",         HTTP_POST, SetCurrentEffectIndex},
+        {"/setCurrentEffectIndex", HTTP_POST, SetCurrentEffectIndex},
+        {"/enableEffect",          HTTP_POST, EnableEffect},
+        {"/disableEffect",         HTTP_POST, DisableEffect},
+        {"/moveEffect",            HTTP_POST, MoveEffect},
+        {"/copyEffect",            HTTP_POST, CopyEffect},
+        {"/deleteEffect",          HTTP_POST, DeleteEffect},
 
-    _server.on("/settings/effect/specs", HTTP_GET,  GetEffectSettingSpecs);
-    _server.on("/settings/effect",       HTTP_GET,  GetEffectSettings);
-    _server.on("/settings/effect",       HTTP_POST, SetEffectSettings);
-    _server.on("/settings/validated",    HTTP_POST, ValidateAndSetSetting);
-    _server.on("/settings/specs",        HTTP_GET,  GetSettingSpecs);
-    _server.on("/settings",              HTTP_GET,  GetSettings);
-    _server.on("/settings",              HTTP_POST, SetSettings);
+        {"/settings/effect/specs", HTTP_GET,  GetEffectSettingSpecs},
+        {"/settings/effect",       HTTP_GET,  GetEffectSettings},
+        {"/settings/effect",       HTTP_POST, SetEffectSettings},
+        {"/settings/validated",    HTTP_POST, ValidateAndSetSetting},
+        {"/settings/specs",        HTTP_GET,  GetSettingSpecs},
+        {"/settings",              HTTP_GET,  GetSettings},
+        {"/settings",              HTTP_POST, SetSettings},
 
-    _server.on("/reset",                 HTTP_POST, Reset);
+        {"/reset",                 HTTP_POST, Reset}
+    }};
 
-    // Embedded file requests
+    for (const auto& route : routes) {
+        if (route.path != nullptr) {
+            _server.on(route.path, route.method, route.handler);
+        }
+    }
+}
+
+void CWebServer::RegisterWebUiEndpoints()
+{
+    [[maybe_unused]] extern const uint8_t html_start[] asm("_binary_site_dist_index_html_gz_start");
+    [[maybe_unused]] extern const uint8_t html_end[] asm("_binary_site_dist_index_html_gz_end");
+    [[maybe_unused]] extern const uint8_t js_start[] asm("_binary_site_dist_index_js_gz_start");
+    [[maybe_unused]] extern const uint8_t js_end[] asm("_binary_site_dist_index_js_gz_end");
+    [[maybe_unused]] extern const uint8_t ico_start[] asm("_binary_site_dist_favicon_ico_gz_start");
+    [[maybe_unused]] extern const uint8_t ico_end[] asm("_binary_site_dist_favicon_ico_gz_end");
+    [[maybe_unused]] extern const uint8_t timezones_start[] asm("_binary_config_timezones_json_start");
+    [[maybe_unused]] extern const uint8_t timezones_end[] asm("_binary_config_timezones_json_end");
+
+    static EmbeddedWebFile html_file(html_start, html_end, "text/html", "gzip");
+    static EmbeddedWebFile js_file(js_start, js_end, "application/javascript", "gzip");
+    static EmbeddedWebFile ico_file(ico_start, ico_end, "image/vnd.microsoft.icon", "gzip");
+    static EmbeddedWebFile timezones_file(timezones_start, timezones_end - 1, "text/json"); // end - 1 because of zero-termination
+
+    debugI("Embedded html file size: %zu", (size_t)html_file.length);
+    debugI("Embedded jsx file size: %zu", (size_t)js_file.length);
+    debugI("Embedded ico file size: %zu", (size_t)ico_file.length);
+    debugI("Embedded timezones file size: %zu", (size_t)timezones_file.length);
 
     ServeEmbeddedFile("/timezones.json", timezones_file);
 
@@ -440,9 +451,17 @@ void CWebServer::SetupStationMode()
         ServeEmbeddedFile("/index.js", js_file);
         ServeEmbeddedFile("/favicon.ico", ico_file);
     #endif
+}
+
+void CWebServer::SetupStationMode()
+{
+    debugI("Connecting Web Endpoints");
+
+    RegisterSystemEndpoints();
+    RegisterApiEndpoints();
+    RegisterWebUiEndpoints();
 
     // Not found handler
-
     _server.onNotFound([](AsyncWebServerRequest *request)
     {
         if (request->method() == HTTP_OPTIONS) {

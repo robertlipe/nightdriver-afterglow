@@ -135,6 +135,10 @@ class CWebServer
     void SetupStationMode();
     void SetupCaptivePortalMode();
 
+    void RegisterSystemEndpoints();
+    void RegisterApiEndpoints();
+    void RegisterWebUiEndpoints();
+
 
     // Helper functions/templates
 
