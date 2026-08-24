@@ -436,7 +436,7 @@ static bool RunTestCase(WiFiTestCase* currentCase) {
         if (!stepPassed) {
             testCasePassed = false;
             debugE("===== Test Step FAILED in %s: Command %d =====", currentCase->name, (int)step.command);
-            break; // Exit current test case on first failure
+            break;
         } else {
              debugI("TEST Step PASSED in %s: Command %d", currentCase->name, (int)step.command);
         }
