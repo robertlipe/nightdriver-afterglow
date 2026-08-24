@@ -89,48 +89,33 @@ void RecordPanicMessage(const char* message)
 static std::vector<std::string_view> Tokenize(std::string_view input)
 {
     std::vector<std::string_view> output;
-    size_t start = 0;
-    bool in_quotes = false;
+    constexpr std::string_view whitespace = " \t\r\n\f\v";
 
-    const size_t input_len = input.length();
-    for (size_t i = 0; i < input_len; ++i)
+    while (true)
     {
-        char c = input[i];
+        size_t start = input.find_first_not_of(whitespace);
+        if (start == std::string_view::npos)
+            break;
 
-        if (in_quotes)
-        {
-            if (c == '"')
-            {
-                size_t len = i - start;
-                output.push_back(input.substr(start, len));
-                in_quotes = false;
-                start = i + 1;
-            }
-            continue;
-        }
+        input.remove_prefix(start);
 
-        if (std::isspace(c))
+        if (input.front() == '"')
         {
-            if (i > start)
-            {
-                output.push_back(input.substr(start, i - start));
-            }
-            start = i + 1;
+            input.remove_prefix(1);
+            size_t end = input.find('"');
+            output.push_back(input.substr(0, end));
+            if (end == std::string_view::npos)
+                break;
+            input.remove_prefix(end + 1);
         }
-        else if (c == '"')
+        else
         {
-            if (i > start)
-            {
-                output.push_back(input.substr(start, i - start));
-            }
-            start = i + 1;
-            in_quotes = true;
+            size_t end = input.find_first_of(" \t\r\n\f\v\"");
+            output.push_back(input.substr(0, end));
+            if (end == std::string_view::npos)
+                break;
+            input.remove_prefix(end);
         }
-    }
-
-    if (start < input.length())
-    {
-        output.push_back(input.substr(start));
     }
 
     return output;
