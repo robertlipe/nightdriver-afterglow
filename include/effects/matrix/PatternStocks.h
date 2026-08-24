@@ -81,7 +81,7 @@ class AnimatedText
 
   public:
 
-    AnimatedText(String text, CRGB color, const GFXfont * pfont, float animationTime, int startX, int startY, int endX, int endY)
+    AnimatedText(const String& text, CRGB color, const GFXfont * pfont, float animationTime, int startX, int startY, int endX, int endY)
     {
         startTime = std::chrono::system_clock::now();
         this->startX = startX;
