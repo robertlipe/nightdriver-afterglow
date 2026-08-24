@@ -1063,6 +1063,7 @@ void IRAM_ATTR RemoteLoopEntry(void *)
 
 String urlEncode(const String &str)
 {
+    static const char hex_chars[] = "0123456789ABCDEF";
     String encoded = "";
     encoded.reserve(str.length() * 3);
     for (int i = 0; i < str.length(); i++)
@@ -1071,7 +1072,8 @@ String urlEncode(const String &str)
         if (isalnum(c)) encoded += c;
         else {
             encoded += '%';
-            encoded += str_sprintf("%02X", (uint8_t)c);
+            encoded += hex_chars[((uint8_t)c) >> 4];
+            encoded += hex_chars[((uint8_t)c) & 0x0F];
         }
     }
     return encoded;
