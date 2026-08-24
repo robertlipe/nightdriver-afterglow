@@ -411,7 +411,7 @@ void CWebServer::RegisterApiEndpoints()
         {"/settings",              HTTP_POST, SetSettings},
 
         {"/reset",                 HTTP_POST, Reset}
-    }};
+    };
 
     for (const auto& route : routes) {
         if (route.path != nullptr) {
