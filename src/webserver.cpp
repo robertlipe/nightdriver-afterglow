@@ -277,7 +277,7 @@ std::vector<std::reference_wrapper<SettingSpec>> CWebServer::deviceSettingSpecs{
 template<>
 bool CWebServer::PushPostParamIfPresent<bool>(const AsyncWebServerRequest * pRequest, const String &paramName, ValueSetter<bool> setter)
 {
-    return PushPostParamIfPresent<bool>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param) constexpr
+    return PushPostParamIfPresent<bool>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param)
     {
         return BoolFromText(param->value());
     });
@@ -287,7 +287,7 @@ bool CWebServer::PushPostParamIfPresent<bool>(const AsyncWebServerRequest * pReq
 template<>
 bool CWebServer::PushPostParamIfPresent<size_t>(const AsyncWebServerRequest * pRequest, const String &paramName, ValueSetter<size_t> setter)
 {
-    return PushPostParamIfPresent<size_t>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param) constexpr
+    return PushPostParamIfPresent<size_t>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param)
     {
         return strtoul(param->value().c_str(), nullptr, 10);
     });
@@ -297,7 +297,7 @@ bool CWebServer::PushPostParamIfPresent<size_t>(const AsyncWebServerRequest * pR
 template<>
 bool CWebServer::PushPostParamIfPresent<int>(const AsyncWebServerRequest * pRequest, const String &paramName, ValueSetter<int> setter)
 {
-    return PushPostParamIfPresent<int>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param) constexpr
+    return PushPostParamIfPresent<int>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param)
     {
         return std::stoi(param->value().c_str());
     });
@@ -307,7 +307,7 @@ bool CWebServer::PushPostParamIfPresent<int>(const AsyncWebServerRequest * pRequ
 template<>
 bool CWebServer::PushPostParamIfPresent<CRGB>(const AsyncWebServerRequest * pRequest, const String &paramName, ValueSetter<CRGB> setter)
 {
-    return PushPostParamIfPresent<CRGB>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param) constexpr
+    return PushPostParamIfPresent<CRGB>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param)
     {
         return CRGB(strtoul(param->value().c_str(), nullptr, 10));
     });
