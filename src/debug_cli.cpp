@@ -181,31 +181,28 @@ static void PrintHelp(const cli_argv &argv)
     if (argv.size() > 1)
     {
         std::string_view target = argv[1];
-        const command *match = nullptr;
-        int matches = 0;
 
-        for (const auto *cmd : g_CommandTable)
-        {
-            if (StringCompareInsensitive(target, cmd->command))
-            {
-                match = cmd;
-                matches = 1;
-                break;
-            }
-            if (StringStartsWithInsensitive(cmd->command, target))
-            {
-                match = cmd;
-                matches++;
-            }
-        }
+        auto exact_it = std::find_if(g_CommandTable.begin(), g_CommandTable.end(),
+                                     [target](const command *cmd) { return StringCompareInsensitive(target, cmd->command); });
 
-        if (matches == 1 && match)
+        if (exact_it != g_CommandTable.end())
         {
-            cli_printf("%-20s %s\n", match->command, match->help);
+            cli_printf("%-20s %s\n", (*exact_it)->command, (*exact_it)->help);
         }
         else
         {
-            cli_printf("Command '%.*s' not found or ambiguous.\n", (int)target.length(), target.data());
+            auto is_prefix_match = [target](const command *cmd) { return StringStartsWithInsensitive(cmd->command, target); };
+            int matches = std::count_if(g_CommandTable.begin(), g_CommandTable.end(), is_prefix_match);
+
+            if (matches == 1)
+            {
+                auto prefix_it = std::find_if(g_CommandTable.begin(), g_CommandTable.end(), is_prefix_match);
+                cli_printf("%-20s %s\n", (*prefix_it)->command, (*prefix_it)->help);
+            }
+            else
+            {
+                cli_printf("Command '%.*s' not found or ambiguous.\n", (int)target.length(), target.data());
+            }
         }
     }
     else
