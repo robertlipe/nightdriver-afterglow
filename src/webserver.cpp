@@ -299,7 +299,7 @@ bool CWebServer::PushPostParamIfPresent<int>(const AsyncWebServerRequest * pRequ
 {
     return PushPostParamIfPresent<int>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param)
     {
-        return std::stoi(param->value().c_str());
+        return static_cast<int>(strtol(param->value().c_str(), nullptr, 10));
     });
 }
 
