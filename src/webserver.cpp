@@ -53,6 +53,29 @@
 
 // Static member initializers
 
+namespace
+{
+    String EscapeHtml(const String& input)
+    {
+        String escaped;
+        escaped.reserve(input.length());
+        for (size_t i = 0; i < input.length(); ++i)
+        {
+            char c = input[i];
+            switch (c)
+            {
+                case '&':  escaped += "&amp;";  break;
+                case '<':  escaped += "&lt;";   break;
+                case '>':  escaped += "&gt;";   break;
+                case '"':  escaped += "&quot;"; break;
+                case '\'': escaped += "&#39;";  break;
+                default:   escaped += c;        break;
+            }
+        }
+        return escaped;
+    }
+}
+
 #if ENABLE_WIFI
 const char captivePortalHtml[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML>
@@ -669,8 +692,10 @@ void CWebServer::HandleWifiSave(AsyncWebServerRequest *request)
             response->print(F("<html><head><title>Rebooting...</title>"));
             response->print(F("</head><body style=\"font-family: sans-serif;\">"));
             response->print(F("<h1>Credentials Saved. Rebooting...</h1>"));
-            response->printf(PSTR("<p>Your device is now rebooting and will attempt to connect to the <b>%s</b> network.</p>"), ssid.c_str());
-            response->printf(PSTR("<p>Please reconnect your client device (phone/computer) to the <b>%s</b> network.</p>"), ssid.c_str());
+
+            String safeSsid = EscapeHtml(ssid);
+            response->printf(PSTR("<p>Your device is now rebooting and will attempt to connect to the <b>%s</b> network.</p>"), safeSsid.c_str());
+            response->printf(PSTR("<p>Please reconnect your client device (phone/computer) to the <b>%s</b> network.</p>"), safeSsid.c_str());
             response->print(F("<p>Check your router's connected devices list to find the IP address of your NightDriver device.</p>"));
             response->print(F("</body></html>"));
 
