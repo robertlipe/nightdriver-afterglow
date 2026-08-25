@@ -669,14 +669,15 @@ void CWebServer::HandleWifiSave(AsyncWebServerRequest *request)
                 hostname.toUpperCase();
             }
 
-            String safeSsid = EscapeHtml(ssid);
-
             AsyncResponseStream *response = request->beginResponseStream("text/html");
             response->print(F("<html><head><title>Rebooting...</title>"));
             response->print(F("</head><body style=\"font-family: sans-serif;\">"));
             response->print(F("<h1>Credentials Saved. Rebooting...</h1>"));
+
+            String safeSsid = EscapeHtml(ssid);
             response->printf(PSTR("<p>Your device is now rebooting and will attempt to connect to the <b>%s</b> network.</p>"), safeSsid.c_str());
             response->printf(PSTR("<p>Please reconnect your client device (phone/computer) to the <b>%s</b> network.</p>"), safeSsid.c_str());
+            response->print(F("<p>Check your router's connected devices list to find the IP address of your NightDriver device.</p>"));
             response->print(F("</body></html>"));
 
             response->addHeader("Connection", "close");
