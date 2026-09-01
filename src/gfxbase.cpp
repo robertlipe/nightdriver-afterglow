@@ -1474,10 +1474,12 @@ void GFXBase::DrawCaptionOverlay()
             setTextWrap(false);
             setTextColor(to16bit(255, 255, 255), to16bit(0, 0, 0));
             setCursor(2, _height - 8);
-            String output = "LED: " + String(g_Values.FPS);
+            char output[64];
 #if ENABLE_AUDIO
             extern class SoundAnalyzerBase g_Analyzer;
-            output += " AUD: " + String(g_Analyzer.AudioFPS());
+            snprintf(output, sizeof(output), "LED: %lu AUD: %d", (unsigned long)g_Values.FPS, g_Analyzer.AudioFPS());
+#else
+            snprintf(output, sizeof(output), "LED: %lu", (unsigned long)g_Values.FPS);
 #endif
             print(output);
         }
