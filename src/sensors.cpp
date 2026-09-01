@@ -133,20 +133,46 @@ void SendStartSignal(int pin)
     pinMode(pin, INPUT_PULLUP);
 }
 
-bool PerformHandshake(const PulseMeasurer& pm, uint32_t handshakeTimeoutCycles, uint32_t cyclesPerUs)
+enum class HandshakeStatus
+{
+    Success,
+    DidNotGoLow,
+    DidNotGoHigh,
+    LowPremature,
+    Bit0StartTimeout
+};
+
+enum class BitstreamStatus
+{
+    Success,
+    LowTimeout,
+    HighTimeout,
+    Bit39RecoveredZero,
+    Bit39RecoveredOne,
+    Bit39RecoveryFailed
+};
+
+struct BitstreamResult
+{
+    BitstreamStatus status = BitstreamStatus::Success;
+    int failedBitIndex = -1;
+    uint8_t expectedSum = 0;
+    uint8_t checksumZero = 0;
+    uint8_t checksumOne = 0;
+};
+
+HandshakeStatus PerformHandshake(const PulseMeasurer& pm, uint32_t handshakeTimeoutCycles, uint32_t cyclesPerUs)
 {
     // Wait for DHT to pull LOW (start of response)
     if (!pm.WaitForState(LOW, handshakeTimeoutCycles))
     {
-        debugD("DHT11 handshake failed: Pin did not go LOW");
-        return false;
+        return HandshakeStatus::DidNotGoLow;
     }
 
     // Wait for DHT to release LOW and go HIGH (start of 80us HIGH response)
     if (!pm.WaitForState(HIGH, handshakeTimeoutCycles))
     {
-        debugD("DHT11 handshake failed: Pin did not go HIGH");
-        return false;
+        return HandshakeStatus::DidNotGoHigh;
     }
 
     // Delay 30us to get past any rise-time oscillations and reach stable middle of 80us HIGH phase
@@ -160,54 +186,51 @@ bool PerformHandshake(const PulseMeasurer& pm, uint32_t handshakeTimeoutCycles, 
     // Verify line is still HIGH
     if (digitalRead(pm.pin) != HIGH)
     {
-        debugD("DHT11 handshake failed: Pin went LOW prematurely during 80us HIGH phase");
-        return false;
+        return HandshakeStatus::LowPremature;
     }
 
     // Wait for line to go LOW to start Bit 0
     if (!pm.WaitForState(LOW, handshakeTimeoutCycles))
     {
-        debugD("DHT11 handshake failed: Pin did not go LOW to start Bit 0");
-        return false;
+        return HandshakeStatus::Bit0StartTimeout;
     }
 
-    return true;
+    return HandshakeStatus::Success;
 }
 
-bool TryRecoverBit39(uint8_t data[5])
+BitstreamResult TryRecoverBit39(uint8_t data[5])
 {
-    uint8_t expectedSum = data[0] + data[1] + data[2] + data[3];
-    uint8_t checksumWithZero = data[4];
-    uint8_t checksumWithOne  = data[4] | 1;
+    BitstreamResult res;
+    res.expectedSum = data[0] + data[1] + data[2] + data[3];
+    res.checksumZero = data[4];
+    res.checksumOne  = data[4] | 1;
 
-    if (checksumWithZero == expectedSum)
+    if (res.checksumZero == res.expectedSum)
     {
-        data[4] = checksumWithZero;
-        debugD("DHT11 bit 39 high timeout recovered as 0 via checksum matching.");
-        return true;
+        data[4] = res.checksumZero;
+        res.status = BitstreamStatus::Bit39RecoveredZero;
+        return res;
     }
 
-    if (checksumWithOne == expectedSum)
+    if (res.checksumOne == res.expectedSum)
     {
-        data[4] = checksumWithOne;
-        debugD("DHT11 bit 39 high timeout recovered as 1 via checksum matching.");
-        return true;
+        data[4] = res.checksumOne;
+        res.status = BitstreamStatus::Bit39RecoveredOne;
+        return res;
     }
 
-    debugD("DHT11 bit 39 high timeout recovery failed. Expected sum: %02x, got %02x or %02x",
-           expectedSum, checksumWithZero, checksumWithOne);
-    return false;
+    res.status = BitstreamStatus::Bit39RecoveryFailed;
+    return res;
 }
 
-bool ReadBitstream(const PulseMeasurer& pm, uint32_t bitTimeoutCycles, uint8_t data[5])
+BitstreamResult ReadBitstream(const PulseMeasurer& pm, uint32_t bitTimeoutCycles, uint8_t data[5])
 {
     for (int i = 0; i < 40; ++i)
     {
         int32_t lowDuration = pm.MeasurePulse(LOW, bitTimeoutCycles);
         if (lowDuration < 0)
         {
-            debugD("DHT11 bit %d low timeout", i);
-            return false;
+            return {BitstreamStatus::LowTimeout, i};
         }
 
         int32_t highDuration = pm.MeasurePulse(HIGH, bitTimeoutCycles);
@@ -221,8 +244,7 @@ bool ReadBitstream(const PulseMeasurer& pm, uint32_t bitTimeoutCycles, uint8_t d
                 return TryRecoverBit39(data);
             }
 
-            debugD("DHT11 bit %d high timeout", i);
-            return false;
+            return {BitstreamStatus::HighTimeout, i};
         }
 
         if (highDuration > lowDuration)
@@ -231,7 +253,7 @@ bool ReadBitstream(const PulseMeasurer& pm, uint32_t bitTimeoutCycles, uint8_t d
         }
     }
 
-    return true;
+    return {BitstreamStatus::Success, -1};
 }
 
 bool DecodeAndValidate(const uint8_t data[5], float& tempF, float& humidity)
@@ -264,22 +286,61 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
     const PulseMeasurer pm{pin, cyclesPerUs};
 
     uint32_t elapsedCycles = 0;
+    HandshakeStatus handshakeStatus = HandshakeStatus::Success;
+    BitstreamResult bitstreamResult;
 
     {
         InterruptGuard guard;
         uint32_t startCycleCount = esp_cpu_get_cycle_count();
 
-        if (!PerformHandshake(pm, handshakeTimeoutCycles, cyclesPerUs))
+        handshakeStatus = PerformHandshake(pm, handshakeTimeoutCycles, cyclesPerUs);
+        if (handshakeStatus == HandshakeStatus::Success)
         {
-            return false;
+            bitstreamResult = ReadBitstream(pm, bitTimeoutCycles, data);
+            elapsedCycles = esp_cpu_get_cycle_count() - startCycleCount;
         }
+    }
 
-        if (!ReadBitstream(pm, bitTimeoutCycles, data))
-        {
-            return false;
-        }
+    // Process Handshake logging outside of critical section
+    switch (handshakeStatus)
+    {
+    case HandshakeStatus::DidNotGoLow:
+        debugD("DHT11 handshake failed: Pin did not go LOW");
+        return false;
+    case HandshakeStatus::DidNotGoHigh:
+        debugD("DHT11 handshake failed: Pin did not go HIGH");
+        return false;
+    case HandshakeStatus::LowPremature:
+        debugD("DHT11 handshake failed: Pin went LOW prematurely during 80us HIGH phase");
+        return false;
+    case HandshakeStatus::Bit0StartTimeout:
+        debugD("DHT11 handshake failed: Pin did not go LOW to start Bit 0");
+        return false;
+    case HandshakeStatus::Success:
+        break;
+    }
 
-        elapsedCycles = esp_cpu_get_cycle_count() - startCycleCount;
+    // Process Bitstream logging outside of critical section
+    switch (bitstreamResult.status)
+    {
+    case BitstreamStatus::LowTimeout:
+        debugD("DHT11 bit %d low timeout", bitstreamResult.failedBitIndex);
+        return false;
+    case BitstreamStatus::HighTimeout:
+        debugD("DHT11 bit %d high timeout", bitstreamResult.failedBitIndex);
+        return false;
+    case BitstreamStatus::Bit39RecoveredZero:
+        debugD("DHT11 bit 39 high timeout recovered as 0 via checksum matching.");
+        break;
+    case BitstreamStatus::Bit39RecoveredOne:
+        debugD("DHT11 bit 39 high timeout recovered as 1 via checksum matching.");
+        break;
+    case BitstreamStatus::Bit39RecoveryFailed:
+        debugD("DHT11 bit 39 high timeout recovery failed. Expected sum: %02x, got %02x or %02x",
+               bitstreamResult.expectedSum, bitstreamResult.checksumZero, bitstreamResult.checksumOne);
+        return false;
+    case BitstreamStatus::Success:
+        break;
     }
 
     if (elapsedCycles > (6000 * cyclesPerUs))
