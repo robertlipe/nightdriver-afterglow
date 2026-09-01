@@ -79,7 +79,6 @@ const StatsPanel = ({ open, addNotification }) => {
     const [timer, setTimer] = useState(undefined);
     const [lastRefreshDate, setLastRefreshDate] = useState(undefined);
     const [abortControler, setAbortControler] = useState(undefined);
-    // TODO add support for saving these values. Removed from the previous "settings" button in the sidebar
     const [statsRefreshRate, setStatsRefreshRate] = useState(config && config.statsRefreshRate !== undefined ? config.statsRefreshRate : 3);
     const [maxSamples, setMaxSamples] = useState(config && config.maxSamples !== undefined ? config.maxSamples : 50);
     const [animateChart, setAnimateChart] = useState(config && config.animateChart !== undefined ? config.animateChart : false);
