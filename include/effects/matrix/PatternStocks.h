@@ -293,12 +293,12 @@ private:
 
         for (const String& symbol : symbolList)
         {
-            if (!isAlive || !*isAlive)
+            if (!*isAlive)
                 return;
 
             GetQuote(symbol, [this, isAlive, callback](const StockData& stockDataReceived)
             {
-                if (!isAlive || !*isAlive)
+                if (!*isAlive)
                     return;
 
                 if (!stockDataReceived.symbol.isEmpty())    // Check if the stock data is not empty
@@ -334,22 +334,24 @@ private:
         TaskHandle_t taskHandle = nullptr;
         BaseType_t result = xTaskCreatePinnedToCore(
             [](void* arg) {
-                auto p = std::unique_ptr<FetchParams>(static_cast<FetchParams*>(arg));
-                std::shared_ptr<std::atomic<bool>> isAlive = p->isAlive;
-                PatternStocks* self = p->self;
-                String symbols = p->symbols;
-
-                if (isAlive && *isAlive)
                 {
-                    self->GetAllQuotes(symbols, [isAlive](const StockData& stockDataReceived)
+                    auto p = std::unique_ptr<FetchParams>(static_cast<FetchParams*>(arg));
+                    std::shared_ptr<std::atomic<bool>> isAlive = p->isAlive;
+                    PatternStocks* self = p->self;
+                    String symbols = p->symbols;
+
+                    if (*isAlive)
                     {
-                        if (!stockDataReceived.symbol.isEmpty())
-                            debugI("Received stock data for %s", stockDataReceived.symbol.c_str());
-                        else
-                            debugI("Failed to retrieve stock data");
-                    });
+                        self->GetAllQuotes(symbols, [isAlive](const StockData& stockDataReceived)
+                        {
+                            if (!stockDataReceived.symbol.isEmpty())
+                                debugI("Received stock data for %s", stockDataReceived.symbol.c_str());
+                            else
+                                debugI("Failed to retrieve stock data");
+                        });
+                    }
+                    self->_isFetching = false;
                 }
-                self->_isFetching = false;
                 vTaskDelete(NULL);
             },
             "StockFetchTask",

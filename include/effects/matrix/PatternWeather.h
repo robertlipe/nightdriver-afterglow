@@ -469,18 +469,18 @@ class PatternWeather : public EffectWithId<PatternWeather>
         // Only try to update if we have an API Key
         if (!g_ptrSystem->GetDeviceConfig().GetOpenWeatherAPIKey().isEmpty())
         {
-            if (!isAlive || !*isAlive) return;
+            if (!*isAlive) return;
             updateCoordinates();
 
-            if (!isAlive || !*isAlive) return;
+            if (!*isAlive) return;
             float hiTom = 0.0f;
             float loTom = 0.0f;
             if (getWeatherData())
             {
-                if (!isAlive || !*isAlive) return;
+                if (!*isAlive) return;
                 if (getTomorrowTemps(hiTom, loTom))
                 {
-                    if (!isAlive || !*isAlive) return;
+                    if (!*isAlive) return;
                     std::lock_guard<std::mutex> lock(_dataMutex);
                     highTomorrow = hiTom;
                     loTomorrow   = loTom;
@@ -510,15 +510,17 @@ class PatternWeather : public EffectWithId<PatternWeather>
         TaskHandle_t taskHandle = nullptr;
         BaseType_t result = xTaskCreatePinnedToCore(
             [](void* arg) {
-                auto p = std::unique_ptr<FetchParams>(static_cast<FetchParams*>(arg));
-                std::shared_ptr<std::atomic<bool>> isAlive = p->isAlive;
-                PatternWeather* self = p->self;
-
-                if (isAlive && *isAlive)
                 {
-                    self->DoUpdateWeather();
+                    auto p = std::unique_ptr<FetchParams>(static_cast<FetchParams*>(arg));
+                    std::shared_ptr<std::atomic<bool>> isAlive = p->isAlive;
+                    PatternWeather* self = p->self;
+
+                    if (*isAlive)
+                    {
+                        self->DoUpdateWeather();
+                    }
+                    self->_isFetching = false;
                 }
-                self->_isFetching = false;
                 vTaskDelete(NULL);
             },
             "WeatherFetchTask",
