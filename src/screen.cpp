@@ -126,9 +126,9 @@ public:
             display.fillScreen(bkgndColor);
 
         // Status line 1
-        static const String szStatus("|/-\\");
+        static constexpr char szStatus[] = "|/-\\";
         static int cStatus = 0;
-        char chStatus = szStatus[cStatus % szStatus.length()];
+        char chStatus = szStatus[cStatus % (sizeof(szStatus) - 1)];
         cStatus++;
 
         if (display.width() > 480)
@@ -620,7 +620,7 @@ int Screen::fontHeight()
 {
     int16_t x1, y1;
     uint16_t w, h;
-    getTextBounds(String("W"), 0, 0, &x1, &y1, &w, &h);
+    getTextBounds("W", 0, 0, &x1, &y1, &w, &h);
     return h;
 }
 
@@ -629,6 +629,11 @@ int Screen::fontHeight()
 // Returns the height of a string in screen pixels
 
 int Screen::textHeight(const String & str)
+{
+    return textHeight(str.c_str());
+}
+
+int Screen::textHeight(const char * str)
 {
     int16_t x1, y1;
     uint16_t w, h;
@@ -649,6 +654,11 @@ int Screen::textHeight(const char * str)
 // Returns the width of a string in screen pixels
 
 int Screen::textWidth(const String & str)
+{
+    return textWidth(str.c_str());
+}
+
+int Screen::textWidth(const char * str)
 {
     int16_t x1, y1;
     uint16_t w, h;
