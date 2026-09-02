@@ -327,10 +327,11 @@ public:
                 // Title lines
                 int yh = 2;
                 display.setTextColor(display.GetBorderColor(), backColor);
-                String sEffect = str_sprintf("Effect: %d/%zu", currentEffect + 1, (size_t)g_ptrSystem->GetEffectManager().EffectCount());
-                auto w = display.textWidth(sEffect);
+                char szEffect[64];
+                snprintf(szEffect, sizeof(szEffect), "Effect: %d/%zu", currentEffect + 1, g_ptrSystem->GetEffectManager().EffectCount());
+                auto w = display.textWidth(szEffect);
                 display.setCursor(display.width() / 2 - w / 2, yh);
-                display.print(sEffect.c_str());
+                display.print(szEffect);
                 yh += display.fontHeight();
 
                 display.setTextColor(display.GetTextColor(), backColor);
@@ -339,11 +340,11 @@ public:
                 display.print(g_ptrSystem->GetEffectManager().GetCurrentEffectName());
                 yh += display.fontHeight();
 
-                String sIP = nd_network::IsWiFiConnected() ? currentIP.c_str() : "No Wifi";
+                const char *pszIP = nd_network::IsWiFiConnected() ? currentIP.c_str() : "No Wifi";
                 display.setTextColor(display.GetBorderColor(), backColor);
-                w = display.textWidth(sIP);
+                w = display.textWidth(pszIP);
                 display.setCursor(display.width() / 2 - w / 2, yh);
-                display.print(sIP);
+                display.print(pszIP);
             }
 
             // Footer line
@@ -627,6 +628,11 @@ int Screen::fontHeight()
 //
 // Returns the height of a string in screen pixels
 
+int Screen::textHeight(const String & str)
+{
+    return textHeight(str.c_str());
+}
+
 int Screen::textHeight(const char * str)
 {
     int16_t x1, y1;
@@ -635,14 +641,14 @@ int Screen::textHeight(const char * str)
     return h;
 }
 
-int Screen::textHeight(const String & str)
-{
-    return textHeight(str.c_str());
-}
-
 // textWidth
 //
 // Returns the width of a string in screen pixels
+
+int Screen::textWidth(const String & str)
+{
+    return textWidth(str.c_str());
+}
 
 int Screen::textWidth(const char * str)
 {
@@ -650,11 +656,6 @@ int Screen::textWidth(const char * str)
     uint16_t w, h;
     getTextBounds(str, 0, 0, &x1, &y1, &w, &h);
     return w;
-}
-
-int Screen::textWidth(const String & str)
-{
-    return textWidth(str.c_str());
 }
 
 // Old free functions replaced by Screen methods below
