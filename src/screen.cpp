@@ -641,14 +641,6 @@ int Screen::textHeight(const char * str)
     return h;
 }
 
-int Screen::textHeight(const char * str)
-{
-    int16_t x1, y1;
-    uint16_t w, h;
-    getTextBounds(str, 0, 0, &x1, &y1, &w, &h);
-    return h;
-}
-
 // textWidth
 //
 // Returns the width of a string in screen pixels
@@ -656,14 +648,6 @@ int Screen::textHeight(const char * str)
 int Screen::textWidth(const String & str)
 {
     return textWidth(str.c_str());
-}
-
-int Screen::textWidth(const char * str)
-{
-    int16_t x1, y1;
-    uint16_t w, h;
-    getTextBounds(str, 0, 0, &x1, &y1, &w, &h);
-    return w;
 }
 
 int Screen::textWidth(const char * str)
