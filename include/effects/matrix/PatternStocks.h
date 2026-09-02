@@ -50,6 +50,7 @@
 
 #include "formatsize.h"
 #include "gfxfont.h"                // Adafruit GFX font structs
+#include "jsonserializer.h"
 #include "systemcontainer.h"
 
 extern const GFXfont Apple5x7 PROGMEM;
@@ -206,6 +207,7 @@ private:
     mutable std::mutex                  _dataMutex;
     std::atomic<bool>                   _isFetching{false};
     std::shared_ptr<std::atomic<bool>>  _isAlive = std::make_shared<std::atomic<bool>>(true);
+    JsonDocument                        _jsonDoc = CreateJsonDocument();
 
     void GetQuote(const String &symbol, StockDataCallback callback = nullptr)
     {
@@ -218,23 +220,23 @@ private:
         {
             debugI("HTTP GET OK");
             String payload = http.getString(); // Get the response payload
-            auto doc = CreateJsonDocument();
-            DeserializationError error = deserializeJson(doc, payload);
+            _jsonDoc.clear();
+            DeserializationError error = deserializeJson(_jsonDoc, payload);
             debugV("JSON: %s", payload.c_str());
 
             if (!error)
             {
                 StockData stockData;
-                stockData.symbol        = doc["symbol"].as<String>();
-                stockData.timestamp     = std::chrono::system_clock::from_time_t(doc["timestamp"].as<time_t>());
-                stockData.previousClose = doc["previous_close"].as<float>();
-                stockData.open          = doc["open"].as<float>();
-                stockData.high          = doc["high"].as<float>();
-                stockData.low           = doc["low"].as<float>();
-                stockData.close         = doc["close"].as<float>();
-                stockData.volume        = doc["volume"].as<float>();
+                stockData.symbol        = _jsonDoc["symbol"].as<String>();
+                stockData.timestamp     = std::chrono::system_clock::from_time_t(_jsonDoc["timestamp"].as<time_t>());
+                stockData.previousClose = _jsonDoc["previous_close"].as<float>();
+                stockData.open          = _jsonDoc["open"].as<float>();
+                stockData.high          = _jsonDoc["high"].as<float>();
+                stockData.low           = _jsonDoc["low"].as<float>();
+                stockData.close         = _jsonDoc["close"].as<float>();
+                stockData.volume        = _jsonDoc["volume"].as<float>();
 
-                for (JsonVariant point : doc["points"].as<JsonArray>())
+                for (JsonVariant point : _jsonDoc["points"].as<JsonArray>())
                 {
                     StockPoint stockPoint;
                     stockPoint.dt  = std::chrono::system_clock::from_time_t(point["dt"].as<time_t>());
