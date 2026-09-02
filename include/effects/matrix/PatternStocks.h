@@ -48,6 +48,7 @@
 
 #include "formatsize.h"
 #include "gfxfont.h"                // Adafruit GFX font structs
+#include "jsonserializer.h"
 #include "systemcontainer.h"
 
 extern const GFXfont Apple5x7 PROGMEM;
@@ -202,7 +203,7 @@ private:
     using StockDataCallback = std::function<void(const StockData&)>;
 
     HTTPClient http;
-    JsonDocument _jsonDoc;
+    JsonDocument _jsonDoc = CreateJsonDocument();
 
     void GetQuote(const String &symbol, StockDataCallback callback = nullptr)
     {
