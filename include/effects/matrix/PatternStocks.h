@@ -40,11 +40,13 @@
 #include <Arduino.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <atomic>
 #include <chrono>
+#include <map>
+#include <mutex>
+#include <sstream>
 #include <thread>
 #include <vector>
-#include <map>
-#include <sstream>
 
 #include "formatsize.h"
 #include "gfxfont.h"                // Adafruit GFX font structs
@@ -201,11 +203,14 @@ private:
 
     using StockDataCallback = std::function<void(const StockData&)>;
 
-    HTTPClient http;
+    mutable std::mutex                  _dataMutex;
+    std::atomic<bool>                   _isFetching{false};
+    std::shared_ptr<std::atomic<bool>>  _isAlive = std::make_shared<std::atomic<bool>>(true);
 
     void GetQuote(const String &symbol, StockDataCallback callback = nullptr)
     {
         String url = String("http://") + stockServer + "/?ticker=" + symbol;
+        HTTPClient http;
         http.begin(url);
 
         int httpCode = http.GET();
@@ -282,15 +287,25 @@ private:
         // Use the lambda to split the symbols string in a vector of strings
 
         std::vector<String> symbolList = split(symbols, ',');
+        std::shared_ptr<std::atomic<bool>> isAlive = _isAlive;
 
         // And now for each symbol in the list, call GetQuote and save the data in the stockData map
 
         for (const String& symbol : symbolList)
         {
-            GetQuote(symbol, [this, callback](const StockData& stockDataReceived)
+            if (!*isAlive)
+                return;
+
+            GetQuote(symbol, [this, isAlive, callback](const StockData& stockDataReceived)
             {
+                if (!*isAlive)
+                    return;
+
                 if (!stockDataReceived.symbol.isEmpty())    // Check if the stock data is not empty
+                {
+                    std::lock_guard<std::mutex> lock(_dataMutex);
                     this->stockData[stockDataReceived.symbol] = stockDataReceived;
+                }
                 if (callback)
                     callback(stockDataReceived);            // Optionally, call the callback for each symbol's data
             });
@@ -299,14 +314,63 @@ private:
 
     void FetchQuotes()
     {
-        debugI("Starting update of stocks...");
-        GetAllQuotes(tickerSymbols, [](const StockData& stockDataReceived)
+        if (_isFetching.exchange(true))
         {
-            if (!stockDataReceived.symbol.isEmpty())
-                debugI("Received stock data for %s", stockDataReceived.symbol.c_str());
-            else
-                debugI("Failed to retrieve stock data");
-        });
+            debugI("Stock update already in progress, skipping.");
+            return;
+        }
+
+        debugI("Starting async update of stocks...");
+
+        struct FetchParams
+        {
+            PatternStocks* self;
+            std::shared_ptr<std::atomic<bool>> isAlive;
+            String symbols;
+        };
+
+        auto params = std::make_unique<FetchParams>(FetchParams{this, _isAlive, tickerSymbols});
+
+        TaskHandle_t taskHandle = nullptr;
+        BaseType_t result = xTaskCreatePinnedToCore(
+            [](void* arg) {
+                {
+                    auto p = std::unique_ptr<FetchParams>(static_cast<FetchParams*>(arg));
+                    std::shared_ptr<std::atomic<bool>> isAlive = p->isAlive;
+                    PatternStocks* self = p->self;
+                    String symbols = p->symbols;
+
+                    if (*isAlive)
+                    {
+                        self->GetAllQuotes(symbols, [isAlive](const StockData& stockDataReceived)
+                        {
+                            if (!stockDataReceived.symbol.isEmpty())
+                                debugI("Received stock data for %s", stockDataReceived.symbol.c_str());
+                            else
+                                debugI("Failed to retrieve stock data");
+                        });
+                    }
+                    self->_isFetching = false;
+                }
+                vTaskDelete(NULL);
+            },
+            "StockFetchTask",
+            8192,
+            params.get(),
+            1, // low priority background task
+            &taskHandle,
+            1  // app core
+        );
+
+        if (result == pdPASS)
+        {
+            params.release(); // Task took ownership
+        }
+        else
+        {
+            _isFetching = false;
+            debugE("Failed to create StockFetchTask");
+        }
     }
 
     // Should this effect show its title.
@@ -360,7 +424,12 @@ public:
 
     ~PatternStocks()
     {
+        *_isAlive = false;
         g_ptrSystem->GetNetworkReader().CancelReader(readerIndex);
+        while (_isFetching)
+        {
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
     }
 
     bool SerializeToJSON(JsonObject& jsonObject) override
@@ -436,12 +505,16 @@ public:
         textChange.Draw(g().get());
         textVolume.Draw(g().get());
 
-        if (stockData.empty())
-            return;
+        StockData currentStock;
+        {
+            std::lock_guard<std::mutex> lock(_dataMutex);
+            if (stockData.empty())
+                return;
 
-        auto it = stockData.begin();
-        std::advance(it, iCurrentStock);
-        StockData & currentStock = it->second;
+            auto it = stockData.begin();
+            std::advance(it, iCurrentStock % stockData.size());
+            currentStock = it->second;
+        }
 
         // Draw the stock history graph
 
@@ -518,19 +591,31 @@ public:
         auto now = std::chrono::system_clock::now();
 
         // We move on to next stock if the interval has passed, or we have less stock data available than before
-        auto showNextStock = now - lastUpdate >= STOCKS_UPDATE_INTERVAL || stockData.size() < lastCount;
+        bool showNextStock = false;
+        StockData stockToDisplay;
+        bool hasStockToDisplay = false;
 
-        // Only do something if we should and have stock data to show
-        if (showNextStock && !stockData.empty())
         {
-            lastUpdate = now;
-            lastCount = stockData.size();
+            std::lock_guard<std::mutex> lock(_dataMutex);
+            showNextStock = now - lastUpdate >= STOCKS_UPDATE_INTERVAL || stockData.size() < lastCount;
 
-            iCurrentStock = (iCurrentStock + 1) % stockData.size();
+            if (showNextStock && !stockData.empty())
+            {
+                lastUpdate = now;
+                lastCount = stockData.size();
 
-            auto it = stockData.begin();
-            std::advance(it, iCurrentStock);
-            StartQuoteDisplay(it->second);
+                iCurrentStock = (iCurrentStock + 1) % stockData.size();
+
+                auto it = stockData.begin();
+                std::advance(it, iCurrentStock);
+                stockToDisplay = it->second;
+                hasStockToDisplay = true;
+            }
+        }
+
+        if (hasStockToDisplay)
+        {
+            StartQuoteDisplay(stockToDisplay);
         }
 
         // Paint Frame
@@ -562,7 +647,10 @@ public:
         if (SetIfSelected(name, NAME_OF(tickerSymbols), tickerSymbols, value))
         {
             iCurrentStock = 0;
-            stockData.clear();
+            {
+                std::lock_guard<std::mutex> lock(_dataMutex);
+                stockData.clear();
+            }
             lastCount = SIZE_MAX;
             g_ptrSystem->GetNetworkReader().FlagReader(readerIndex);
             return true;
