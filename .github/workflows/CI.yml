@@ -71,7 +71,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        envname: ${{ fromJson(needs.setup.outputs.envs) }}
+        envname: ${{ fromJson(needs.setup.outputs.envs || '[]') }}
 
     steps:
     - uses: actions/checkout@v4
