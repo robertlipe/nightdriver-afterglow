@@ -159,6 +159,7 @@ jobs:
         pip install platformio
 
     - name: Run library setup
+      if: steps.pio-cache.outputs.cache-hit != 'true'
       run: python tools/setup_shared_libs_cli.py
 
     - name: Copy secrets and clear SSID
