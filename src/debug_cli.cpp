@@ -312,8 +312,9 @@ std::string_view TabComplete(std::string_view partial, std::string_view full_lin
         std::string_view firstMatch = "";
         int matches = 0;
         size_t common_len = 0;
+        const size_t effectCount = effectManager.EffectCount();
 
-        for (size_t i = 0; i < effectManager.EffectCount(); ++i)
+        for (size_t i = 0; i < effectCount; ++i)
         {
             const String& name = effectManager.EffectsList()[i]->FriendlyName();
             if (StringStartsWithInsensitive(name.c_str(), partial))
@@ -371,8 +372,9 @@ static std::optional<size_t> ResolveEffect(std::string_view arg)
     int match_index = -1;
     int matches = 0;
     std::vector<std::string> candidates;
+    const size_t effectCount = effectManager.EffectCount();
 
-    for (size_t i = 0; i < effectManager.EffectCount(); ++i)
+    for (size_t i = 0; i < effectCount; ++i)
     {
         const String& name = effectManager.EffectsList()[i]->FriendlyName();
         if (ContainsInsensitive(name.c_str(), arg))
