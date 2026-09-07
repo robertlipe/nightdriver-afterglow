@@ -48,7 +48,8 @@ def collect_files():
     for base in INCLUDE_DIRS:
         for root, _, filenames in os.walk(base):
             # Skip third-party source directories
-            if 'src/uzlib' in root or '.pio' in root:
+            norm_root = root.replace('\\', '/')
+            if 'src/uzlib' in norm_root or '.pio' in norm_root:
                 continue
             for name in filenames:
                 if name.endswith(('.h', '.hpp', '.cpp', '.c')):
@@ -129,7 +130,7 @@ def find_path(graph, start, targets):
 
 
 def rel(path):
-    return os.path.relpath(path, PROJECT_ROOT)
+    return os.path.relpath(path, PROJECT_ROOT).replace('\\', '/')
 
 
 def audit_include_ordering(path, rel_path, violations):
