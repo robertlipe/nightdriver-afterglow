@@ -123,6 +123,9 @@ jobs:
       run:
         shell: bash
 
+    env:
+      PYTHONIOENCODING: utf-8
+
     strategy:
       fail-fast: false
       matrix:
@@ -165,6 +168,9 @@ jobs:
       run: |
         grep -v "^#define cszSSID" include/secrets.example.h > include/secrets.h
         echo '#define cszSSID ""' >> include/secrets.h
+
+    - name: Add PlatformIO toolchain to PATH
+      run: echo "$HOME/.platformio/penv/Scripts;C:/Users/runneradmin/.platformio/penv/Scripts;C:/Users/runneradmin/.platformio/packages/toolchain-xtensa-esp-elf/bin" >> $GITHUB_PATH
 
     - name: "Build environment (Windows): ${{ matrix.envname }}"
       run: pio run -e ${{ matrix.envname }}
