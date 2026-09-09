@@ -119,9 +119,6 @@ jobs:
     needs: [setup]
     if: ${{ always() && (needs.setup.result == 'success' || needs.setup.result == 'skipped') && !cancelled() }}
 
-    defaults:
-      run:
-        shell: bash
 
     env:
       PYTHONIOENCODING: utf-8
