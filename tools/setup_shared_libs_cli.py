@@ -5,7 +5,7 @@ import sys
 import re
 import shutil
 import subprocess
-
+import time
 import stat
 
 def remove_readonly(func, path, exc_info):

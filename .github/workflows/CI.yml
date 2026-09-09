@@ -117,7 +117,7 @@ jobs:
     name: "Windows Build (${{ matrix.envname }})"
     runs-on: windows-latest
     needs: [setup]
-    if: ${{ always() && (needs.setup.result == 'success' || needs.setup.result == 'skipped') && !cancelled() && !failed() }}
+    if: ${{ always() && (needs.setup.result == 'success' || needs.setup.result == 'skipped') && !cancelled() }}
 
     defaults:
       run:
