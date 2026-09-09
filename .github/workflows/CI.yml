@@ -119,6 +119,9 @@ jobs:
     needs: [setup]
     if: ${{ always() && (needs.setup.result == 'success' || needs.setup.result == 'skipped') && !cancelled() }}
 
+    defaults:
+      run:
+        shell: pwsh
 
     env:
       PYTHONIOENCODING: utf-8
@@ -163,11 +166,13 @@ jobs:
 
     - name: Copy secrets and clear SSID
       run: |
-        grep -v "^#define cszSSID" include/secrets.example.h > include/secrets.h
-        echo '#define cszSSID ""' >> include/secrets.h
+        Get-Content include/secrets.example.h | Where-Object { $_ -notmatch '^#define cszSSID' } | Set-Content include/secrets.h
+        Add-Content include/secrets.h '#define cszSSID ""'
 
     - name: Add PlatformIO toolchain to PATH
-      run: echo "$HOME/.platformio/penv/Scripts;C:/Users/runneradmin/.platformio/penv/Scripts;C:/Users/runneradmin/.platformio/packages/toolchain-xtensa-esp-elf/bin" >> $GITHUB_PATH
+      run: |
+        echo "$env:USERPROFILE\.platformio\penv\Scripts" >> $env:GITHUB_PATH
+        echo "$env:USERPROFILE\.platformio\packages\toolchain-xtensa-esp-elf\bin" >> $env:GITHUB_PATH
 
     - name: "Build environment (Windows): ${{ matrix.envname }}"
       run: pio run -e ${{ matrix.envname }}
