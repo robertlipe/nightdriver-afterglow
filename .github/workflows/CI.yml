@@ -125,6 +125,7 @@ jobs:
 
     env:
       PYTHONIOENCODING: utf-8
+      MSYSTEM: ""
 
     strategy:
       fail-fast: false
@@ -171,8 +172,8 @@ jobs:
 
     - name: Add PlatformIO toolchain to PATH
       run: |
-        echo "$env:USERPROFILE\.platformio\penv\Scripts" >> $env:GITHUB_PATH
-        echo "$env:USERPROFILE\.platformio\packages\toolchain-xtensa-esp-elf\bin" >> $env:GITHUB_PATH
+        Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.platformio\penv\Scripts"
+        Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.platformio\packages\toolchain-xtensa-esp-elf\bin"
 
     - name: "Build environment (Windows): ${{ matrix.envname }}"
       run: pio run -e ${{ matrix.envname }}
