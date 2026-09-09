@@ -16,7 +16,6 @@ on:
 jobs:
 
   setup:
-    if: ${{ !inputs.skip_linux }}
     runs-on: ubuntu-latest
 
     steps:
@@ -117,8 +116,8 @@ jobs:
   build-windows:
     name: "Windows Build (${{ matrix.envname }})"
     runs-on: windows-latest
-    needs: [build-environment]
-    if: ${{ always() && (needs.build-environment.result == 'success' || needs.build-environment.result == 'skipped') && !cancelled() && !failed() }}
+    needs: [setup]
+    if: ${{ always() && (needs.setup.result == 'success' || needs.setup.result == 'skipped') && !cancelled() && !failed() }}
 
     defaults:
       run:
