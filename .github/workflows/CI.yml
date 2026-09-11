@@ -16,7 +16,6 @@ on:
 jobs:
 
   setup:
-    if: ${{ !inputs.skip_linux }}
     runs-on: ubuntu-latest
 
     steps:
@@ -117,12 +116,16 @@ jobs:
   build-windows:
     name: "Windows Build (${{ matrix.envname }})"
     runs-on: windows-latest
-    needs: [build-environment]
-    if: ${{ always() && (needs.build-environment.result == 'success' || needs.build-environment.result == 'skipped') && !cancelled() && !failed() }}
+    needs: [setup]
+    if: ${{ always() && (needs.setup.result == 'success' || needs.setup.result == 'skipped') && !cancelled() }}
 
     defaults:
       run:
-        shell: bash
+        shell: pwsh
+
+    env:
+      PYTHONIOENCODING: utf-8
+      MSYSTEM: ""
 
     strategy:
       fail-fast: false
@@ -164,8 +167,13 @@ jobs:
 
     - name: Copy secrets and clear SSID
       run: |
-        grep -v "^#define cszSSID" include/secrets.example.h > include/secrets.h
-        echo '#define cszSSID ""' >> include/secrets.h
+        Get-Content include/secrets.example.h | Where-Object { $_ -notmatch '^#define cszSSID' } | Set-Content include/secrets.h
+        Add-Content include/secrets.h '#define cszSSID ""'
+
+    - name: Add PlatformIO toolchain to PATH
+      run: |
+        Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.platformio\penv\Scripts"
+        Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.platformio\packages\toolchain-xtensa-esp-elf\bin"
 
     - name: "Build environment (Windows): ${{ matrix.envname }}"
       run: pio run -e ${{ matrix.envname }}

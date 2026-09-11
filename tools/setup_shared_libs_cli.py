@@ -5,15 +5,37 @@ import sys
 import re
 import shutil
 import subprocess
+import time
+import stat
+
+def remove_readonly(func, path, exc_info):
+    try:
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    except Exception:
+        pass
+
+def safe_rmtree(path):
+    if not os.path.exists(path):
+        return
+    for attempt in range(5):
+        try:
+            shutil.rmtree(path, onerror=remove_readonly)
+            if not os.path.exists(path):
+                return
+        except Exception:
+            pass
+        time.sleep(0.2)
 
 # Find PlatformIO executable in various standard locations
 def find_platformio_bin():
-    # 1. Try relative to sys.executable
+    # 1. Try relative to sys.executable (and Scripts subfolder on Windows)
     py_dir = os.path.dirname(sys.executable)
-    for name in ["platformio", "platformio.exe", "pio", "pio.exe"]:
-        path = os.path.join(py_dir, name)
-        if os.path.exists(path):
-            return path
+    for sub in ["", "Scripts", "bin"]:
+        for name in ["platformio", "platformio.exe", "pio", "pio.exe"]:
+            path = os.path.join(py_dir, sub, name) if sub else os.path.join(py_dir, name)
+            if os.path.exists(path):
+                return path
 
     # 2. Try standard user home platformio virtual environment paths
     home = os.path.expanduser("~")
@@ -178,10 +200,7 @@ try:
         if needs_install:
             if os.path.exists(lib_path):
                 print(f"[Shared-Libs] Upgrading/Reinstalling shared dependency: {lib}...", file=sys.stderr)
-                try:
-                    shutil.rmtree(lib_path)
-                except Exception as e:
-                    print(f"[Shared-Libs] Warning: failed to clean up directory {lib_path}: {e}", file=sys.stderr)
+                safe_rmtree(lib_path)
             else:
                 print(f"[Shared-Libs] Installing shared dependency: {lib}...", file=sys.stderr)
 
@@ -198,8 +217,7 @@ try:
 
                 # Rename if expected_path != lib_path (spaces to underscores)
                 if expected_path != lib_path and os.path.exists(expected_path):
-                    if os.path.exists(lib_path):
-                        shutil.rmtree(lib_path)
+                    safe_rmtree(lib_path)
                     os.rename(expected_path, lib_path)
 
                 # Write version file
@@ -208,10 +226,8 @@ try:
                     f.write(lib)
             except Exception as e:
                 print(f"[Shared-Libs] Error: failed to install dependency {lib}: {e}", file=sys.stderr)
-                if os.path.exists(lib_path):
-                    shutil.rmtree(lib_path, ignore_errors=True)
-                if expected_path != lib_path and os.path.exists(expected_path):
-                    shutil.rmtree(expected_path, ignore_errors=True)
+                safe_rmtree(lib_path)
+                safe_rmtree(expected_path)
                 sys.exit(1)
 finally:
     release_lock(lock_fd, lock_path)
