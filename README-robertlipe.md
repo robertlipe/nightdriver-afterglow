@@ -4,7 +4,7 @@ This file documents the custom reliability, diagnostic, and performance improvem
 
 (This file is extensively AI generated. #sorrynotsorry.)
 
-*Last Updated: August 09, 2024*
+*Last Updated: September 13, 2026*
 
 ---
 
@@ -27,6 +27,9 @@ This file documents the custom reliability, diagnostic, and performance improvem
 ### 5. Software Watchdog / Deadlock Recovery (`src/taskmgr.cpp`)
 - **Issue**: The standard Task Watchdog Timer (TWDT) only registers CPU Idle tasks. When application tasks deadlock or block on a mutex, they yield the CPU, allowing the Idle tasks to run and feed the TWDT. Consequently, the hardware/software watchdogs fail to detect task freezes.
 - **Fix**: Added atomic heartbeat timestamps (`LastLoopHeartbeat`, `LastDrawHeartbeat`) to `g_Values`. Instrumented the main `loop()` and `Draw` thread to continuously update their respective heartbeats. Inside the CPU Idle task (`IdleTask::ProcessIdleTime()`), a supervisor checks the ages of these heartbeats every second. If either thread is frozen or deadlocked for more than 30 seconds (and no OTA update is in progress), it prints a diagnostic error directly to `Serial` and performs a hard reset via `ESP.restart()`.
+
+### 6. Timezone Buffer Overflow Guard
+- **Fix**: Fixed potential buffer overflow in DeviceConfig timezone handling.
 
 ---
 
@@ -132,6 +135,9 @@ This file documents the custom reliability, diagnostic, and performance improvem
 - **Clean WebServer Teardown**: Implemented a proper `CWebServer::Stop()` method to cleanly halt the HTTP and DNS servers, and reset the `_captivePortalActive` state when transitioning from AP mode back to STA mode.
 - **Memory Leak Fixes**: Removed aggressive `WiFi.mode(WIFI_OFF)` transitions in the credential-cycling logic. Frequent mode switching was leaking heap memory in the ESP-IDF Wi-Fi driver stack.
 
+### 4. Captive Portal XSS Protection
+- **Fix**: Closed an XSS vulnerability in the Captive Portal response.
+
 ---
 
 ## 🌐 Network Reliability & Captive Portal
@@ -180,6 +186,19 @@ This file documents the custom reliability, diagnostic, and performance improvem
 
 ### 4. Arduino2/ESP-IDF4 Turndown Completed
 - **ESP-IDF Modernization**: Migrated from unsupported Arduino2 and ESP-IDF4 completely to Arduino3 and ESP-IDF5. This gives more modern language support, regular updates from Espressif, provides for newer chips like ESP32-C5, ESP32-C6, ESP32-P4 and lays the groundwork to move to Arduino4 and ESP-IDF6 for upcoming chips like ESP32-P4X and ESP32-S3.
+
+### 5. Async Non-Blocking HTTP Fetching
+- **Optimization**: Refactored PatternStocks and PatternWeather to non-blocking async HTTP fetching.
+- **Memory Efficiency**: Reused JsonDocument in PatternStocks to prevent heap fragmentation.
+
+### 6. CWebServer Route Refactoring
+- **Architecture**: Refactored `CWebServer::SetupStationMode()` by extracting groups of related HTTP route registrations into new private methods (`RegisterSystemEndpoints()`, `RegisterApiEndpoints()`, and `RegisterWebUiEndpoints()`). Included the use of an array of configuration structures for cleaner looping configuration of the API routes.
+
+### 7. O(N) CLI Tab Completion
+- **Optimization**: TabComplete: walk command table exactly once, calling StringStartsWithInsensitive only on the first pass, and compute the longest common prefix dynamically as it goes. No more O(N^2) comparisons!
+
+### 8. Windows CI Pipeline Parallelism
+- **Feature**: Added Windows build job, fixed cross-platform Python scripts, and enabled parallel execution.
 
 ## ⚡ Hardware Upgrades
 
