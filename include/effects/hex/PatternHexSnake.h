@@ -151,7 +151,8 @@ public:
                 // Check self collision
                 bool collision = false;
                 // Exclude the very tip of the tail since it will move out of the way
-                for (size_t s = 1; s < snake.size(); s++) {
+                const size_t snakeSize = snake.size();
+                for (size_t s = 1; s < snakeSize; s++) {
                     if (snake[s].q == candidateHead.q && snake[s].r == candidateHead.r) {
                         collision = true;
                         break;
@@ -198,9 +199,10 @@ public:
         }
 
         // Draw snake
-        for (size_t i = 0; i < snake.size(); i++) {
+        const size_t totalSegments = snake.size();
+        for (size_t i = 0; i < totalSegments; i++) {
             uint8_t hue = (hueOffset + i * 10) % 256;
-            uint8_t brightness = (i == snake.size() - 1) ? 255 : 200 - (i * 5);
+            uint8_t brightness = (i == totalSegments - 1) ? 255 : 200 - (i * 5);
             CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, brightness, LINEARBLEND);
             hexGfx->drawHexPixel(snake[i], color);
         }
