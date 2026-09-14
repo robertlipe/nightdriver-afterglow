@@ -882,7 +882,6 @@ public:
     {
       RotateFan(i, (i / 2) * 2 == i ? true : false, iRotate);
     }
-    delay(10);
 
     EVERY_N_MILLISECONDS(25)
     {
