@@ -151,9 +151,13 @@ public:
                 // Check self collision
                 bool collision = false;
                 // Exclude the very tip of the tail since it will move out of the way
-                const size_t snakeSize = snake.size();
-                for (size_t s = 1; s < snakeSize; s++) {
-                    if (snake[s].q == candidateHead.q && snake[s].r == candidateHead.r) {
+                bool isTailTip = true;
+                for (const auto& segment : snake) {
+                    if (isTailTip) {
+                        isTailTip = false;
+                        continue;
+                    }
+                    if (segment.q == candidateHead.q && segment.r == candidateHead.r) {
                         collision = true;
                         break;
                     }
@@ -199,12 +203,14 @@ public:
         }
 
         // Draw snake
+        size_t i = 0;
         const size_t totalSegments = snake.size();
-        for (size_t i = 0; i < totalSegments; i++) {
+        for (const auto& segment : snake) {
             uint8_t hue = (hueOffset + i * 10) % 256;
             uint8_t brightness = (i == totalSegments - 1) ? 255 : 200 - (i * 5);
             CRGB color = ColorFromPalette(g()->GetCurrentPalette(), hue, brightness, LINEARBLEND);
-            hexGfx->drawHexPixel(snake[i], color);
+            hexGfx->drawHexPixel(segment, color);
+            ++i;
         }
 
         // Draw food

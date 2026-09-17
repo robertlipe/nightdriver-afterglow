@@ -51,19 +51,20 @@ void ConsoleSession::WriteText(std::string_view text)
     if (_sink->LinePolicy() == LineEndingPolicy::CRLF)
     {
         size_t start = 0;
-        const size_t textSize = text.size();
-        for (size_t i = 0; i < textSize; ++i)
+        size_t i = 0;
+        for (char c : text)
         {
-            if (text[i] == '\n')
+            if (c == '\n')
             {
                 if (i > start)
                     _sink->Write(text.data() + start, i - start);
                 _sink->Write("\r\n", 2);
                 start = i + 1;
             }
+            ++i;
         }
-        if (start < textSize)
-            _sink->Write(text.data() + start, textSize - start);
+        if (start < text.size())
+            _sink->Write(text.data() + start, text.size() - start);
     }
     else
     {

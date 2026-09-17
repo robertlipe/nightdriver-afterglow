@@ -739,13 +739,14 @@ bool EffectManager::DeserializeFromJSON(const JsonObjectConst& jsonObject)
         JsonArrayConst enabledArray = jsonObject["eef"].as<JsonArrayConst>();
         size_t enabledSize = enabledArray.isNull() ? 0 : enabledArray.size();
 
-        const size_t effectCount = _vEffects.size();
-        for (size_t i = 0; i < effectCount; ++i)
+        size_t i = 0;
+        for ([[maybe_unused]] const auto& pEffect : _vEffects)
         {
             if (i >= enabledSize || enabledArray[i] == 1)
                 EnableEffect(i, true);
             else
                 DisableEffect(i, true);
+            ++i;
         }
     }
 
