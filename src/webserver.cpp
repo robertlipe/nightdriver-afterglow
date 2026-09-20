@@ -58,9 +58,11 @@ namespace
     String EscapeHtml(const String& input)
     {
         String escaped;
-        escaped.reserve(input.length());
-        for (char c : input)
+        const size_t len = input.length();
+        escaped.reserve(len);
+        for (size_t i = 0; i < len; ++i)
         {
+            char c = input[i];
             switch (c)
             {
                 case '&':  escaped += "&amp;";  break;
