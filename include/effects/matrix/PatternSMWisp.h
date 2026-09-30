@@ -83,7 +83,7 @@ class PatternSMWisp : public EffectWithId<PatternSMWisp>
                     (PixelB.nscale8(ease8InOutApprox(fraction))); // lerp8by8(PixelA, PixelB, fraction );
             }
         }
-        memcpy(g()->leds, ledsbuff, sizeof(CRGB) * NUM_LEDS);
+        memcpy(static_cast<void*>(g()->leds), static_cast<const void*>(ledsbuff), sizeof(CRGB) * NUM_LEDS);
     }
 
     void MoveFractionalNoiseY(int amplitude = 1, float shift = 0)
@@ -117,7 +117,7 @@ class PatternSMWisp : public EffectWithId<PatternSMWisp>
                     (PixelA.nscale8(ease8InOutApprox(255 - fraction))) + (PixelB.nscale8(ease8InOutApprox(fraction)));
             }
         }
-        memcpy(g()->leds, ledsbuff, sizeof(CRGB) * NUM_LEDS);
+        memcpy(static_cast<void*>(g()->leds), static_cast<const void*>(ledsbuff), sizeof(CRGB) * NUM_LEDS);
     }
 
     void FillNoise(int layer)

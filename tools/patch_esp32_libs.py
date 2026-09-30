@@ -1,48 +1,68 @@
 import os
 import sys
 
+# 1. Patch missing ESP32 CPPPATH entries in framework-arduinoespressif32-libs
 lib_pkg = os.path.expanduser("~/.platformio/packages/framework-arduinoespressif32-libs")
 esp32_py = os.path.join(lib_pkg, "esp32", "pioarduino-build.py")
 esp32s3_py = os.path.join(lib_pkg, "esp32s3", "pioarduino-build.py")
 
-if not os.path.exists(esp32_py) or not os.path.exists(esp32s3_py):
-    print("Could not find pioarduino-build.py. This patch is only needed for platform-espressif32 > 5.5.")
-    sys.exit(0)
+if os.path.exists(esp32_py) and os.path.exists(esp32s3_py):
+    def get_cpppath(filepath):
+        with open(filepath, 'r') as f:
+            content = f.read()
 
-def get_cpppath(filepath):
-    with open(filepath, 'r') as f:
-        content = f.read()
-    
-    start = content.find("CPPPATH=[")
-    if start == -1: return []
-    end = content.find("]", start)
-    return content[start:end].split('\n')
+        start = content.find("CPPPATH=[")
+        if start == -1: return []
+        end = content.find("]", start)
+        return content[start:end].split('\n')
 
-s3_paths = get_cpppath(esp32s3_py)
-esp32_paths = get_cpppath(esp32_py)
+    s3_paths = get_cpppath(esp32s3_py)
+    esp32_paths = get_cpppath(esp32_py)
 
-def clean_path(p):
-    return p.strip().replace('"esp32s3"', '"{board}"').replace('"esp32"', '"{board}"').strip(',')
+    def clean_path(p):
+        return p.strip().replace('"esp32s3"', '"{board}"').replace('"esp32"', '"{board}"').strip(',')
 
-esp32_clean = set(clean_path(p) for p in esp32_paths if p.strip())
+    esp32_clean = set(clean_path(p) for p in esp32_paths if p.strip())
 
-missing = []
-for orig in s3_paths:
-    if not orig.strip():
-        continue
-    clean = clean_path(orig)
-    if clean not in esp32_clean and clean != "CPPPATH=[":
-        missing.append(orig.replace('"esp32s3"', '"esp32"'))
+    missing = []
+    for orig in s3_paths:
+        if not orig.strip():
+            continue
+        clean = clean_path(orig)
+        if clean not in esp32_clean and clean != "CPPPATH=[":
+            missing.append(orig.replace('"esp32s3"', '"esp32"'))
 
-if missing:
-    print(f"Patching {len(missing)} missing ESP-IDF include paths into esp32/pioarduino-build.py...")
-    with open(esp32_py, 'r') as f:
-        content = f.read()
-    start = content.find("CPPPATH=[")
-    bracket_idx = content.find("[", start)
-    new_content = content[:bracket_idx+1] + "\n" + "\n".join(missing) + content[bracket_idx+1:]
-    with open(esp32_py, 'w') as f:
-        f.write(new_content)
-    print("Patch applied successfully.")
-else:
-    print("ESP32 pioarduino-build.py is already fully patched.")
+    if missing:
+        print(f"Patching {len(missing)} missing ESP-IDF include paths into esp32/pioarduino-build.py...")
+        with open(esp32_py, 'r') as f:
+            content = f.read()
+        start = content.find("CPPPATH=[")
+        bracket_idx = content.find("[", start)
+        new_content = content[:bracket_idx+1] + "\n" + "\n".join(missing) + content[bracket_idx+1:]
+        with open(esp32_py, 'w') as f:
+            f.write(new_content)
+        print("Patch applied successfully.")
+
+# 2. Patch platform-espressif32's component_manager.py to prevent stripping critical network includes (e.g. esp_wifi)
+platform_cm_py = os.path.expanduser("~/.platformio/platforms/espressif32/builder/frameworks/component_manager.py")
+
+if os.path.exists(platform_cm_py):
+    with open(platform_cm_py, 'r') as f:
+        cm_content = f.read()
+
+    # Modify _critical_components set
+    target_str = "'lwip',           # Network stack"
+    if target_str in cm_content and "'esp_wifi'" not in cm_content:
+        print("Patching component_manager.py to protect esp_wifi from lib_ignore stripping...")
+        replacement = "'esp_wifi',        # WiFi stack\n            'esp_netif',       # Netif stack\n            'lwip',           # Network stack"
+        cm_content = cm_content.replace(target_str, replacement)
+
+    # Modify extended_mapping dict to prevent mapping 'wifi' -> 'esp_wifi'
+    map_str = "'wifi': 'esp_wifi',"
+    if map_str in cm_content:
+        print("Patching component_manager.py extended_mapping for wifi...")
+        cm_content = cm_content.replace(map_str, "# 'wifi': 'esp_wifi',")
+
+    with open(platform_cm_py, 'w') as f:
+        f.write(cm_content)
+    print("component_manager.py patched successfully.")

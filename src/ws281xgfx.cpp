@@ -104,7 +104,7 @@ WS281xGFX::WS281xGFX(size_t w, size_t h) : GFXBase(w, h)
 
 WS281xGFX::~WS281xGFX()
 {
-    free(leds);
+    free(static_cast<void*>(leds));
     leds = nullptr;
 }
 

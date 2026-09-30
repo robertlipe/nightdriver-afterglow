@@ -53,14 +53,33 @@ enum PixelOrder
   RightLeft = 16
 };
 
+inline void ReverseCRGB(CRGB* b, CRGB* e)
+{
+  while (b < --e)
+  {
+    CRGB tmp = *b;
+    *b = *e;
+    *e = tmp;
+    ++b;
+  }
+}
+
+inline void RotateCRGB(CRGB* first, CRGB* middle, CRGB* last)
+{
+  if (first == middle || middle == last) return;
+  ReverseCRGB(first, middle);
+  ReverseCRGB(middle, last);
+  ReverseCRGB(first, last);
+}
+
 inline void RotateForward(int iStart, int length = FAN_SIZE, int count = 1)
 {
-  std::rotate(&FastLED.leds()[iStart], &FastLED.leds()[iStart + count], &FastLED.leds()[iStart + length]);
+  RotateCRGB(static_cast<CRGB*>(FastLED.leds()) + iStart, static_cast<CRGB*>(FastLED.leds()) + iStart + count, static_cast<CRGB*>(FastLED.leds()) + iStart + length);
 }
 
 inline void RotateReverse(int iStart, int length = FAN_SIZE, int count = 1)
 {
-  std::rotate(&FastLED.leds()[iStart], &FastLED.leds()[iStart + length - count], &FastLED.leds()[iStart + length]);
+  RotateCRGB(static_cast<CRGB*>(FastLED.leds()) + iStart, static_cast<CRGB*>(FastLED.leds()) + iStart + length - count, static_cast<CRGB*>(FastLED.leds()) + iStart + length);
 }
 
 // Rotate
