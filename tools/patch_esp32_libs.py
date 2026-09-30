@@ -9,11 +9,15 @@ try:
 except Exception:
     env = None
 
-def ensure_objcopy_shims(env_obj=None):
+def patch_all(env_obj=None):
     home = os.path.expanduser("~")
-    pkg_dir = os.path.join(home, ".platformio", "packages")
-    tc_dirs = glob.glob(os.path.join(pkg_dir, "toolchain-*", "bin"))
+    pio_dir = os.path.join(home, ".platformio")
 
+    if not os.path.exists(pio_dir):
+        return
+
+    # 1. Toolchain shims and PATH environment setup
+    tc_dirs = glob.glob(os.path.join(pio_dir, "packages", "toolchain-*", "bin"), recursive=True)
     for tc_bin in tc_dirs:
         if not os.path.exists(tc_bin):
             continue
@@ -30,30 +34,25 @@ def ensure_objcopy_shims(env_obj=None):
                 if not os.path.isfile(src_path):
                     continue
 
-                base_names = []
-                if "xtensa" in name.lower() or "objcopy" in name.lower():
-                    base_names += [
-                        "xtensa-esp32-elf-objcopy",
-                        "xtensa-esp32s2-elf-objcopy",
-                        "xtensa-esp32s3-elf-objcopy",
-                        "xtensa-esp-elf-objcopy",
-                    ]
-                if "riscv" in name.lower() or "objcopy" in name.lower():
-                    base_names += [
-                        "riscv32-esp-elf-objcopy",
-                        "riscv32-esp32c3-elf-objcopy",
-                        "riscv32-esp32c6-elf-objcopy",
-                        "riscv32-esp32h2-elf-objcopy",
-                    ]
+                base_names = [
+                    "xtensa-esp32-elf-objcopy",
+                    "xtensa-esp32s2-elf-objcopy",
+                    "xtensa-esp32s3-elf-objcopy",
+                    "xtensa-esp-elf-objcopy",
+                    "riscv32-esp-elf-objcopy",
+                    "riscv32-esp32c3-elf-objcopy",
+                    "riscv32-esp32c6-elf-objcopy",
+                    "riscv32-esp32h2-elf-objcopy",
+                ]
 
                 for base in base_names:
-                    for ext in (["", ".exe"] if os.name == "nt" or sys.platform == "win32" or name.endswith(".exe") else [""]):
+                    for ext in ["", ".exe"]:
                         target_alias = base + ext
                         target_path = os.path.join(tc_bin, target_alias)
                         if not os.path.exists(target_path):
                             try:
                                 shutil.copy2(src_path, target_path)
-                                print(f"[Patch-Libs] Created missing toolchain executable shim: {target_alias}")
+                                print(f"[Patch-Libs] Created toolchain executable shim: {target_alias}")
                             except Exception as e:
                                 print(f"[Patch-Libs] Warning: Failed to copy {target_alias}: {e}")
 
@@ -63,85 +62,83 @@ def ensure_objcopy_shims(env_obj=None):
         if resolved:
             env_obj["OBJCOPY"] = resolved
 
-ensure_objcopy_shims(env)
+    # 2. Patch _embed_files.py to replace hardcoded xtensa-{mcu}-elf-objcopy with generic xtensa-esp-elf-objcopy
+    for embed_py in glob.glob(os.path.join(pio_dir, "**", "_embed_files.py"), recursive=True):
+        try:
+            with open(embed_py, "r") as f:
+                content = f.read()
+            target_str = 'f"xtensa-{mcu}-elf-objcopy"'
+            if target_str in content:
+                print(f"Patching _embed_files.py at {embed_py}...")
+                content = content.replace(target_str, '"xtensa-esp-elf-objcopy"')
+                with open(embed_py, "w") as f:
+                    f.write(content)
+                print("_embed_files.py patched successfully.")
+        except Exception as e:
+            print(f"Warning: Failed to patch {embed_py}: {e}")
 
-# 1. Patch _embed_files.py to replace hardcoded xtensa-{mcu}-elf-objcopy with generic xtensa-esp-elf-objcopy
-platform_embed_py = os.path.expanduser("~/.platformio/platforms/espressif32/builder/frameworks/_embed_files.py")
+    # 3. Patch missing ESP32 CPPPATH entries in pioarduino-build.py
+    for lib_dir in glob.glob(os.path.join(pio_dir, "packages", "framework-arduinoespressif32-libs*"), recursive=True):
+        esp32_py = os.path.join(lib_dir, "esp32", "pioarduino-build.py")
+        esp32s3_py = os.path.join(lib_dir, "esp32s3", "pioarduino-build.py")
 
-if os.path.exists(platform_embed_py):
-    with open(platform_embed_py, "r") as f:
-        embed_content = f.read()
+        if os.path.exists(esp32_py) and os.path.exists(esp32s3_py):
+            def get_cpppath(filepath):
+                with open(filepath, 'r') as f:
+                    content = f.read()
 
-    target_str = 'f"xtensa-{mcu}-elf-objcopy"'
-    if target_str in embed_content:
-        print("Patching _embed_files.py to use generic xtensa-esp-elf-objcopy...")
-        embed_content = embed_content.replace(target_str, '"xtensa-esp-elf-objcopy"')
-        with open(platform_embed_py, "w") as f:
-            f.write(embed_content)
-        print("_embed_files.py patched successfully.")
+                start = content.find("CPPPATH=[")
+                if start == -1: return []
+                end = content.find("]", start)
+                return content[start:end].split('\n')
 
-# 2. Patch missing ESP32 CPPPATH entries in framework-arduinoespressif32-libs
-lib_pkg = os.path.expanduser("~/.platformio/packages/framework-arduinoespressif32-libs")
-esp32_py = os.path.join(lib_pkg, "esp32", "pioarduino-build.py")
-esp32s3_py = os.path.join(lib_pkg, "esp32s3", "pioarduino-build.py")
+            s3_paths = get_cpppath(esp32s3_py)
+            esp32_paths = get_cpppath(esp32_py)
 
-if os.path.exists(esp32_py) and os.path.exists(esp32s3_py):
-    def get_cpppath(filepath):
-        with open(filepath, 'r') as f:
-            content = f.read()
+            def clean_path(p):
+                return p.strip().replace('"esp32s3"', '"{board}"').replace('"esp32"', '"{board}"').strip(',')
 
-        start = content.find("CPPPATH=[")
-        if start == -1: return []
-        end = content.find("]", start)
-        return content[start:end].split('\n')
+            esp32_clean = set(clean_path(p) for p in esp32_paths if p.strip())
 
-    s3_paths = get_cpppath(esp32s3_py)
-    esp32_paths = get_cpppath(esp32_py)
+            missing = []
+            for orig in s3_paths:
+                if not orig.strip():
+                    continue
+                clean = clean_path(orig)
+                if clean not in esp32_clean and clean != "CPPPATH=[":
+                    missing.append(orig.replace('"esp32s3"', '"esp32"'))
 
-    def clean_path(p):
-        return p.strip().replace('"esp32s3"', '"{board}"').replace('"esp32"', '"{board}"').strip(',')
+            if missing:
+                print(f"Patching {len(missing)} missing ESP-IDF include paths into {esp32_py}...")
+                with open(esp32_py, 'r') as f:
+                    content = f.read()
+                start = content.find("CPPPATH=[")
+                bracket_idx = content.find("[", start)
+                new_content = content[:bracket_idx+1] + "\n" + "\n".join(missing) + content[bracket_idx+1:]
+                with open(esp32_py, 'w') as f:
+                    f.write(new_content)
+                print("pioarduino-build.py patched successfully.")
 
-    esp32_clean = set(clean_path(p) for p in esp32_paths if p.strip())
+    # 4. Patch platform-espressif32's component_manager.py to prevent stripping critical network includes (e.g. esp_wifi)
+    for cm_py in glob.glob(os.path.join(pio_dir, "**", "component_manager.py"), recursive=True):
+        try:
+            with open(cm_py, "r") as f:
+                cm_content = f.read()
 
-    missing = []
-    for orig in s3_paths:
-        if not orig.strip():
-            continue
-        clean = clean_path(orig)
-        if clean not in esp32_clean and clean != "CPPPATH=[":
-            missing.append(orig.replace('"esp32s3"', '"esp32"'))
+            target_str = "'lwip',           # Network stack"
+            if target_str in cm_content and "'esp_wifi'" not in cm_content:
+                print(f"Patching component_manager.py at {cm_py} to protect esp_wifi...")
+                replacement = "'esp_wifi',        # WiFi stack\n            'esp_netif',       # Netif stack\n            'lwip',           # Network stack"
+                cm_content = cm_content.replace(target_str, replacement)
 
-    if missing:
-        print(f"Patching {len(missing)} missing ESP-IDF include paths into esp32/pioarduino-build.py...")
-        with open(esp32_py, 'r') as f:
-            content = f.read()
-        start = content.find("CPPPATH=[")
-        bracket_idx = content.find("[", start)
-        new_content = content[:bracket_idx+1] + "\n" + "\n".join(missing) + content[bracket_idx+1:]
-        with open(esp32_py, 'w') as f:
-            f.write(new_content)
-        print("Patch applied successfully.")
+            map_str = "'wifi': 'esp_wifi',"
+            if map_str in cm_content:
+                cm_content = cm_content.replace(map_str, "# 'wifi': 'esp_wifi',")
 
-# 3. Patch platform-espressif32's component_manager.py to prevent stripping critical network includes (e.g. esp_wifi)
-platform_cm_py = os.path.expanduser("~/.platformio/platforms/espressif32/builder/frameworks/component_manager.py")
+            with open(cm_py, "w") as f:
+                f.write(cm_content)
+            print("component_manager.py patched successfully.")
+        except Exception as e:
+            print(f"Warning: Failed to patch {cm_py}: {e}")
 
-if os.path.exists(platform_cm_py):
-    with open(platform_cm_py, 'r') as f:
-        cm_content = f.read()
-
-    # Modify _critical_components set
-    target_str = "'lwip',           # Network stack"
-    if target_str in cm_content and "'esp_wifi'" not in cm_content:
-        print("Patching component_manager.py to protect esp_wifi from lib_ignore stripping...")
-        replacement = "'esp_wifi',        # WiFi stack\n            'esp_netif',       # Netif stack\n            'lwip',           # Network stack"
-        cm_content = cm_content.replace(target_str, replacement)
-
-    # Modify extended_mapping dict to prevent mapping 'wifi' -> 'esp_wifi'
-    map_str = "'wifi': 'esp_wifi',"
-    if map_str in cm_content:
-        print("Patching component_manager.py extended_mapping for wifi...")
-        cm_content = cm_content.replace(map_str, "# 'wifi': 'esp_wifi',")
-
-    with open(platform_cm_py, 'w') as f:
-        f.write(cm_content)
-    print("component_manager.py patched successfully.")
+patch_all(env)

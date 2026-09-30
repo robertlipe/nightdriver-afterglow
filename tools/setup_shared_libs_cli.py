@@ -30,9 +30,12 @@ def safe_rmtree(path):
 
 def ensure_objcopy_shims():
     home = os.path.expanduser("~")
-    pkg_dir = os.path.join(home, ".platformio", "packages")
-    tc_dirs = glob.glob(os.path.join(pkg_dir, "toolchain-*", "bin"))
+    pio_dir = os.path.join(home, ".platformio")
 
+    if not os.path.exists(pio_dir):
+        return
+
+    tc_dirs = glob.glob(os.path.join(pio_dir, "packages", "toolchain-*", "bin"), recursive=True)
     for tc_bin in tc_dirs:
         if not os.path.exists(tc_bin):
             continue
@@ -46,24 +49,19 @@ def ensure_objcopy_shims():
                 if not os.path.isfile(src_path):
                     continue
 
-                base_names = []
-                if "xtensa" in name.lower() or "objcopy" in name.lower():
-                    base_names += [
-                        "xtensa-esp32-elf-objcopy",
-                        "xtensa-esp32s2-elf-objcopy",
-                        "xtensa-esp32s3-elf-objcopy",
-                        "xtensa-esp-elf-objcopy",
-                    ]
-                if "riscv" in name.lower() or "objcopy" in name.lower():
-                    base_names += [
-                        "riscv32-esp-elf-objcopy",
-                        "riscv32-esp32c3-elf-objcopy",
-                        "riscv32-esp32c6-elf-objcopy",
-                        "riscv32-esp32h2-elf-objcopy",
-                    ]
+                base_names = [
+                    "xtensa-esp32-elf-objcopy",
+                    "xtensa-esp32s2-elf-objcopy",
+                    "xtensa-esp32s3-elf-objcopy",
+                    "xtensa-esp-elf-objcopy",
+                    "riscv32-esp-elf-objcopy",
+                    "riscv32-esp32c3-elf-objcopy",
+                    "riscv32-esp32c6-elf-objcopy",
+                    "riscv32-esp32h2-elf-objcopy",
+                ]
 
                 for base in base_names:
-                    for ext in (["", ".exe"] if os.name == "nt" or sys.platform == "win32" or name.endswith(".exe") else [""]):
+                    for ext in ["", ".exe"]:
                         target_alias = base + ext
                         target_path = os.path.join(tc_bin, target_alias)
                         if not os.path.exists(target_path):
