@@ -2,6 +2,7 @@
 
 import os
 import sys
+import glob
 import re
 import shutil
 import subprocess
@@ -29,26 +30,36 @@ def safe_rmtree(path):
 
 def ensure_objcopy_shims():
     home = os.path.expanduser("~")
-    possible_dirs = [
-        os.path.join(home, ".platformio", "packages", "toolchain-xtensa-esp-elf", "bin"),
-        os.path.join(home, ".platformio", "packages", "toolchain-xtensa-esp32s3-elf", "bin"),
-        os.path.join(home, ".platformio", "packages", "toolchain-xtensa-esp32s2-elf", "bin"),
-    ]
+    pkg_dir = os.path.join(home, ".platformio", "packages")
+    tc_dirs = glob.glob(os.path.join(pkg_dir, "toolchain-*", "bin"))
 
-    for tc_bin in possible_dirs:
+    for tc_bin in tc_dirs:
         if not os.path.exists(tc_bin):
             continue
+
+        if tc_bin not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = tc_bin + os.pathsep + os.environ.get("PATH", "")
 
         for name in os.listdir(tc_bin):
             if "objcopy" in name:
                 src_path = os.path.join(tc_bin, name)
-                ext = ".exe" if name.endswith(".exe") else ""
-                aliases = [
-                    f"xtensa-esp32-elf-objcopy{ext}",
-                    f"xtensa-esp32s2-elf-objcopy{ext}",
-                    f"xtensa-esp32s3-elf-objcopy{ext}",
-                    f"xtensa-esp-elf-objcopy{ext}",
-                ]
+                ext = ".exe" if name.endswith(".exe") or os.name == "nt" else ""
+                aliases = []
+                if "xtensa" in name or "objcopy" in name:
+                    aliases += [
+                        f"xtensa-esp32-elf-objcopy{ext}",
+                        f"xtensa-esp32s2-elf-objcopy{ext}",
+                        f"xtensa-esp32s3-elf-objcopy{ext}",
+                        f"xtensa-esp-elf-objcopy{ext}",
+                    ]
+                if "riscv" in name or "objcopy" in name:
+                    aliases += [
+                        f"riscv32-esp-elf-objcopy{ext}",
+                        f"riscv32-esp32c3-elf-objcopy{ext}",
+                        f"riscv32-esp32c6-elf-objcopy{ext}",
+                        f"riscv32-esp32h2-elf-objcopy{ext}",
+                    ]
+
                 for alias in aliases:
                     target_path = os.path.join(tc_bin, alias)
                     if not os.path.exists(target_path):
