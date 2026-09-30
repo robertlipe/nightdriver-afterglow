@@ -1,5 +1,39 @@
 import os
 import sys
+import shutil
+
+def ensure_objcopy_shims():
+    home = os.path.expanduser("~")
+    possible_dirs = [
+        os.path.join(home, ".platformio", "packages", "toolchain-xtensa-esp-elf", "bin"),
+        os.path.join(home, ".platformio", "packages", "toolchain-xtensa-esp32s3-elf", "bin"),
+        os.path.join(home, ".platformio", "packages", "toolchain-xtensa-esp32s2-elf", "bin"),
+    ]
+
+    for tc_bin in possible_dirs:
+        if not os.path.exists(tc_bin):
+            continue
+
+        for name in os.listdir(tc_bin):
+            if "objcopy" in name:
+                src_path = os.path.join(tc_bin, name)
+                ext = ".exe" if name.endswith(".exe") else ""
+                aliases = [
+                    f"xtensa-esp32-elf-objcopy{ext}",
+                    f"xtensa-esp32s2-elf-objcopy{ext}",
+                    f"xtensa-esp32s3-elf-objcopy{ext}",
+                    f"xtensa-esp-elf-objcopy{ext}",
+                ]
+                for alias in aliases:
+                    target_path = os.path.join(tc_bin, alias)
+                    if not os.path.exists(target_path):
+                        try:
+                            shutil.copy2(src_path, target_path)
+                            print(f"[Patch-Libs] Created missing toolchain executable shim: {alias}")
+                        except Exception as e:
+                            print(f"[Patch-Libs] Warning: Failed to copy {alias}: {e}")
+
+ensure_objcopy_shims()
 
 # 1. Patch missing ESP32 CPPPATH entries in framework-arduinoespressif32-libs
 lib_pkg = os.path.expanduser("~/.platformio/packages/framework-arduinoespressif32-libs")
