@@ -1,6 +1,5 @@
 import os
 import shutil
-import SCons.Action
 from SCons.Script import Import
 
 Import("env")
@@ -15,7 +14,7 @@ def fix_objcopy():
         new_action_str = new_action_str.replace("xtensa-esp32-elf-objcopy", "xtensa-esp-elf-objcopy")
         new_action_str = new_action_str.replace("xtensa-esp32s2-elf-objcopy", "xtensa-esp-elf-objcopy")
         new_action_str = new_action_str.replace("xtensa-esp32c3-elf-objcopy", "xtensa-esp-elf-objcopy")
-        txt_to_bin.action = SCons.Action.Action(new_action_str, str(txt_to_bin.action))
+        txt_to_bin.action = env.Action(new_action_str, str(txt_to_bin.action))
 
     # Create executable shims in toolchain bin directory on Windows
     packages_dir = os.path.expanduser("~/.platformio/packages")
