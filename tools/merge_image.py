@@ -51,21 +51,20 @@ def merge_bin(source, target, env):
         flash_mode = "dout"
 
     # Run esptool to merge images into a single binary
-    esptool_path = env.subst("${OBJCOPY}")
-    if not os.path.isabs(esptool_path):
-        try:
-            platform = env.PioPlatform()
-            package_dir = platform.get_package_dir("tool-esptoolpy")
-            if package_dir:
-                candidate = os.path.join(package_dir, esptool_path)
+    esptool_path = "esptool.py"
+    try:
+        platform = env.PioPlatform()
+        package_dir = platform.get_package_dir("tool-esptoolpy")
+        if package_dir:
+            candidate = os.path.join(package_dir, "esptool.py")
+            if os.path.exists(candidate):
+                esptool_path = candidate
+            else:
+                candidate = os.path.join(package_dir, "esptool")
                 if os.path.exists(candidate):
                     esptool_path = candidate
-                else:
-                    candidate = os.path.join(package_dir, "esptool.py")
-                    if os.path.exists(candidate):
-                        esptool_path = candidate
-        except Exception:
-            pass
+    except Exception:
+        pass
 
     env.Execute(
         " ".join(
