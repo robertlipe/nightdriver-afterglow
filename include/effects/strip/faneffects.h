@@ -55,6 +55,7 @@ enum PixelOrder
 
 inline void ReverseCRGB(CRGB* b, CRGB* e)
 {
+  if (b >= e) return;
   while (b < --e)
   {
     CRGB tmp = *b;
