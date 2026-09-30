@@ -41,33 +41,37 @@ def ensure_objcopy_shims():
             os.environ["PATH"] = tc_bin + os.pathsep + os.environ.get("PATH", "")
 
         for name in os.listdir(tc_bin):
-            if "objcopy" in name:
+            if "objcopy" in name.lower():
                 src_path = os.path.join(tc_bin, name)
-                ext = ".exe" if name.endswith(".exe") or os.name == "nt" else ""
-                aliases = []
-                if "xtensa" in name or "objcopy" in name:
-                    aliases += [
-                        f"xtensa-esp32-elf-objcopy{ext}",
-                        f"xtensa-esp32s2-elf-objcopy{ext}",
-                        f"xtensa-esp32s3-elf-objcopy{ext}",
-                        f"xtensa-esp-elf-objcopy{ext}",
+                if not os.path.isfile(src_path):
+                    continue
+
+                base_names = []
+                if "xtensa" in name.lower() or "objcopy" in name.lower():
+                    base_names += [
+                        "xtensa-esp32-elf-objcopy",
+                        "xtensa-esp32s2-elf-objcopy",
+                        "xtensa-esp32s3-elf-objcopy",
+                        "xtensa-esp-elf-objcopy",
                     ]
-                if "riscv" in name or "objcopy" in name:
-                    aliases += [
-                        f"riscv32-esp-elf-objcopy{ext}",
-                        f"riscv32-esp32c3-elf-objcopy{ext}",
-                        f"riscv32-esp32c6-elf-objcopy{ext}",
-                        f"riscv32-esp32h2-elf-objcopy{ext}",
+                if "riscv" in name.lower() or "objcopy" in name.lower():
+                    base_names += [
+                        "riscv32-esp-elf-objcopy",
+                        "riscv32-esp32c3-elf-objcopy",
+                        "riscv32-esp32c6-elf-objcopy",
+                        "riscv32-esp32h2-elf-objcopy",
                     ]
 
-                for alias in aliases:
-                    target_path = os.path.join(tc_bin, alias)
-                    if not os.path.exists(target_path):
-                        try:
-                            shutil.copy2(src_path, target_path)
-                            print(f"[Shared-Libs] Created missing toolchain executable shim: {alias}")
-                        except Exception as e:
-                            print(f"[Shared-Libs] Warning: Failed to copy {alias}: {e}")
+                for base in base_names:
+                    for ext in (["", ".exe"] if os.name == "nt" or sys.platform == "win32" or name.endswith(".exe") else [""]):
+                        target_alias = base + ext
+                        target_path = os.path.join(tc_bin, target_alias)
+                        if not os.path.exists(target_path):
+                            try:
+                                shutil.copy2(src_path, target_path)
+                                print(f"[Shared-Libs] Created missing toolchain executable shim: {target_alias}")
+                            except Exception as e:
+                                print(f"[Shared-Libs] Warning: Failed to copy {target_alias}: {e}")
 
 ensure_objcopy_shims()
 

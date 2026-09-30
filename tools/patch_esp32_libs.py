@@ -25,33 +25,37 @@ def ensure_objcopy_shims(env_obj=None):
             os.environ["PATH"] = tc_bin + os.pathsep + os.environ.get("PATH", "")
 
         for name in os.listdir(tc_bin):
-            if "objcopy" in name:
+            if "objcopy" in name.lower():
                 src_path = os.path.join(tc_bin, name)
-                ext = ".exe" if name.endswith(".exe") or os.name == "nt" else ""
-                aliases = []
-                if "xtensa" in name or "objcopy" in name:
-                    aliases += [
-                        f"xtensa-esp32-elf-objcopy{ext}",
-                        f"xtensa-esp32s2-elf-objcopy{ext}",
-                        f"xtensa-esp32s3-elf-objcopy{ext}",
-                        f"xtensa-esp-elf-objcopy{ext}",
+                if not os.path.isfile(src_path):
+                    continue
+
+                base_names = []
+                if "xtensa" in name.lower() or "objcopy" in name.lower():
+                    base_names += [
+                        "xtensa-esp32-elf-objcopy",
+                        "xtensa-esp32s2-elf-objcopy",
+                        "xtensa-esp32s3-elf-objcopy",
+                        "xtensa-esp-elf-objcopy",
                     ]
-                if "riscv" in name or "objcopy" in name:
-                    aliases += [
-                        f"riscv32-esp-elf-objcopy{ext}",
-                        f"riscv32-esp32c3-elf-objcopy{ext}",
-                        f"riscv32-esp32c6-elf-objcopy{ext}",
-                        f"riscv32-esp32h2-elf-objcopy{ext}",
+                if "riscv" in name.lower() or "objcopy" in name.lower():
+                    base_names += [
+                        "riscv32-esp-elf-objcopy",
+                        "riscv32-esp32c3-elf-objcopy",
+                        "riscv32-esp32c6-elf-objcopy",
+                        "riscv32-esp32h2-elf-objcopy",
                     ]
 
-                for alias in aliases:
-                    target_path = os.path.join(tc_bin, alias)
-                    if not os.path.exists(target_path):
-                        try:
-                            shutil.copy2(src_path, target_path)
-                            print(f"[Patch-Libs] Created missing toolchain executable shim: {alias}")
-                        except Exception as e:
-                            print(f"[Patch-Libs] Warning: Failed to copy {alias}: {e}")
+                for base in base_names:
+                    for ext in (["", ".exe"] if os.name == "nt" or sys.platform == "win32" or name.endswith(".exe") else [""]):
+                        target_alias = base + ext
+                        target_path = os.path.join(tc_bin, target_alias)
+                        if not os.path.exists(target_path):
+                            try:
+                                shutil.copy2(src_path, target_path)
+                                print(f"[Patch-Libs] Created missing toolchain executable shim: {target_alias}")
+                            except Exception as e:
+                                print(f"[Patch-Libs] Warning: Failed to copy {target_alias}: {e}")
 
     if env_obj is not None and env_obj.get("OBJCOPY"):
         objcopy_cmd = env_obj.get("OBJCOPY")
@@ -61,7 +65,22 @@ def ensure_objcopy_shims(env_obj=None):
 
 ensure_objcopy_shims(env)
 
-# 1. Patch missing ESP32 CPPPATH entries in framework-arduinoespressif32-libs
+# 1. Patch _embed_files.py to replace hardcoded xtensa-{mcu}-elf-objcopy with generic xtensa-esp-elf-objcopy
+platform_embed_py = os.path.expanduser("~/.platformio/platforms/espressif32/builder/frameworks/_embed_files.py")
+
+if os.path.exists(platform_embed_py):
+    with open(platform_embed_py, "r") as f:
+        embed_content = f.read()
+
+    target_str = 'f"xtensa-{mcu}-elf-objcopy"'
+    if target_str in embed_content:
+        print("Patching _embed_files.py to use generic xtensa-esp-elf-objcopy...")
+        embed_content = embed_content.replace(target_str, '"xtensa-esp-elf-objcopy"')
+        with open(platform_embed_py, "w") as f:
+            f.write(embed_content)
+        print("_embed_files.py patched successfully.")
+
+# 2. Patch missing ESP32 CPPPATH entries in framework-arduinoespressif32-libs
 lib_pkg = os.path.expanduser("~/.platformio/packages/framework-arduinoespressif32-libs")
 esp32_py = os.path.join(lib_pkg, "esp32", "pioarduino-build.py")
 esp32s3_py = os.path.join(lib_pkg, "esp32s3", "pioarduino-build.py")
@@ -103,7 +122,7 @@ if os.path.exists(esp32_py) and os.path.exists(esp32s3_py):
             f.write(new_content)
         print("Patch applied successfully.")
 
-# 2. Patch platform-espressif32's component_manager.py to prevent stripping critical network includes (e.g. esp_wifi)
+# 3. Patch platform-espressif32's component_manager.py to prevent stripping critical network includes (e.g. esp_wifi)
 platform_cm_py = os.path.expanduser("~/.platformio/platforms/espressif32/builder/frameworks/component_manager.py")
 
 if os.path.exists(platform_cm_py):
