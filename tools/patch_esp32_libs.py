@@ -20,24 +20,24 @@ def update_toolchain_path_and_shims(env_obj=None):
         if not os.path.exists(tc_bin):
             continue
 
-        normalized_bin = tc_bin.replace("\\", "/")
+        native_bin = os.path.normpath(tc_bin)
 
         # 1. Prepend to SCons environment PATH
         if env_obj is not None and "ENV" in env_obj:
             scons_path = env_obj["ENV"].get("PATH", "")
-            if normalized_bin not in scons_path and tc_bin not in scons_path:
-                env_obj["ENV"]["PATH"] = tc_bin + os.pathsep + scons_path
+            if native_bin not in scons_path and tc_bin not in scons_path:
+                env_obj["ENV"]["PATH"] = native_bin + os.pathsep + scons_path
 
         # 2. Prepend to OS environment PATH
         os_path = os.environ.get("PATH", "")
-        if normalized_bin not in os_path and tc_bin not in os_path:
-            os.environ["PATH"] = tc_bin + os.pathsep + os_path
+        if native_bin not in os_path and tc_bin not in os_path:
+            os.environ["PATH"] = native_bin + os.pathsep + os_path
 
         # 3. Append to GITHUB_PATH for subsequent workflow steps
         if github_path and os.path.exists(github_path):
             try:
                 with open(github_path, "a") as f:
-                    f.write(tc_bin + "\n")
+                    f.write(native_bin + "\n")
             except Exception:
                 pass
 
@@ -60,7 +60,7 @@ def update_toolchain_path_and_shims(env_obj=None):
                 ]
 
                 for base in base_names:
-                    for ext in ["", ".exe"]:
+                    for ext in (["", ".exe"] if os.name == "nt" or sys.platform == "win32" or name.endswith(".exe") else [""]):
                         target_alias = base + ext
                         target_path = os.path.join(tc_bin, target_alias)
                         if not os.path.exists(target_path):
@@ -102,7 +102,7 @@ def fix_scons_txttobin(env_obj):
                 break
 
     if resolved:
-        resolved = resolved.replace("\\", "/")
+        resolved = os.path.normpath(resolved)
 
     final_objcopy = f'"{resolved}"' if resolved else objcopy_cmd
 
@@ -141,7 +141,7 @@ def patch_all(env_obj=None):
             target_str = 'f"xtensa-{mcu}-elf-objcopy"'
             if target_str in content:
                 print(f"Patching _embed_files.py at {embed_py}...")
-                content = content.replace(target_str, '"xtensa-esp-elf-objcopy"')
+                content = content.replace(target_str, '"xtensa-esp-elf-objcopy.exe" if os.name == "nt" else "xtensa-esp-elf-objcopy"')
                 with open(embed_py, "w") as f:
                     f.write(content)
                 print("_embed_files.py patched successfully.")
