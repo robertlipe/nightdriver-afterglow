@@ -4,14 +4,57 @@ import glob
 import shutil
 
 try:
-    from SCons.Script import Import
+    from SCons.Script import Import, Builder
     Import("env")
 except Exception:
     env = None
 
+def fix_scons_txttobin(env_obj):
+    if env_obj is None or "BUILDERS" not in env_obj:
+        return
+
+    board = env_obj.BoardConfig()
+    mcu = board.get("build.mcu", "esp32")
+    is_xtensa = mcu in ("esp32", "esp32s2", "esp32s3")
+
+    objcopy_cmd = "riscv32-esp-elf-objcopy" if not is_xtensa else "xtensa-esp-elf-objcopy"
+    target_arch = "elf32-littleriscv" if not is_xtensa else "elf32-xtensa-le"
+    binary_arch = "riscv" if not is_xtensa else "xtensa"
+
+    home = os.path.expanduser("~")
+    pkg_dir = os.path.join(home, ".platformio", "packages")
+    resolved = None
+    for tc in glob.glob(os.path.join(pkg_dir, "toolchain-*", "bin")):
+        resolved = shutil.which(objcopy_cmd, path=tc) or shutil.which(objcopy_cmd + ".exe", path=tc)
+        if resolved:
+            break
+
+    if not resolved:
+        resolved = shutil.which(objcopy_cmd) or shutil.which(objcopy_cmd + ".exe")
+
+    final_objcopy = f'"{resolved}"' if resolved else objcopy_cmd
+
+    cmd_str = " ".join([
+        final_objcopy,
+        "--input-target", "binary",
+        "--output-target", target_arch,
+        "--binary-architecture", binary_arch,
+        "--rename-section", ".data=.rodata.embedded",
+        "$SOURCE", "$TARGET"
+    ])
+
+    env_obj["BUILDERS"]["TxtToBin"] = Builder(
+        action=env_obj.VerboseAction(cmd_str, "Converting $TARGET"),
+        suffix=".txt.o"
+    )
+    print(f"[Patch-Libs] Successfully configured TxtToBin builder with objcopy: {final_objcopy}")
+
 def patch_all(env_obj=None):
     home = os.path.expanduser("~")
     pio_dir = os.path.join(home, ".platformio")
+
+    if env_obj is not None:
+        fix_scons_txttobin(env_obj)
 
     if not os.path.exists(pio_dir):
         return
@@ -56,13 +99,7 @@ def patch_all(env_obj=None):
                             except Exception as e:
                                 print(f"[Patch-Libs] Warning: Failed to copy {target_alias}: {e}")
 
-    if env_obj is not None and env_obj.get("OBJCOPY"):
-        objcopy_cmd = env_obj.get("OBJCOPY")
-        resolved = shutil.which(objcopy_cmd, path=env_obj["ENV"].get("PATH", ""))
-        if resolved:
-            env_obj["OBJCOPY"] = resolved
-
-    # 2. Patch _embed_files.py to replace hardcoded xtensa-{mcu}-elf-objcopy with generic xtensa-esp-elf-objcopy
+    # 2. Patch _embed_files.py on disk as fallback
     for embed_py in glob.glob(os.path.join(pio_dir, "**", "_embed_files.py"), recursive=True):
         try:
             with open(embed_py, "r") as f:
