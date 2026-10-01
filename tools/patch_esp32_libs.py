@@ -86,7 +86,17 @@ def fix_scons_txttobin(env_obj):
     resolved = shutil.which(objcopy_cmd, path=scons_path) or shutil.which(objcopy_cmd + ".exe", path=scons_path)
 
     if not resolved:
-        for candidate in ["xtensa-esp32-elf-objcopy", "xtensa-esp32s3-elf-objcopy", "xtensa-esp-elf-objcopy"]:
+        candidates = [
+            "xtensa-esp32-elf-objcopy",
+            "xtensa-esp32s3-elf-objcopy",
+            "xtensa-esp-elf-objcopy"
+        ] if is_xtensa else [
+            "riscv32-esp-elf-objcopy",
+            "riscv32-esp32c3-elf-objcopy",
+            "riscv32-esp32c6-elf-objcopy",
+            "riscv32-esp32h2-elf-objcopy"
+        ]
+        for candidate in candidates:
             resolved = shutil.which(candidate, path=scons_path) or shutil.which(candidate + ".exe", path=scons_path)
             if resolved:
                 break
