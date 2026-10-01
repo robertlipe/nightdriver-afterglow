@@ -32,6 +32,9 @@ def fix_scons_txttobin(env_obj):
     if not resolved:
         resolved = shutil.which(objcopy_cmd) or shutil.which(objcopy_cmd + ".exe")
 
+    if resolved:
+        resolved = resolved.replace("\\", "/")
+
     final_objcopy = f'"{resolved}"' if resolved else objcopy_cmd
 
     cmd_str = " ".join([
