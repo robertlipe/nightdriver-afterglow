@@ -9,71 +9,39 @@ try:
 except Exception:
     env = None
 
-def fix_scons_txttobin(env_obj):
-    if env_obj is None or "BUILDERS" not in env_obj:
-        return
-
-    board = env_obj.BoardConfig()
-    mcu = board.get("build.mcu", "esp32")
-    is_xtensa = mcu in ("esp32", "esp32s2", "esp32s3")
-
-    objcopy_cmd = "riscv32-esp-elf-objcopy" if not is_xtensa else "xtensa-esp-elf-objcopy"
-    target_arch = "elf32-littleriscv" if not is_xtensa else "elf32-xtensa-le"
-    binary_arch = "riscv" if not is_xtensa else "xtensa"
-
-    home = os.path.expanduser("~")
-    pkg_dir = os.path.join(home, ".platformio", "packages")
-    resolved = None
-    for tc in glob.glob(os.path.join(pkg_dir, "toolchain-*", "bin")):
-        resolved = shutil.which(objcopy_cmd, path=tc) or shutil.which(objcopy_cmd + ".exe", path=tc)
-        if resolved:
-            break
-
-    if not resolved:
-        resolved = shutil.which(objcopy_cmd) or shutil.which(objcopy_cmd + ".exe")
-
-    if resolved:
-        resolved = resolved.replace("\\", "/")
-
-    final_objcopy = f'"{resolved}"' if resolved else objcopy_cmd
-
-    cmd_str = " ".join([
-        final_objcopy,
-        "--input-target", "binary",
-        "--output-target", target_arch,
-        "--binary-architecture", binary_arch,
-        "--rename-section", ".data=.rodata.embedded",
-        "$SOURCE", "$TARGET"
-    ])
-
-    env_obj["BUILDERS"]["TxtToBin"] = Builder(
-        action=env_obj.VerboseAction(cmd_str, "Converting $TARGET"),
-        suffix=".txt.o"
-    )
-    print(f"[Patch-Libs] Successfully configured TxtToBin builder with objcopy: {final_objcopy}")
-
-def patch_all(env_obj=None):
+def update_toolchain_path_and_shims(env_obj=None):
     home = os.path.expanduser("~")
     pio_dir = os.path.join(home, ".platformio")
-
-    if env_obj is not None:
-        fix_scons_txttobin(env_obj)
-
-    if not os.path.exists(pio_dir):
-        return
-
-    # 1. Toolchain shims and PATH environment setup
     tc_dirs = glob.glob(os.path.join(pio_dir, "packages", "toolchain-*", "bin"), recursive=True)
+
+    github_path = os.environ.get("GITHUB_PATH")
+
     for tc_bin in tc_dirs:
         if not os.path.exists(tc_bin):
             continue
 
-        if env_obj is not None and "ENV" in env_obj:
-            if tc_bin not in env_obj["ENV"].get("PATH", ""):
-                env_obj["ENV"]["PATH"] = tc_bin + os.pathsep + env_obj["ENV"].get("PATH", "")
-        if tc_bin not in os.environ.get("PATH", ""):
-            os.environ["PATH"] = tc_bin + os.pathsep + os.environ.get("PATH", "")
+        normalized_bin = tc_bin.replace("\\", "/")
 
+        # 1. Prepend to SCons environment PATH
+        if env_obj is not None and "ENV" in env_obj:
+            scons_path = env_obj["ENV"].get("PATH", "")
+            if normalized_bin not in scons_path and tc_bin not in scons_path:
+                env_obj["ENV"]["PATH"] = tc_bin + os.pathsep + scons_path
+
+        # 2. Prepend to OS environment PATH
+        os_path = os.environ.get("PATH", "")
+        if normalized_bin not in os_path and tc_bin not in os_path:
+            os.environ["PATH"] = tc_bin + os.pathsep + os_path
+
+        # 3. Append to GITHUB_PATH for subsequent workflow steps
+        if github_path and os.path.exists(github_path):
+            try:
+                with open(github_path, "a") as f:
+                    f.write(tc_bin + "\n")
+            except Exception:
+                pass
+
+        # 4. Create executable shims
         for name in os.listdir(tc_bin):
             if "objcopy" in name.lower():
                 src_path = os.path.join(tc_bin, name)
@@ -102,7 +70,60 @@ def patch_all(env_obj=None):
                             except Exception as e:
                                 print(f"[Patch-Libs] Warning: Failed to copy {target_alias}: {e}")
 
-    # 2. Patch _embed_files.py on disk as fallback
+def fix_scons_txttobin(env_obj):
+    if env_obj is None or "BUILDERS" not in env_obj:
+        return
+
+    board = env_obj.BoardConfig()
+    mcu = board.get("build.mcu", "esp32")
+    is_xtensa = mcu in ("esp32", "esp32s2", "esp32s3")
+
+    objcopy_cmd = "riscv32-esp-elf-objcopy" if not is_xtensa else "xtensa-esp-elf-objcopy"
+    target_arch = "elf32-littleriscv" if not is_xtensa else "elf32-xtensa-le"
+    binary_arch = "riscv" if not is_xtensa else "xtensa"
+
+    scons_path = env_obj["ENV"].get("PATH", os.environ.get("PATH", ""))
+    resolved = shutil.which(objcopy_cmd, path=scons_path) or shutil.which(objcopy_cmd + ".exe", path=scons_path)
+
+    if not resolved:
+        for candidate in ["xtensa-esp32-elf-objcopy", "xtensa-esp32s3-elf-objcopy", "xtensa-esp-elf-objcopy"]:
+            resolved = shutil.which(candidate, path=scons_path) or shutil.which(candidate + ".exe", path=scons_path)
+            if resolved:
+                break
+
+    if resolved:
+        resolved = resolved.replace("\\", "/")
+
+    final_objcopy = f'"{resolved}"' if resolved else objcopy_cmd
+
+    cmd_str = " ".join([
+        final_objcopy,
+        "--input-target", "binary",
+        "--output-target", target_arch,
+        "--binary-architecture", binary_arch,
+        "--rename-section", ".data=.rodata.embedded",
+        "$SOURCE", "$TARGET"
+    ])
+
+    env_obj["BUILDERS"]["TxtToBin"] = Builder(
+        action=env_obj.VerboseAction(cmd_str, "Converting $TARGET"),
+        suffix=".txt.o"
+    )
+    print(f"[Patch-Libs] Successfully configured TxtToBin builder with objcopy: {final_objcopy}")
+
+def patch_all(env_obj=None):
+    home = os.path.expanduser("~")
+    pio_dir = os.path.join(home, ".platformio")
+
+    update_toolchain_path_and_shims(env_obj)
+
+    if env_obj is not None:
+        fix_scons_txttobin(env_obj)
+
+    if not os.path.exists(pio_dir):
+        return
+
+    # 1. Patch _embed_files.py on disk
     for embed_py in glob.glob(os.path.join(pio_dir, "**", "_embed_files.py"), recursive=True):
         try:
             with open(embed_py, "r") as f:
@@ -117,7 +138,7 @@ def patch_all(env_obj=None):
         except Exception as e:
             print(f"Warning: Failed to patch {embed_py}: {e}")
 
-    # 3. Patch missing ESP32 CPPPATH entries in pioarduino-build.py
+    # 2. Patch missing ESP32 CPPPATH entries in pioarduino-build.py
     for lib_dir in glob.glob(os.path.join(pio_dir, "packages", "framework-arduinoespressif32-libs*"), recursive=True):
         esp32_py = os.path.join(lib_dir, "esp32", "pioarduino-build.py")
         esp32s3_py = os.path.join(lib_dir, "esp32s3", "pioarduino-build.py")
@@ -159,7 +180,7 @@ def patch_all(env_obj=None):
                     f.write(new_content)
                 print("pioarduino-build.py patched successfully.")
 
-    # 4. Patch platform-espressif32's component_manager.py to prevent stripping critical network includes (e.g. esp_wifi)
+    # 3. Patch platform-espressif32's component_manager.py to prevent stripping critical network includes (e.g. esp_wifi)
     for cm_py in glob.glob(os.path.join(pio_dir, "**", "component_manager.py"), recursive=True):
         try:
             with open(cm_py, "r") as f:
