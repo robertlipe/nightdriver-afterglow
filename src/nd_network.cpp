@@ -1426,7 +1426,7 @@ void IRAM_ATTR ColorDataTaskEntry(void *)
                 pPacket->header = COLOR_DATA_PACKET_HEADER;
                 pPacket->width  = effectManager.g()->width();
                 pPacket->height = effectManager.g()->height();
-                memcpy(pPacket->colors, leds, sizeof(CRGB) * NUM_LEDS);
+                memcpy(static_cast<void*>(pPacket->colors), static_cast<const void*>(leds), sizeof(CRGB) * NUM_LEDS);
 
                 if (!_viewer.SendPacket(socket, pPacket.get(), sizeof(ColorDataPacket)))
                 {

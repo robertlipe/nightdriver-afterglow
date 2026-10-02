@@ -129,7 +129,7 @@ uint16_t GFXBase::to16bit(CRGB::HTMLColorCode code)
 void GFXBase::Clear(CRGB color)
 {
     if (color == CRGB::Black)
-        memset(leds, 0, sizeof(CRGB) * _ledcount);
+        memset(static_cast<void*>(leds), 0, sizeof(CRGB) * _ledcount);
     else
         fill_solid(leds, _ledcount, color);
 }

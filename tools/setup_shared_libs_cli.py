@@ -2,6 +2,7 @@
 
 import os
 import sys
+import glob
 import re
 import shutil
 import subprocess
@@ -26,6 +27,51 @@ def safe_rmtree(path):
         except Exception:
             pass
         time.sleep(0.2)
+
+def ensure_objcopy_shims():
+    home = os.path.expanduser("~")
+    pio_dir = os.path.join(home, ".platformio")
+
+    if not os.path.exists(pio_dir):
+        return
+
+    tc_dirs = glob.glob(os.path.join(pio_dir, "packages", "toolchain-*", "bin"), recursive=True)
+    for tc_bin in tc_dirs:
+        if not os.path.exists(tc_bin):
+            continue
+
+        if tc_bin not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = tc_bin + os.pathsep + os.environ.get("PATH", "")
+
+        for name in os.listdir(tc_bin):
+            if "objcopy" in name.lower():
+                src_path = os.path.join(tc_bin, name)
+                if not os.path.isfile(src_path):
+                    continue
+
+                base_names = [
+                    "xtensa-esp32-elf-objcopy",
+                    "xtensa-esp32s2-elf-objcopy",
+                    "xtensa-esp32s3-elf-objcopy",
+                    "xtensa-esp-elf-objcopy",
+                    "riscv32-esp-elf-objcopy",
+                    "riscv32-esp32c3-elf-objcopy",
+                    "riscv32-esp32c6-elf-objcopy",
+                    "riscv32-esp32h2-elf-objcopy",
+                ]
+
+                for base in base_names:
+                    for ext in ["", ".exe"]:
+                        target_alias = base + ext
+                        target_path = os.path.join(tc_bin, target_alias)
+                        if not os.path.exists(target_path):
+                            try:
+                                shutil.copy2(src_path, target_path)
+                                print(f"[Shared-Libs] Created missing toolchain executable shim: {target_alias}")
+                            except Exception as e:
+                                print(f"[Shared-Libs] Warning: Failed to copy {target_alias}: {e}")
+
+ensure_objcopy_shims()
 
 # Find PlatformIO executable in various standard locations
 def find_platformio_bin():
@@ -231,4 +277,3 @@ try:
                 sys.exit(1)
 finally:
     release_lock(lock_fd, lock_path)
-
