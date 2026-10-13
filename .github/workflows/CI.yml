@@ -1,23 +1,28 @@
 name: CI
 
 on:
-  # Documentation-only changes cannot affect a firmware build, and this workflow
-  # runs the entire environment matrix (Linux, then a Windows subset) with no
-  # per-path gating. Without the filters below, editing a single .md file costs
-  # the same ~45 minutes of builds as a change to src/. Skip the run when every
-  # changed file is documentation. '**.md' (not '*.md') is load-bearing: most of
-  # the project's markdown, including AGENTS.md and the top-level READMEs, lives
-  # outside docs/. A change to any non-documentation file still runs the matrix.
+  # Changes that cannot affect a firmware build should not pay for one. This
+  # workflow runs the entire environment matrix (Linux, then a Windows subset)
+  # with no other per-path gating, so without the filters below, editing a single
+  # .md file -- or a single React component -- costs the same ~45 minutes of
+  # builds as a change to src/. Skip the run when every changed file matches an
+  # ignore pattern. '**.md' (not '*.md') is load-bearing: most of the project's
+  # markdown, including AGENTS.md and the top-level READMEs, lives outside docs/.
+  # site/ is the frontend, which nothing in this workflow builds or tests (the
+  # web installer is a separate, release-triggered workflow). Any other file
+  # still runs the full matrix.
   push:
     branches:
       - main
     paths-ignore:
       - 'docs/**'
       - '**.md'
+      - 'site/**'
   pull_request:
     paths-ignore:
       - 'docs/**'
       - '**.md'
+      - 'site/**'
   workflow_dispatch:
     inputs:
       skip_linux:
