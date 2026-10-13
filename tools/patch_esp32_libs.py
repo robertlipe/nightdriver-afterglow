@@ -1,3 +1,42 @@
+#!/usr/bin/env python3
+"""Restore ESP-IDF include paths that pioarduino forgets for the base esp32 target.
+
+Why this exists
+---------------
+Since platform-espressif32 5.5 (we pin 55.03.311), the platform generates one
+``pioarduino-build.py`` per MCU under
+``~/.platformio/packages/framework-arduinoespressif32-libs/<mcu>/``.  The
+generator fills in the complete ESP-IDF ``CPPPATH`` for ``esp32s3`` but ships an
+``esp32`` variant that is missing dozens of ESP-IDF component include
+directories (``esp_wifi``, ``esp_netif``, ``nvs_flash``, ...).  Those headers are
+present on disk, so any code that transitively includes them - FastLED reaching
+``esp_wifi.h``, or our own users of ``esp_wifi_types.h`` - fails with "No such
+file or directory" for no good reason.
+
+What we patch
+-------------
+Every ``CPPPATH`` entry present for ``esp32s3`` but absent for ``esp32`` is
+copied into the ``esp32`` build file, rewriting the target segment
+(``"esp32s3"`` -> ``"esp32"``).  The entries are relative to the package, so
+this is portable across host OSes.  It is a no-op once pioarduino ships a
+correct ``esp32`` include list, at which point this script (and its entry in
+``platformio.ini``'s ``extra_scripts``) can be deleted.
+
+Caveat
+------
+The platform's ComponentManager rewrites ``pioarduino-build.py`` *after* the
+``pre:`` extra-script phase, so paths it deliberately strips (for example the
+``esp_wifi`` component in a no-WiFi build such as ``demo``) are removed again
+and cannot be rescued from here.  This script only restores paths that
+ComponentManager would otherwise leave in place.
+
+See also
+--------
+The unrelated Windows-only failure where pioarduino's toolchain install aborts
+under ESP-IDF's ``idf_tools.py`` is handled in ``.github/workflows/CI.yml``
+(the ``MSYSTEM`` presence check), not here.
+"""
+
 import os
 import sys
 

@@ -125,7 +125,6 @@ jobs:
 
     env:
       PYTHONIOENCODING: utf-8
-      MSYSTEM: ""
 
     strategy:
       fail-fast: false
@@ -176,7 +175,17 @@ jobs:
         Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.platformio\packages\toolchain-xtensa-esp-elf\bin"
 
     - name: "Build environment (Windows): ${{ matrix.envname }}"
-      run: pio run -e ${{ matrix.envname }}
+      run: |
+        # ESP-IDF's idf_tools.py aborts when the MSYSTEM variable exists at all:
+        #   if 'MSYSTEM' in os.environ: fatal('MSys/Mingw is not supported...')
+        # That is a *presence* test, not a value test, so exporting `MSYSTEM: ""`
+        # (as we used to) makes it worse, not better. When idf_tools.py fails the
+        # ESP32 toolchain is left as the ~1.6 KB registry stub with no bin/, and
+        # the build dies looking for xtensa-esp32-elf-objcopy/gcc. Remove the
+        # variable outright so a real toolchain gets installed. See pioarduino
+        # platform-espressif32 issues #351 and #526.
+        Remove-Item Env:MSYSTEM -ErrorAction SilentlyContinue
+        pio run -e ${{ matrix.envname }}
 
   call-web-installer:
     if: ( github.repository_owner == 'rbergen' && github.ref == 'refs/heads/staging' )
