@@ -1,10 +1,23 @@
 name: CI
 
 on:
+  # Documentation-only changes cannot affect a firmware build, and this workflow
+  # runs the entire environment matrix (Linux, then a Windows subset) with no
+  # per-path gating. Without the filters below, editing a single .md file costs
+  # the same ~45 minutes of builds as a change to src/. Skip the run when every
+  # changed file is documentation. '**.md' (not '*.md') is load-bearing: most of
+  # the project's markdown, including AGENTS.md and the top-level READMEs, lives
+  # outside docs/. A change to any non-documentation file still runs the matrix.
   push:
     branches:
       - main
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   workflow_dispatch:
     inputs:
       skip_linux:
