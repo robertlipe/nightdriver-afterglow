@@ -32,9 +32,9 @@
 #include <algorithm>                          // for max
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>  // for MatrixPanel_I2S_DMA
 #include <memory>                             // for shared_ptr, unique_ptr
-#include <stdexcept>                          // for runtime_error
 #include <vector>                             // for vector
 #include "espmpdmagfx.h"                      // for ESPMPDMAGFX
+#include "nd_panic.h"
 
 std::unique_ptr<MatrixPanel_I2S_DMA> ESPMPDMAGFX::driver;
 std::unique_ptr<CRGB[]> ESPMPDMAGFX::drawBuffer;
@@ -85,7 +85,7 @@ void ESPMPDMAGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devi
 #endif
 
     driver = std::make_unique<MatrixPanel_I2S_DMA>(config);
-    if (!driver) throw std::runtime_error("Failed to allocate matrix driver!");
+    if (!driver) Panic("Failed to allocate matrix driver!");
     if (!driver->begin()) debugE("MatrixPanel_I2S_DMA::begin() FAILED!");
 
     // Allocate draw buffer in PSRAM

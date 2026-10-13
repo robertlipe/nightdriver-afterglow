@@ -55,6 +55,7 @@
 #include "ledbuffer.h"
 #include "ledviewer.h"              // For the LEDViewer task and object
 #include "nd_network.h"
+#include "nd_panic.h"
 
 #include "soundanalyzer.h"
 
@@ -574,7 +575,7 @@ namespace nd_network
         #if INCOMING_WIFI_ENABLED
             g_ptrSystem->GetSocketServer().release();
             if (false == g_ptrSystem->GetSocketServer().begin())
-                throw std::runtime_error("Could not start socket server!");
+                Panic("Could not start socket server!");
         #endif
         #if ENABLE_OTA
             SetupOTA(String(WiFi.getHostname()));
@@ -794,7 +795,7 @@ namespace nd_network
                             debugI("Starting/restarting Socket Server...");
                             socketServer.release();
                             if (false == socketServer.begin())
-                                throw std::runtime_error("Could not start socket server!");
+                                Panic("Could not start socket server!");
                             debugI("Socket server started.");
                         #endif
 
@@ -1128,7 +1129,7 @@ void SetupOTA(const String &strHostname)
         else if (error == OTA_CONNECT_ERROR) debugW("Connect Failed");
         else if (error == OTA_RECEIVE_ERROR) debugW("Receive Failed");
         else if (error == OTA_END_ERROR) debugW("End Failed");
-        throw std::runtime_error("OTA Flash update failed.");
+        Panic("OTA Flash update failed.");
     });
     ArduinoOTA.begin();
 #endif

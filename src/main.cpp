@@ -158,6 +158,8 @@
 
 #include <algorithm>
 #include <Arduino.h>
+#include <cstdarg>
+#include <cstdio>
 #if ENABLE_WIFI
 #include <WiFi.h>
 #endif
@@ -167,6 +169,7 @@
 #if ENABLE_ESPNOW
 #include <esp_now.h>
 #endif
+#include <exception>
 #include <IPAddress.h>
 #if USE_M5
 #include <M5Unified.h>
@@ -205,6 +208,7 @@
 #include "ledstripeffect.h"
 #include "logger.h"
 #include "nd_network.h"
+#include "nd_panic.h"
 #include "ntptimeclient.h"
 #include "sensors.h"
 #include "socketserver.h"
@@ -288,9 +292,44 @@ void PrintOutputHeader()
     debugI("ESP32 Clock Freq : %lu MHz", (unsigned long)ESP.getCpuFreqMHz());
 }
 
+// PanicAt
+//
+// The implementation behind the Panic() macro.  Reports the fatal message along with the file, line
+// and function of the caller, records it in the RTC flight recorder (so a post-mortem can still read
+// it back after the reboot), and restarts the chip.
+
+[[noreturn]] void PanicAt(const std::source_location& location, const char* fmt, ...)
+{
+    debugE("-------------------------------------------------------------------------------------");
+    debugE("- NightDriverStrip Guru Meditation                                      Fatal Error -");
+    debugE("-------------------------------------------------------------------------------------");
+
+    char message[128];      // Sized to match DebugCLI::RTC_PanicRecord::Message
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(message, sizeof(message), fmt, args);
+    va_end(args);
+
+    // Record before printing anything else: the RTC copy is what survives the reboot, so it must not
+    // depend on the console being healthy enough for PrintOutputHeader() or debugE() to succeed.
+    DebugCLI::RecordPanicMessage(message);
+
+    PrintOutputHeader();
+
+    debugE("Panic at %s:%lu in %s", location.file_name(), (unsigned long) location.line(), location.function_name());
+    debugE("Fatal error: %s", message);
+
+    Serial.flush();
+    delay(100);
+    esp_restart();
+}
+
 // TerminateHandler
 //
-// Set as the handler for unhandled exceptions, prints some debug info and reboots the chip!
+// Set as the handler for unhandled exceptions, prints some debug info and reboots the chip!  The
+// firmware is now built with -fno-exceptions, so there is no such thing as an unhandled C++
+// exception any more, but std::terminate is still reachable (a violated noexcept, a bad
+// std::function target, ...), so the handler stays.
 
 void TerminateHandler()
 {
@@ -300,20 +339,8 @@ void TerminateHandler()
 
     PrintOutputHeader();
 
-    try
-    {
-        std::rethrow_exception(std::current_exception());
-    }
-    catch (const std::exception& ex)
-    {
-        debugE("Terminated due to exception: %s", ex.what());
-        DebugCLI::RecordPanicMessage(ex.what());
-    }
-    catch (...)
-    {
-        debugE("Terminated due to unknown exception type");
-        DebugCLI::RecordPanicMessage("Unknown Exception");
-    }
+    debugE("Terminated without a diagnostic message");
+    DebugCLI::RecordPanicMessage("Unknown Exception");
 
     Serial.flush();
     delay(100);
@@ -394,7 +421,7 @@ void setup()
         nd_network::SetWiFiModeSTA();
 
         if (esp_now_init() != ESP_OK)
-            throw std::runtime_error("Error initializing ESP-NOW");
+            Panic("Error initializing ESP-NOW");
         // Register receive callback function
         esp_now_register_recv_cb(onReceiveESPNOW);
         debugI("ESP-NOW initialized with MAC address: %s", nd_network::GetMacAddress(":").c_str());
@@ -681,15 +708,8 @@ void loop()
         #endif
 
         #if ENABLE_OTA
-            try
-            {
-                if (nd_network::IsWiFiConnected())
-                    ArduinoOTA.handle();
-            }
-            catch(const std::exception& e)
-            {
-                debugW("Exception in OTA code caught");
-            }
+            if (nd_network::IsWiFiConnected())
+                ArduinoOTA.handle();
         #endif
 
         EVERY_N_SECONDS(10)

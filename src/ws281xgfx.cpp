@@ -32,6 +32,7 @@
 
 #include "deviceconfig.h"
 #include "effectmanager.h"
+#include "nd_panic.h"
 #include "systemcontainer.h"
 #include "values.h"
 #include "ws281xgfx.h"
@@ -99,7 +100,7 @@ WS281xGFX::WS281xGFX(size_t w, size_t h) : GFXBase(w, h)
     debugV("Creating Device of size %zu x %zu", w, h);
     leds = static_cast<CRGB *>(calloc(w * h, sizeof(CRGB)));
     if(!leds)
-        throw std::runtime_error("Unable to allocate LEDs in WS281xGFX");
+        Panic("Unable to allocate LEDs in WS281xGFX");
 }
 
 WS281xGFX::~WS281xGFX()

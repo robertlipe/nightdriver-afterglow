@@ -35,6 +35,7 @@
 #include <cmath>
 #include <numeric>
 
+#include "nd_panic.h"
 #include "soundanalyzer.h"
 #include "values.h"
 
@@ -49,14 +50,14 @@
 // SoundAnalyzerBase
 //
 // Construct analyzer, allocate buffers (PSRAM-preferred), set initial state.
-// Throws std::runtime_error on allocation failure. Computes band layout once.
+// Panics on allocation failure. Computes band layout once.
 SoundAnalyzerBase::SoundAnalyzerBase()
     : _FFT(_vReal.data(), _vImaginary.data(), MAX_SAMPLES, SAMPLING_FREQUENCY, true)
 {
     ptrSampleBuffer.reset((int16_t *)heap_caps_malloc(MAX_SAMPLES * sizeof(int16_t), MALLOC_CAP_8BIT));
     if (!ptrSampleBuffer)
     {
-        throw std::runtime_error("Failed to allocate sample buffer");
+        Panic("Failed to allocate sample buffer");
     }
     _oldVU = _oldPeakVU = _oldMinVU = 0.0f;
     ComputeBandLayout();
@@ -301,7 +302,7 @@ void SoundAnalyzerBase::Pause()
                 if (millis() - start > 5000)
                 {
                     debugE("Audio: FAILED to pause ADC after 5 seconds! Flash writes will CRASH!");
-                    throw std::runtime_error("Failed to pause audio DMA!");
+                    Panic("Failed to pause audio DMA!");
                 }
                 delay(5);
             }
@@ -331,7 +332,7 @@ void SoundAnalyzerBase::Resume()
                     if (millis() - start > 5000)
                     {
                         debugE("Audio: FAILED to resume ADC after 5 seconds!");
-                        throw std::runtime_error("Failed to resume audio DMA!");
+                        Panic("Failed to resume audio DMA!");
                     }
                     delay(5);
                 }
@@ -586,7 +587,7 @@ size_t SoundAnalyzerBase::SampleADC()
 #if !USE_M5 && !USE_I2S_AUDIO
     constexpr size_t bytesToRead = MAX_SAMPLES * sizeof(uint16_t);
     // Use 100ms timeout instead of 0 to wait for a full buffer
-    if (!_adc_handle ) throw std::runtime_error("Failed to allocate adc handle");
+    if (!_adc_handle ) Panic("Failed to allocate adc handle");
     esp_err_t err = adc_continuous_read(_adc_handle, (uint8_t*)ptrSampleBuffer.get(), bytesToRead, &ret_num, 100);
 
     // Process only if we got a full buffer

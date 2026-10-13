@@ -41,6 +41,7 @@
 #include "gfxbase.h"
 #include "jsonserializer.h"
 #include "ledstripeffect.h"
+#include "nd_panic.h"
 #include "soundanalyzer.h" // for g_Analyzer.Pause()
 #include "systemcontainer.h"
 #include "websocketserver.h"
@@ -91,7 +92,7 @@ void InitEffectsManager()
     l_EffectsManagerJSONWriterIndex = g_ptrSystem->GetJSONWriter().RegisterWriter([]()
     {
         if (!SaveToJSONFile(EFFECTS_CONFIG_FILE, g_ptrSystem->GetEffectManager()) && EFFECT_PERSISTENCE_CRITICAL)
-            throw std::runtime_error("Effects serialization failed");
+            Panic("Effects serialization failed");
     });
     l_CurrentEffectWriterIndex = g_ptrSystem->GetJSONWriter().RegisterWriter(WriteCurrentEffectIndexFile);
 
@@ -118,7 +119,7 @@ void InitEffectsManager()
     }
 
     if (false == g_ptrSystem->GetEffectManager().Init())
-        throw std::runtime_error("Could not initialize effect manager");
+        Panic("Could not initialize effect manager");
 
     // We won't need the default factories anymore, so swipe them from memory
     g_ptrEffectFactories->ClearDefaultFactories();
@@ -560,7 +561,7 @@ std::shared_ptr<LEDStripEffect> GetSpectrumAnalyzer(CRGB color)
     auto object = std::make_shared<SpectrumAnalyzerEffect>("Spectrum Clr", 24, CRGBPalette16(color, color2), true);
     if (object->Init(g_ptrSystem->GetDevices()))
         return object;
-    throw std::runtime_error("Could not initialize new spectrum analyzer, one color version!");
+    Panic("Could not initialize new spectrum analyzer, one color version!");
 }
 
 #endif
