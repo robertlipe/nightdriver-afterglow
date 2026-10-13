@@ -1507,10 +1507,10 @@ void GFXBase::DrawCaptionOverlay()
     const size_t kCharWidth = 6;
     const size_t kCharHeight = 8;
     // Adafruit_GFX default font has 1 pixel of trailing horizontal space and 1 pixel of trailing vertical space.
-    // Subtracting the trailing space corrects the visual centering to match the old SmartMatrix font.
+    // Subtracting the trailing space corrects the visual centering to match the old Adafruit font.
     int w = strCaption.length() * kCharWidth - 1;
 
-    // Shift down by 1 pixel so the baseline matches the old SmartMatrix visual placement.
+    // Shift down by 1 pixel so the baseline matches the old Adafruit visual placement.
     int y = (int)_height - 1 - (int)kCharHeight;
     unsigned long elapsed = millis() - captionStartTime;
 

@@ -77,7 +77,7 @@ NightDriverStrip is a comprehensive C++ firmware framework for the ESP32 microco
 *   **Frontend:** React, Vite, Material UI (in `site/`).
 *   **Hardware Support:** ESP32, ESP32-S3, ESP32-C3.
 *   **Graphics Engine:** Custom `GFXBase` extending `Adafruit_GFX`.
-*   **Libraries:** FastLED, SmartMatrix, ArduinoJson, ESPAsyncWebServer.
+*   **Libraries:** FastLED, ArduinoJson, ESPAsyncWebServer, esp-hub75, ESP32_HUB75_LED_MATRIX_PANEL_DMA_Display
 
 ## Directory Structure
 *   `src/`: C++ source files.
