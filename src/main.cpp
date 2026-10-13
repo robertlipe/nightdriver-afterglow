@@ -169,6 +169,7 @@
 #if ENABLE_ESPNOW
 #include <esp_now.h>
 #endif
+#include <exception>
 #include <IPAddress.h>
 #if USE_M5
 #include <M5Unified.h>
