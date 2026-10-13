@@ -3,6 +3,7 @@
 import os
 import sys
 import re
+import json
 import shutil
 import subprocess
 import time
@@ -154,6 +155,90 @@ if not os.path.exists(TARGET_DIR):
 
 import time
 
+# `python tools/setup_shared_libs_cli.py --force` re-downloads everything, which
+# is handy after switching platforms or when a tree is suspect.
+FORCE_REINSTALL = "--force" in sys.argv[1:]
+
+
+def read_resolved_version(lib_path):
+    """Return the version PlatformIO actually installed, if discoverable.
+
+    PlatformIO writes a ``.piopm`` manifest next to every installed package; it
+    is the authoritative record of what is really on disk, unlike our own
+    ``.nd_version`` marker which only remembers what we asked for.
+    """
+    try:
+        with open(os.path.join(lib_path, ".piopm"), "r", encoding="utf-8") as f:
+            version = json.load(f).get("version")
+        if version:
+            return str(version)
+    except (OSError, ValueError, AttributeError):
+        pass
+
+    try:
+        with open(os.path.join(lib_path, "library.json"), "r", encoding="utf-8") as f:
+            version = json.load(f).get("version")
+        if version:
+            return str(version)
+    except (OSError, ValueError, AttributeError):
+        pass
+
+    try:
+        with open(os.path.join(lib_path, "library.properties"), "r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                match = re.match(r"^\s*version\s*[=:]\s*(.+?)\s*$", line)
+                if match:
+                    return match.group(1)
+    except OSError:
+        pass
+
+    return None
+
+
+def read_version_marker(version_file):
+    """Decode the ``.nd_version`` marker into a dict.
+
+    Current markers are JSON (``{"spec": ..., "resolved": ...}``); older
+    checkouts wrote the bare spec string. Both are understood.
+    """
+    try:
+        with open(version_file, "r", encoding="utf-8") as f:
+            raw = f.read().strip()
+    except OSError:
+        return {}
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return data
+    except ValueError:
+        pass
+    return {"spec": raw}
+
+
+def write_version_marker(version_file, spec, resolved):
+    """Record both the requested spec and the version we ended up with."""
+    try:
+        with open(version_file, "w", encoding="utf-8") as f:
+            json.dump({"spec": spec, "resolved": resolved}, f, indent=2)
+            f.write("\n")
+    except OSError:
+        pass
+
+
+def exact_pin(spec):
+    """Return the version if ``spec`` is an exact pin, else None.
+
+    Accepts ``3.10.3``, ``=3.10.3`` and ``==3.10.3``. Range specs such as
+    ``^3.10.1`` or ``>=1.2.3`` return None because their resolved version is
+    expected to move as upstream releases.
+    """
+    requirement = spec.rsplit("@", 1)[-1].strip()
+    match = re.fullmatch(r"=*\s*(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.\-]+)?)", requirement)
+    return match.group(1) if match else None
+
+
 # Simple lock mechanism to prevent race conditions when invoked concurrently by PIO
 def acquire_lock(lock_path, timeout=300):
     start = time.time()
@@ -187,15 +272,26 @@ try:
         expected_path = os.path.join(TARGET_DIR, expected_name)
         version_file = os.path.join(lib_path, ".nd_version")
 
+        # Decide whether the copy already on disk is the one we want. We no
+        # longer trust the marker alone: a stale tree (e.g. one frozen by an old
+        # "^3.10.1" marker) or a half-unpacked install used to be reused
+        # forever, which is how local and CI builds silently diverged.
+        resolved = read_resolved_version(lib_path) if os.path.exists(lib_path) else None
+        marker = read_version_marker(version_file) if os.path.exists(version_file) else {}
+        required = exact_pin(lib)
+
         needs_install = True
-        if os.path.exists(lib_path) and os.path.exists(version_file):
-            try:
-                with open(version_file, "r") as f:
-                    installed_version = f.read().strip()
-                if installed_version == lib:
-                    needs_install = False
-            except Exception:
-                pass
+        if FORCE_REINSTALL:
+            print(f"[Shared-Libs] {lib}: forced reinstall requested.", file=sys.stderr)
+        elif os.path.exists(lib_path) and marker.get("spec") == lib:
+            if resolved is None:
+                print(f"[Shared-Libs] {lib}: no package manifest found; reinstalling.", file=sys.stderr)
+            elif required and resolved != required:
+                print(f"[Shared-Libs] {lib}: on-disk {resolved} != pinned {required}; reinstalling.", file=sys.stderr)
+            elif marker.get("resolved") and marker["resolved"] != resolved:
+                print(f"[Shared-Libs] {lib}: on-disk {resolved} != recorded {marker['resolved']}; reinstalling.", file=sys.stderr)
+            else:
+                needs_install = False
 
         if needs_install:
             if os.path.exists(lib_path):
@@ -220,10 +316,10 @@ try:
                     safe_rmtree(lib_path)
                     os.rename(expected_path, lib_path)
 
-                # Write version file
+                # Record both what we asked for and what we actually got, so a
+                # later run can tell whether the tree on disk still matches.
                 os.makedirs(lib_path, exist_ok=True)
-                with open(version_file, "w") as f:
-                    f.write(lib)
+                write_version_marker(version_file, lib, read_resolved_version(lib_path))
             except Exception as e:
                 print(f"[Shared-Libs] Error: failed to install dependency {lib}: {e}", file=sys.stderr)
                 safe_rmtree(lib_path)
