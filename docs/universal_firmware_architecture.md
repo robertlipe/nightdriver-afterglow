@@ -41,7 +41,7 @@ The aspiration is to compile one universal binary per architecture family:
 2. `nightdriver_esp32s3_universal.bin` (LX7)
 3. `nightdriver_esp32c3_universal.bin` (and other RISC-V parts as needed: C6, P4, ...)
 
-**Honest caveat:** "one binary per architecture family" is probably too aggressive. A single-core RISC-V C6 like `kitch` driving one WS2812 strip has almost nothing in common with an ESP32-S3 pushing a HUB75 panel through a large pile of matrix effects. The realistic end state is likely a *handful* of binaries grouped by capability tier — "strip + audio", "matrix/HUB75", "screen + buttons" — with the ISA as one axis among several rather than the definition of the family.
+**Honest caveat:** "one binary per architecture family" is too aggressive, but it's convenient framing for this consideration. A single-core RISC-V C6 like `kitch` driving one WS2812 strip has almost nothing in common with an ESP32-S3 pushing a HUB75 panel through a large pile of matrix effects. The realistic end state is likely a *handful* of binaries grouped by capability tier — "strip + audio", "matrix/HUB75", "screen + buttons" — with the ISA as one axis among several rather than the definition of the family. So it's not "3", but it's closer to three than to 49.
 
 These binaries contain the code for *all* features (Screens, HUB75, WS2812, Audio). When the ESP32 boots, it reads a tiny configuration file (e.g., `board_config.json`) from a specific LittleFS or NVS partition to decide *who it is* and *which features to activate*.
 
@@ -53,17 +53,25 @@ Instead of macros, we define a universal C++ struct that dictates the hardware t
 ```cpp
 struct HardwareConfig {
     bool has_screen;
-    int screen_type;      // e.g., OLED_SSD1306, TFT_ST7789
+    std::optional<ScreenType> screen_type;   // e.g., OLED_SSD1306, TFT_ST7789
     int led_pin;
-    int led_count;
+    int led_count;             // These might be repeating, like an array for multi-strip
     bool has_audio_in;
+    std::optional<int> i2s_audio_pin;
+    std::optional<int> i2s_bclk_pin;
+    std::optional<int> i2s_ws_pin;
     int btn0_pin;
     int btn1_pin;
+    // RGB configurations for HUB75
+    // temperature sensor types, configs // Consult src/sensors.cpp and src/espmpdmagfx.cpp, which are currently growing gardens of configuration weeds, working hard to NOT pollute platformio.ini and/or globals.h as awareness of the issues discussed here.
+    // orientation sensors, pinouts
     // ...
 };
 
 extern HardwareConfig g_hwConfig;
 ```
+
+Aside: those familiar with the Google Way may find these spellings influenced by protobufs throughout. They certainly are. Whether they're a proto, a JSON, or a C struct is intentionally kept loose at this point.
 
 > `led_pin` is the one field that does not work as written. See *Known Obstacles #2*.
 
@@ -80,11 +88,11 @@ Before initializing FastLED or the Screen, the firmware mounts a small LittleFS 
   "btn1_pin": -1
 }
 ```
-*Note: This doesn't even have to be a partition! It can just be a standard file in the existing data directory.*
+*Note: This doesn't even have to be a partition! It can just be a standard file in the existing data directory. Note also that this sketch mixes conventions — the struct expresses "absent" with `std::optional` while the JSON uses `-1`. Pick one before implementing.*
 
 #### 3. Dynamic Initialization (if vs #ifdef)
 Instead of `#ifdef USE_SCREEN`, the code evaluates the configuration at runtime.
-Because C++ classes like `ScreenImpl` can be allocated dynamically, we only instantiate what the hardware actually possesses:
+Because C++ classes like `ScreenImpl` can be — and often are — allocated dynamically, we only instantiate what the hardware actually possesses:
 
 ```cpp
 // Old Way:
@@ -109,13 +117,17 @@ Two constraints measured since this memo was first written. Neither kills the id
 
 The first draft assumed that pulling every optional library into one image would cost "slightly more Flash space ... entirely negligible" on 4MB/8MB boards. Measurement says otherwise.
 
-Retiring C++ exceptions alone freed **153 KB** on `kitch` — a 4 MB, OTA-updating C6 — which is roughly 9% of its app slot. That board had *zero* real headroom at the time: PlatformIO's size report read "95.4%" while the actual app image was **102.9%** of the partition. The report omits `.eh_frame`, which is allocated and genuinely is flashed. The image had been silently spilling into the empty second OTA slot, which means no OTA update could ever have fitted it.
+Retiring C++ exceptions alone freed **153 KB** on `kitch` — a 4 MB, OTA-updating C6 — which is roughly 9% of its app slot. That board had *zero* real headroom at the time: PlatformIO's size report read "95.4%" while the actual app image was **102.9%** of the partition. The report omits `.eh_frame`, which is allocated and genuinely is flashed. The image had been silently spilling into the empty second OTA slot, which means no OTA update could ever have fitted it. It's our current known worst case.
 
 A universal binary compiles *every* feature set into *every* image, and any target that keeps OTA pays for two app slots. The flash budget has to lead this design, not follow it. Note that `tools/merge_image.py` now fails the build when an app image does not fit its partition — that guard exists because of exactly this class of surprise, and any experiment in this direction has to live within it.
 
+This reality is where our "more than three" comes into play. A C6 strip design already bursting at the seams has no room to bring seventy matrix effects along for the ride. But devices with 8MB or 16MB (or more!) of flash are common in our world, so an 8MB board feeding multiple 16x16 WS2812 grids certainly will need those effects. Realistically that means an 8MB device, or one that gives up OTA.
+
 ### 2. FastLED pins are compile-time
 
-`FastLED.addLeds<CHIPSET, PIN, ORDER>(...)` takes the chipset, the data pin, *and* the color order as **template** arguments, so a runtime `g_hwConfig.led_pin` cannot drive it. This is the blocker that stalled the first attempt.
+`FastLED.addLeds<CHIPSET, PIN, ORDER>(...)` takes the chipset, the data pin, *and* the color order as **template** arguments, so a runtime `g_hwConfig.led_pin` cannot drive it. This is the blocker that stalled the first attempt. It's also one of our motivations for replacing FastLED's *driver*, probably with something runtime-pinnable like the ESP-IDF [`led_strip`](https://github.com/espressif/idf-extra-components/tree/master/led_strip) component.
+
+Scope matters here, and it is better news than it sounds: the driver is invoked from exactly two places (`src/ws281xgfx.cpp`, plus one onboard-pixel case in `src/drawing.cpp`), while FastLED's *types and helpers* — `CRGB`, `CHSV`, `blur1d`, `lib8tion` — reach well over a hundred files. Replacing the driver is tractable; replacing the library would be neither cheap nor useful.
 
 In practice, the residual compile-time axis is the *LED output signature*: chipset, pin, and color order. Everything else — led count, brightness, audio configuration, screen type, buttons, effect sets — can be runtime. The options, none of them free:
 
@@ -125,13 +137,13 @@ In practice, the residual compile-time axis is the *LED output signature*: chips
 
 ---
 
-## Action Plan for Refactoring (Future You)
+## Action Plan for Refactoring (Future Work)
 
 Migrating to a Universal Architecture is a multi-step process. Do not attempt it all at once.
 
 ### Phase 0: The Cheap 80% (do this first, regardless)
 
-Most of the build-time pain does not require universal firmware at all. The matrix is padded with environments for hardware that is no longer in service, and each one costs a full compile in CI and on every bare `pio run`. Deleting dead environments is a small, reversible, unglamorous change that recovers much of the ~45 minutes and shrinks the surface any later work has to cover. Do it before, and independently of, everything below.
+Most of the build-time pain does not require universal firmware at all. The matrix is padded with environments for hardware that is no longer in service, and each one costs a full compile in CI and on every bare `pio run`. Deleting dead environments is a small, reversible, unglamorous change that recovers much of the ~45 minutes and shrinks the surface any later work has to cover. Do it before, and independently of, everything below. Even just moving them out of the default build and into separate `custom_foo.ini` files that can be activated when wanted would be a build-time win. (Caveat: `extra_configs` currently globs `custom_*.ini` in, and `default_envs` is empty — which means "build everything" — so envs parked there are still built by a bare `pio run`. The lever that actually delivers is an explicit `default_envs` list; parked envs stay buildable on demand with `-e`.)
 
 ### Phase 1: The Config Struct
 1. Create `include/hw_config.h`.
@@ -143,11 +155,18 @@ Most of the build-time pain does not require universal firmware at all. The matr
 2. Replace `#ifdef USE_SCREEN` with `if (g_hwConfig.has_screen)`.
 3. *Note: heavy library dependencies (U8g2, HUB75, audio) now compile into every image. An earlier draft of this memo called that "entirely negligible"; see Known Obstacles #1. Audit the flash budget per target before committing to this phase.*
 
+Note: since this was drafted, large inroads have been made into moving board configuration OUT of `globals.h` and into per-environment build flags in `platformio.ini`.
+
 ### Phase 3: The JSON Parser
 1. Integrate ArduinoJson to parse `/board_config.json` from LittleFS during `setup()`.
 2. Map the JSON values into `g_hwConfig`.
 
-### Phase 4: The Build System Massacre
+### Phase 4: Adding Infrastructure
+1. We probably need rich data types, like a `std::variant`.
+2. These probably have observers that are called on change. Most of the things that allow the above steps also would allow for runtime configuration changes via REST calls from a Web interface. Changing a pin count from a web interface is a reasonable expectation in modern times.
+3. These have somewhat awkward constraints because persisting these might schedule a file write and touching flash from protected context in ESP32 is a hazardous process.
+
+### Phase 5: The Build System Massacre
 1. Delete the environments that are provably dead (see Phase 0), then reduce what remains to a handful of runtime-configured targets.
 2. Create the universal environments — one per capability tier actually chosen, not blindly one per ISA.
 3. Create a python deployment script (e.g., `tools/deploy_board.py helteclorav3demo`).
