@@ -54,5 +54,33 @@
         "letter": "T",
         "value": "1",
         "show": false
+    },
+    "mpdma": {
+        "label": "MPDMA HUB75 driver",
+        "define": "USE_MPDMA_HUB75",
+        "letter": "P",
+        "value": "1",
+        "show": false
+    },
+    "esphub75": {
+        "label": "esp-hub75 driver",
+        "define": "USE_ESP_HUB75",
+        "letter": "E",
+        "value": "1",
+        "show": false
+    },
+    "matrix": {
+        "label": "HUB75 matrix",
+        "define": "USE_MATRIX",
+        "letter": "M",
+        "value": "1",
+        "show": false
+    },
+    "screen": {
+        "label": "LCD/OLED screen",
+        "define": "USE_SCREEN",
+        "letter": "D",
+        "value": "1",
+        "show": false
     }
 }
