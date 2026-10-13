@@ -29,9 +29,9 @@
 #include "globals.h"
 
 #if USE_ESP_HUB75
-#include <stdexcept>
 
 #include "esphub75gfx.h"
+#include "nd_panic.h"
 #include "systemcontainer.h"
 
 std::unique_ptr<Hub75Driver> ESPHUB75GFX::driver;
@@ -106,12 +106,12 @@ void ESPHUB75GFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devi
 #endif
 
     driver = std::make_unique<Hub75Driver>(config);
-    if (!driver) throw std::runtime_error("Failed to allocate ESPHome matrix driver!");
+    if (!driver) Panic("Failed to allocate ESPHome matrix driver!");
     driver->begin();
 
     // Allocate frame drawing buffer in PSRAM
     drawBuffer = std::make_unique<CRGB[]>(MATRIX_WIDTH * MATRIX_HEIGHT);
-    if (!drawBuffer) throw std::runtime_error("Failed to allocate drawBuffer!");
+    if (!drawBuffer) Panic("Failed to allocate drawBuffer!");
 
     for (int i = 0; i < NUM_CHANNELS; i++)
     {

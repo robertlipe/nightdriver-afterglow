@@ -610,7 +610,7 @@ class SoundAnalyzer : public SoundAnalyzerBase
     static constexpr const AudioInputParams& _params = Params;
 
     // Construct analyzer, allocate buffers (PSRAM-preferred), set initial state.
-    // Throws std::runtime_error on allocation failure. Computes band layout once.
+    // Panics on allocation failure. Computes band layout once.
     SoundAnalyzer() : SoundAnalyzerBase()
     {
     }

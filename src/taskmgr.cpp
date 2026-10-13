@@ -15,6 +15,7 @@
 #include "globals.h"
 #include "ledstripeffect.h"
 #include "nd_network.h"
+#include "nd_panic.h"
 #include "taskmgr.h"
 #include "values.h"
 
@@ -139,7 +140,7 @@ void TaskManager::CheckHeap()
 {
     if (false == heap_caps_check_integrity_all(true))
     {
-        throw std::runtime_error("Heap FAILED checks!");
+        Panic("Heap FAILED checks!");
     }
 }
 

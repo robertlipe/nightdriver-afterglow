@@ -33,6 +33,7 @@
 #if ENABLE_WEBSERVER
 
 #include "nd_network.h"
+#include "nd_panic.h"
 #include "webserver.h"
 
 #include <ArduinoJson.h>
@@ -1256,7 +1257,7 @@ void CWebServer::Reset(AsyncWebServerRequest * pRequest)
     if (boardResetRequested)
     {
         debugW("Resetting device at API request!");
-        throw std::runtime_error("Resetting device at API request");
+        Panic("Resetting device at API request");
     }
 }
 

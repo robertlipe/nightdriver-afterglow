@@ -1,0 +1,16 @@
+# ast-grep configuration.
+#
+# ast-grep's built-in C++ language definition does not claim the ".h" extension,
+# and it skips files whose extension is not registered for the requested language
+# without saying a word.  That silently hides everything interesting in this
+# project's headers - including, for example, the fatal-error sites in
+# include/taskmgr.h and include/effects/matrix/PatternAnimatedGIF.h.  Claiming
+# ".h" for cpp makes `ast-grep run -l cpp` see headers too.
+#
+# Verified with ast-grep 0.50.0.  Usage:
+#     ast-grep run -p 'throw $X' -l cpp .
+#     ast-grep run -p 'try { $$$B } catch ($E) { $$$C }' -l cpp .
+
+languageGlobs:
+  cpp:
+    - "**/*.h"

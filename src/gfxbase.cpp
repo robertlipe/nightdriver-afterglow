@@ -36,12 +36,12 @@
 #include <memory>
 #include <numbers>
 #include <numeric>
-#include <stdexcept>
 #include <unordered_map>
 
 #include "effectmanager.h"
 #include "effects/matrix/Boid.h"
 #include "gfxbase.h"
+#include "nd_panic.h"
 #include "systemcontainer.h"
 
 #if ENABLE_AUDIO
@@ -143,7 +143,7 @@ CRGB GFXBase::getPixel(int16_t x, int16_t y) const
     if (isValidPixel(x, y))
         return leds[XY(x, y)];
     else
-        throw std::runtime_error(str_sprintf("Invalid index in getPixel: x=%d, y=%d, NUM_LEDS=%d", x, y, NUM_LEDS).c_str());
+        Panic("Invalid index in getPixel: x=%d, y=%d, NUM_LEDS=%d", x, y, NUM_LEDS);
 }
 
 // getPixel
@@ -155,7 +155,7 @@ CRGB GFXBase::getPixel(int16_t i) const
     if (isValidPixel(i))
         return leds[i];
     else
-        throw std::runtime_error(str_sprintf("Invalid index in getPixel: i=%d, NUM_LEDS=%d", i, NUM_LEDS).c_str());
+        Panic("Invalid index in getPixel: i=%d, NUM_LEDS=%d", i, NUM_LEDS);
 }
 
 void GFXBase::drawPixel(int16_t x, int16_t y, uint16_t color)

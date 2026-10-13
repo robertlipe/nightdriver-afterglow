@@ -34,10 +34,10 @@
 #include <algorithm>
 #include <cstdlib>
 #include <iterator>
-#include <stdexcept>
 
 #include "gfxbase.h"
 #include "jsonserializer.h"
+#include "nd_panic.h"
 #include "random_utils.h"
 
 #if HEXAGON
@@ -215,7 +215,7 @@ void LEDStripEffect::fillSolidOnAllChannels(CRGB color, int iStart, int numToFil
     if (_GFX.size() == 0)
     {
         debugE("fillSolidOnAllChannels called with no GFX devices");
-        throw std::runtime_error("Graphics not set up properly, no GFX devices");
+        Panic("Graphics not set up properly, no GFX devices");
     }
 
     if (numToFill == 0)

@@ -32,6 +32,7 @@
 #include "globals.h"
 #include "effectfactories.h"
 #include "ledstripeffect.h"
+#include "nd_panic.h"
 
 // -----------------------------------------------------------------------------
 // Class: EffectFactories
@@ -112,7 +113,7 @@ std::vector<FactoryId> EffectFactories::FactoryIDs() const
 const String& EffectFactories::HashString() const
 {
     if (hashString.isEmpty())
-        throw std::runtime_error("Attempt to retrieve unset hash string");
+        Panic("Attempt to retrieve unset hash string");
     return hashString;
 }
 
