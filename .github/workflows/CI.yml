@@ -133,8 +133,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows compatibility subset gates
-        envname: ['demo', 'yulc-hex', 'mesmerizer']
+        # Windows compatibility subset gates. kitch is ESP32-C6 (RISC-V) so the
+        # matrix covers LX6, LX7 and RISC-V.
+        envname: ['demo', 'yulc-hex', 'mesmerizer', 'kitch']
 
     steps:
     - uses: actions/checkout@v4
