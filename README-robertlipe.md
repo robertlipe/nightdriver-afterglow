@@ -4,7 +4,7 @@ This file documents the custom reliability, diagnostic, and performance improvem
 
 (This file is extensively AI generated. #sorrynotsorry.)
 
-*Last Updated: September 13, 2026*
+*Last Updated: October 18, 2026*
 
 ---
 
@@ -173,31 +173,47 @@ This file documents the custom reliability, diagnostic, and performance improvem
 
 ## 🏗️ Codebase Modernization & Performance
 
-### 1. Embracing C++20/C++26 Features
+### 1. C++ Exception Retirement & `Panic(...)` System
+- **Feature**: Completely retired C++ exceptions across the entire codebase (`-fno-exceptions`), replacing all `throw` sites with a lightweight, zero-overhead `Panic(...)` macro system.
+- **Diagnostics & Flight Recorder**: `Panic(...)` utilizes `std::source_location` to automatically record the exact call site (file, line, and function name) into the RTC flight recorder for post-mortem analysis prior to rebooting.
+- **Flash Savings**: Exception unwinding tables (`.eh_frame`) were quietly costing up to ~150KB of flash storage per app binary. Removing them shrank firmware images dramatically (e.g. `kitch` firmware.bin dropped from 1.82MB to 1.66MB), bringing constrained targets back under their 1.7MB partition boundaries.
+
+### 2. Strict Partition Boundary Enforcement (`tools/merge_image.py`)
+- **Issue**: PlatformIO's default `Flash:` percentage calculation excludes `.eh_frame` bytes that are actually written into flash binaries. Consequently, builds were reporting ~95% usage while quietly exceeding partition boundaries and making OTA updates impossible.
+- **Fix**: Upgraded `tools/merge_image.py` into a build-time tripwire. It parses `partitions.bin` and compares `firmware.bin` byte size directly against target app partition capacities, failing the build immediately if the binary would overflow.
+
+### 3. Targeted Debug Symbol Splitting (`tools/src_debug_flags.py`)
+- **Optimization**: Third-party libraries and framework code were inheriting `-gdwarf-4 -ggdb` from ESP-IDF, bloating build artifacts. Introduced `tools/src_debug_flags.py` to strip framework debug level overrides down to line tables (`-g1`) while preserving full `-g` debug symbols for application source code under `src/`.
+- **Impact**: Reduced total library object file sizes by over 40% and shrank firmware ELF files by ~34% (e.g. `demo` ELF reduced from 31.4MB to 20.8MB).
+
+### 4. Shared Dependency Link Pointers (`.pio-link`)
+- **Optimization**: Switched PlatformIO shared library management from deep directory copying (`copytree`) to JSON pointer files (`.pio-link`). This eliminated gigabytes of duplicate library downloads across multi-environment builds and sped up local development workflows.
+
+### 5. Embracing C++20/C++26 Features
 - **Range-Based Loops & Idiomatic C++ (`modernize-loop-convert`)**: Transitioned legacy `for` loops (using raw indexes) to C++ range-based `for` loops. This eliminates off-by-one fencepost errors and allows the compiler's optimizer to fully understand the bounds. On hardware with SIMD capabilities, this translates to automatic loop unrolling and parallelization.
 - **Modern Data Structures (`std::array` & `<algorithm>`)**: Replaced raw C-style arrays with `std::array` and replaced manual loops with classic C++ algorithms (like `std::copy`, `std::fill`). This makes the codebase much safer, more idiomatic, and highly optimized for ESP32 flash and memory constraints.
 
-### 2. The Great `psram_allocator` Purge
+### 6. The Great `psram_allocator` Purge
 - **Simplification**: Removed the heavy, template-complex `psram_allocator`. Ripping this out eliminated hundreds of lines of confusing boilerplate, resulting in cleaner, more idiomatic C++ code without sacrificing performance.
 
-### 3. Rendering Enhancements & Security Fixes
+### 7. Rendering Enhancements & Security Fixes
 - **Animation Framework**: Migrated from the legacy `GIFDecoder` to the more robust `AnimatedGIF` library, fixing frame blocking issues and improving decode stability.
 - **Security & Code Health**: Squashed command injection vulnerabilities in Python build scripts (`bake_site.py`) and eliminated unsafe `sprintf` usages (like in `PatternPongClock`) to ensure rock-solid stability and secure builds.
 
-### 4. Arduino2/ESP-IDF4 Turndown Completed
+### 8. Arduino2/ESP-IDF4 Turndown Completed
 - **ESP-IDF Modernization**: Migrated from unsupported Arduino2 and ESP-IDF4 completely to Arduino3 and ESP-IDF5. This gives more modern language support, regular updates from Espressif, provides for newer chips like ESP32-C5, ESP32-C6, ESP32-P4 and lays the groundwork to move to Arduino4 and ESP-IDF6 for upcoming chips like ESP32-P4X and ESP32-S3.
 
-### 5. Async Non-Blocking HTTP Fetching
+### 9. Async Non-Blocking HTTP Fetching
 - **Optimization**: Refactored PatternStocks and PatternWeather to non-blocking async HTTP fetching.
 - **Memory Efficiency**: Reused JsonDocument in PatternStocks to prevent heap fragmentation.
 
-### 6. CWebServer Route Refactoring
+### 10. CWebServer Route Refactoring
 - **Architecture**: Refactored `CWebServer::SetupStationMode()` by extracting groups of related HTTP route registrations into new private methods (`RegisterSystemEndpoints()`, `RegisterApiEndpoints()`, and `RegisterWebUiEndpoints()`). Included the use of an array of configuration structures for cleaner looping configuration of the API routes.
 
-### 7. O(N) CLI Tab Completion
+### 11. O(N) CLI Tab Completion
 - **Optimization**: TabComplete: walk command table exactly once, calling StringStartsWithInsensitive only on the first pass, and compute the longest common prefix dynamically as it goes. No more O(N^2) comparisons!
 
-### 8. Windows CI Pipeline Parallelism
+### 12. Windows CI Pipeline Parallelism
 - **Feature**: Added Windows build job, fixed cross-platform Python scripts, and enabled parallel execution.
 
 ## ⚡ Hardware Upgrades
