@@ -12,7 +12,9 @@
 #if AMOLED_S3
 
 #include <driver/gpio.h>
+#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3,0,0)
 #include <esp_adc_cal.h>
+#endif
 #include "amoled/LilyGo_AMOLED.h"
 
 #define SEND_BUF_SIZE           (16384)
@@ -127,11 +129,17 @@ uint16_t LilyGo_AMOLED::getBattVoltage(void)
                 }
             }
         } else if (boards->adcPins != -1) {
+            // esp_adc_cal was removed in IDF 6 (Arduino 4); analogReadMilliVolts() is
+            // the calibrated successor. Same pattern as the upstream LilyGo library.
+            uint32_t v1 = 0;
+#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3,0,0)
             esp_adc_cal_characteristics_t adc_chars;
             esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_12, ADC_WIDTH_BIT_12, 1100, &adc_chars);
-            uint32_t v1 = 0,  raw = 0;
-            raw = analogRead(boards->adcPins);
+            uint32_t raw = analogRead(boards->adcPins);
             v1 = esp_adc_cal_raw_to_voltage(raw, &adc_chars) * 2;
+#else
+            v1 = analogReadMilliVolts(boards->adcPins) * 2;
+#endif
             return v1;
         }
     }
