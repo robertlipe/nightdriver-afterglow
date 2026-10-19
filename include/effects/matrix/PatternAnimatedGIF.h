@@ -48,6 +48,7 @@
 #include <AnimatedGIF.h>
 #include "hub75gfx.h"
 #include "ledstripeffect.h"
+#include "nd_panic.h"
 #include "systemcontainer.h"
 #include "types.h"
 
@@ -303,7 +304,7 @@ public:
 
         auto gif = GetAnimatedGIFs().find(_gifIndex);
         if (gif == GetAnimatedGIFs().end())
-            throw std::runtime_error(str_sprintf("Unable to locate GIF by index %d in the map.", (int) _gifIndex).c_str());
+            Panic("Unable to locate GIF by index %d in the map.", (int) _gifIndex);
 
         // Set up the gifDecoderState with all of the context that it will need to decode and
         // draw the GIF, since the static callbacks will have no other context to work with.

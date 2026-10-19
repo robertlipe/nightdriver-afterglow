@@ -67,8 +67,9 @@ def get_features(environment_name):
     pio_env = os.environ.copy()
     pio_env['PLATFORMIO_BUILD_FLAGS'] = '-dM -E'
 
+    pio_cmd = shutil.which('pio') or 'pio'
     try:
-        subprocess.run(['pio', 'run', '-e', environment_name, '-t', '.pio/build/' + environment_name + '/src/' + cpp_file + '.o'],
+        subprocess.run([pio_cmd, 'run', '-e', environment_name, '-t', os.path.join('.pio', 'build', environment_name, 'src', cpp_file + '.o')],
                        check=True,
                        env=pio_env,
                        capture_output=True)

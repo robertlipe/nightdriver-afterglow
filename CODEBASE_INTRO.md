@@ -44,13 +44,13 @@ The text in this document regularly mentions "LED display" as the visualization 
 ### `HUB75GFX`
 
 - Located in: [hub75gfx.h](./include/hub75gfx.h) and [hub75gfx.cpp](./src/hub75gfx.cpp)
-- Role: Extends `GFXBase` for HUB75 matrix-style LED arrangements, driven through the one of the HUB75 layers, either
+- Role: Extends `GFXBase` for HUB75 matrix-style LED arrangements, driven through one of the HUB75 layers, either
 [ESP32-HUB75-MatrixPanel-DMA](https://github.com/mrcodetastic/ESP32-HUB75-MatrixPanel-DMA)
 or
 [esp-hub75](https://github.com/esphome-libs/esp-hub75)
 libraries.
 - Key functionalities: Matrix-specific drawing, dimension management.
-- Explanation: This class extends the functionalities of [`GFXBase`](#the-core-gfxbase) to cater to matrix-style LED arrangements, as supported by by the HUB75 layer. It provides methods to draw on a matrix, manage its dimensions, and handle matrix-specific effects.
+- Explanation: This class extends the functionalities of [`GFXBase`](#the-core-gfxbase) to cater to matrix-style LED arrangements, as supported by the HUB75 layer. It provides methods to draw on a matrix, manage its dimensions, and handle matrix-specific effects.
 
 ### `EffectManager`
 

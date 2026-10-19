@@ -33,6 +33,7 @@
 #if ENABLE_WEBSERVER
 
 #include "nd_network.h"
+#include "nd_panic.h"
 #include "webserver.h"
 
 #include <ArduinoJson.h>
@@ -52,6 +53,30 @@
 #include "values.h"
 
 // Static member initializers
+
+namespace
+{
+    String EscapeHtml(const String& input)
+    {
+        String escaped;
+        const size_t len = input.length();
+        escaped.reserve(len);
+        for (size_t i = 0; i < len; ++i)
+        {
+            char c = input[i];
+            switch (c)
+            {
+                case '&':  escaped += "&amp;";  break;
+                case '<':  escaped += "&lt;";   break;
+                case '>':  escaped += "&gt;";   break;
+                case '"':  escaped += "&quot;"; break;
+                case '\'': escaped += "&#39;";  break;
+                default:   escaped += c;        break;
+            }
+        }
+        return escaped;
+    }
+}
 
 #if ENABLE_WIFI
 const char captivePortalHtml[] PROGMEM = R"rawliteral(
@@ -277,7 +302,7 @@ std::vector<std::reference_wrapper<SettingSpec>> CWebServer::deviceSettingSpecs{
 template<>
 bool CWebServer::PushPostParamIfPresent<bool>(const AsyncWebServerRequest * pRequest, const String &paramName, ValueSetter<bool> setter)
 {
-    return PushPostParamIfPresent<bool>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param) constexpr
+    return PushPostParamIfPresent<bool>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param)
     {
         return BoolFromText(param->value());
     });
@@ -287,7 +312,7 @@ bool CWebServer::PushPostParamIfPresent<bool>(const AsyncWebServerRequest * pReq
 template<>
 bool CWebServer::PushPostParamIfPresent<size_t>(const AsyncWebServerRequest * pRequest, const String &paramName, ValueSetter<size_t> setter)
 {
-    return PushPostParamIfPresent<size_t>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param) constexpr
+    return PushPostParamIfPresent<size_t>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param)
     {
         return strtoul(param->value().c_str(), nullptr, 10);
     });
@@ -297,9 +322,9 @@ bool CWebServer::PushPostParamIfPresent<size_t>(const AsyncWebServerRequest * pR
 template<>
 bool CWebServer::PushPostParamIfPresent<int>(const AsyncWebServerRequest * pRequest, const String &paramName, ValueSetter<int> setter)
 {
-    return PushPostParamIfPresent<int>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param) constexpr
+    return PushPostParamIfPresent<int>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param)
     {
-        return std::stoi(param->value().c_str());
+        return static_cast<int>(strtol(param->value().c_str(), nullptr, 10));
     });
 }
 
@@ -307,7 +332,7 @@ bool CWebServer::PushPostParamIfPresent<int>(const AsyncWebServerRequest * pRequ
 template<>
 bool CWebServer::PushPostParamIfPresent<CRGB>(const AsyncWebServerRequest * pRequest, const String &paramName, ValueSetter<CRGB> setter)
 {
-    return PushPostParamIfPresent<CRGB>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param) constexpr
+    return PushPostParamIfPresent<CRGB>(pRequest, paramName, std::move(setter), [](const AsyncWebParameter * param)
     {
         return CRGB(strtoul(param->value().c_str(), nullptr, 10));
     });
@@ -669,8 +694,10 @@ void CWebServer::HandleWifiSave(AsyncWebServerRequest *request)
             response->print(F("<html><head><title>Rebooting...</title>"));
             response->print(F("</head><body style=\"font-family: sans-serif;\">"));
             response->print(F("<h1>Credentials Saved. Rebooting...</h1>"));
-            response->printf(PSTR("<p>Your device is now rebooting and will attempt to connect to the <b>%s</b> network.</p>"), ssid.c_str());
-            response->printf(PSTR("<p>Please reconnect your client device (phone/computer) to the <b>%s</b> network.</p>"), ssid.c_str());
+
+            String safeSsid = EscapeHtml(ssid);
+            response->printf(PSTR("<p>Your device is now rebooting and will attempt to connect to the <b>%s</b> network.</p>"), safeSsid.c_str());
+            response->printf(PSTR("<p>Please reconnect your client device (phone/computer) to the <b>%s</b> network.</p>"), safeSsid.c_str());
             response->print(F("<p>Check your router's connected devices list to find the IP address of your NightDriver device.</p>"));
             response->print(F("</body></html>"));
 
@@ -1230,7 +1257,7 @@ void CWebServer::Reset(AsyncWebServerRequest * pRequest)
     if (boardResetRequested)
     {
         debugW("Resetting device at API request!");
-        throw std::runtime_error("Resetting device at API request");
+        Panic("Resetting device at API request");
     }
 }
 

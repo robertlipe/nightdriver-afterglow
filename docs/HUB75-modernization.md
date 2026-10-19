@@ -1,5 +1,9 @@
 # HUB75 Display Modernization Roadmap
 
+**Oct 2026 Status: implemented (Phases 1–2).** This is a planning document, left as written.
+The SmartMatrix removal and the MPDMA / esp-hub75 dual-driver split it describes
+have landed (#93, #97). Phase 3 (non-Espressif backends) is still open and low priority as we run only on Espressif.
+
 This document outlines the architectural plan to modernize the HUB75 matrix display driver backend, transitioning from the legacy `SmartMatrix` library to a modern, supported driver stack while preparing the graphics pipeline for future microcontrollers (ESP32-S3, ESP32-P4, RP2350, etc.).
 
 ## Current Status & Limitations

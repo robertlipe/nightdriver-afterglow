@@ -5,14 +5,12 @@
 
 #include "effectmanager.h"
 #include "effects/strip/musiceffect.h"
+#include "systemcontainer.h"
 #include "types.h"
 
 // Inspired by
-// https://editor.soulmatelights.com/gallery/1685-strobe-and-diffusion Was
-// originally drawn for a lamp, but I like it on a panel. The original
-// coordinate system had 0,0 in the LL corner. We have 0,0 in UL. BUGBUG: This
-// would look better if the snowflakes took longer to decay. I can't find the
-// magic for blur2d().
+// https://editor.soulmatelights.com/gallery/1685-strobe-and-diffusion
+// Originally drawn for a lamp; adapted for LED panel matrix (0,0 in UL).
 
 #if ENABLE_AUDIO
 class PatternSMStrobeDiffusion : public BeatEffectBase, public EffectWithId<PatternSMStrobeDiffusion>
@@ -22,7 +20,7 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
 {
   private:
 
-    uint8_t hue, hue2; // gradual hue shift or some other cyclic counter
+    uint8_t hue2; // gradual hue shift or cyclic counter
     uint8_t step { 0 }; // some counter of frames or sequences of operations
     // Locations of snowflakes stored in a single flattened bitset (X-major).
     // Index calculation: idx = y * MATRIX_WIDTH + x
@@ -30,11 +28,14 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
     uint8_t Speed = 150;                                                             // 1-255 is speed
     uint8_t Scale = 90;                                                              // 1-100 is something parameter
 
+    inline int TopLineOffset() const
+    {
 #if ENABLE_AUDIO
-    const int top_line_offset = 1;
+        return g_ptrSystem->GetEffectManager().IsVUVisible() ? 1 : 0;
 #else
-    const int top_line_offset = 0;
+        return 0;
 #endif
+    }
 
     // Compile-time index calculation for (x,y) -> flat bit index.
     static constexpr size_t bitIndex(uint8_t x, uint8_t y)
@@ -89,12 +90,14 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
     {
         static int ct;
         ct++;
+        const int topLineOffset = TopLineOffset();
+
         // Scroll existing snowflakes down the screen.
         for (int x = 0; x < MATRIX_WIDTH; x++)
         {
             // Don't copy the very top (usable) line that we're about to fill with
             // fresh snowflakes.
-            for (int y = MATRIX_HEIGHT - 1; y > top_line_offset; y--)
+            for (int y = MATRIX_HEIGHT - 1; y > topLineOffset; y--)
             {
                 assert(x < MATRIX_WIDTH);
                 assert(y < MATRIX_HEIGHT);
@@ -106,13 +109,12 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
             }
         }
 
-        // This is a fragile way to to it, but we fill the top line of
-        // the display with fresh snowflakes to be scrolled down later.
+        // We fill the top available line of the display with fresh snowflakes to be scrolled down later.
         uint8_t posX = random(MATRIX_WIDTH);
         for (int x = 0U; x < MATRIX_WIDTH; x++)
         {
             // randomly fill in the top row
-            snowAt(x, top_line_offset) = (posX == x) && (step % 3 == 0);
+            snowAt(x, topLineOffset) = (posX == x) && (step % 3 == 0);
         }
     }
 
@@ -132,8 +134,8 @@ class PatternSMStrobeDiffusion : public EffectWithId<PatternSMStrobeDiffusion>
         if (Scale > 50)
         {
             // diffusion ---
-            // The offset is to skip the VU meter.
-            g()->blur2d(g()->leds, MATRIX_WIDTH, 0, MATRIX_HEIGHT, top_line_offset, beatsin8(3, 64, 80));
+            // The offset is to skip the VU meter if visible.
+            g()->blur2d(g()->leds, MATRIX_WIDTH, 0, MATRIX_HEIGHT, TopLineOffset(), beatsin8(3, 64, 80));
             STEP = 1U;
         }
         else

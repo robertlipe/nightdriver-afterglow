@@ -34,6 +34,7 @@
 #include "jsonserializer.h"
 #include "ledbuffer.h"
 #include "nd_network.h"
+#include "nd_panic.h"
 #include "remotecontrol.h"
 #include "screen.h"
 #include "socketserver.h"
@@ -81,7 +82,7 @@ void SystemContainer::CheckPointer(bool initialized, const char* name) const
     {
         debugE("Calling getter for %s with pointer uninitialized!", name);
         delay(1000);
-        throw std::runtime_error("Calling SystemContainer getter with uninitialized pointer!");
+        Panic("Calling SystemContainer getter with uninitialized pointer!");
     }
 }
 
@@ -185,7 +186,7 @@ SystemContainer::BufferManagerContainer& SystemContainer::SetupBufferManagers()
     {
         debugE("Can't setup BufferManagers without Devices!");
         delay(1000);
-        throw std::runtime_error("Attempt to setup BufferManagers without Devices");
+        Panic("Attempt to setup BufferManagers without Devices");
     }
 
     #if USE_PSRAM
@@ -200,7 +201,7 @@ SystemContainer::BufferManagerContainer& SystemContainer::SetupBufferManagers()
     if (cBuffers < MIN_BUFFERS)
     {
         debugI("Not enough memory, could only allocate %lu buffers and need %lu", (unsigned long)cBuffers, (unsigned long)MIN_BUFFERS);
-        throw std::runtime_error("Could not allocate all buffers");
+        Panic("Could not allocate all buffers");
     }
     if (cBuffers > MAX_BUFFERS)
     {
@@ -258,7 +259,7 @@ void SystemContainer::SetupConfig()
     {
         debugE("Can't setup config objects without TaskManager!");
         delay(1000);
-        throw std::runtime_error("Attempt to setup config objects without TaskManager");
+        Panic("Attempt to setup config objects without TaskManager");
     }
 
     // Create the JSON writer and start its background thread

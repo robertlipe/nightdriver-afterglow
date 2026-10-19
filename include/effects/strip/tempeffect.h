@@ -34,6 +34,7 @@
 
 #if ENABLE_AUDIO
 
+#include <array>
 #include <deque>
 
 #include "colordata.h"
@@ -54,13 +55,35 @@ class SimpleInsulatorBeatEffect : public EffectWithId<SimpleInsulatorBeatEffect>
     void HandleBeat(bool bMajor, float elapsed, float span) override
     {
         while (_lit.size() >= NUM_FANS - 1)
-            _lit.pop_front();
-
-        size_t i;
-        do
         {
-            i = random(0, NUM_FANS);
-        } while (_lit.end() != std::find(_lit.begin(), _lit.end(), i));
+            _lit.pop_front();
+        }
+
+        std::array<bool, NUM_FANS> isLit = {false};
+        for (int litIdx : _lit)
+        {
+            if (litIdx >= 0 && litIdx < NUM_FANS)
+            {
+                isLit[litIdx] = true;
+            }
+        }
+
+        std::array<int, NUM_FANS> available;
+        size_t availableCount = 0;
+        for (int f = 0; f < NUM_FANS; ++f)
+        {
+            if (!isLit[f])
+            {
+                available[availableCount++] = f;
+            }
+        }
+
+        size_t i = 0;
+        if (availableCount > 0)
+        {
+            i = available[random(0, availableCount)];
+        }
+
         _lit.push_back(i);
 
         FillRingPixels(RandomSaturatedColor(), i, 0);
@@ -92,16 +115,38 @@ class SimpleInsulatorBeatEffect2 : public EffectWithId<SimpleInsulatorBeatEffect
     void HandleBeat(bool bMajor, float elapsed, float span) override
     {
         while (_lit.size() >= NUM_FANS - 1)
-            _lit.pop_front();
-
-        size_t i;
-        do
         {
-            i = random(0, NUM_FANS);
-        } while (_lit.end() != std::find(_lit.begin(), _lit.end(), i));
+            _lit.pop_front();
+        }
+
+        std::array<bool, NUM_FANS> isLit = {false};
+        for (int litIdx : _lit)
+        {
+            if (litIdx >= 0 && litIdx < NUM_FANS)
+            {
+                isLit[litIdx] = true;
+            }
+        }
+
+        std::array<int, NUM_FANS> available;
+        size_t availableCount = 0;
+        for (int f = 0; f < NUM_FANS; ++f)
+        {
+            if (!isLit[f])
+            {
+                available[availableCount++] = f;
+            }
+        }
+
+        size_t i = 0;
+        if (availableCount > 0)
+        {
+            i = available[random(0, availableCount)];
+        }
+
         _lit.push_back(i);
 
-      FillRingPixels(CRGB::Red, i, 0);
+        FillRingPixels(CRGB::Red, i, 0);
     }
 
   public:

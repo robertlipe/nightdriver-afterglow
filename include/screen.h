@@ -120,12 +120,14 @@ class Screen : public GFXBase
     // Returns the height of a string in screen pixels
 
     virtual int textHeight(const String & str);
+    virtual int textHeight(const char * str);
 
     // textWidth
     //
     // Returns the width of a string in screen pixels
 
     virtual int textWidth(const String & str);
+    virtual int textWidth(const char * str);
 
     // Render the current page into this screen.
     void Update(bool bRedraw);

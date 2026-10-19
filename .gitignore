@@ -1,9 +1,11 @@
-.cache# User test files
+.cache
+# User test files
 .DS_Store
 .history
 .idea/**
 .pio
 .vscode/**
+compile_commands.json
 **/.idea/**
 **/*.iml
 **/*.swn
@@ -24,6 +26,7 @@ site/main.jsx
 site/node_modules
 site/yarn-error.log
 src/-defines-.cpp
+src/idf_component.yml
 src/uzlib/src/*.o
 tools/__pycache__
 WebInstaller/assets/**

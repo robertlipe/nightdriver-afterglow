@@ -151,6 +151,13 @@ extern std::mutex g_buffer_mutex;
     #define USE_M5 1
 #endif
 
+// Exactly one HUB75 driver may be selected.  hub75gfx.cpp picks the driver with
+// #if/#elif, so a second definition would be silently ignored - which is how a
+// "switch to the other driver" edit can turn out to be a no-op at runtime.
+#if defined(USE_ESP_HUB75) && defined(USE_MPDMA_HUB75)
+    #error "Two HUB75 drivers selected: define only one of USE_ESP_HUB75 or USE_MPDMA_HUB75."
+#endif
+
 #if defined(USE_ESP_HUB75) || defined(USE_MPDMA_HUB75)
     #ifndef USE_HUB75
         #define USE_HUB75 1

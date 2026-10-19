@@ -17,10 +17,11 @@ This file contains critical context, constraints, and architectural information 
 *   **Consult `.md` files in the top-level directory and docs/.**
 
 **C++ Coding Standards**
-*   **Standard:** Uses **C++20**, but defers to Arduino conventions for compatibility. Prefer industry-standard C++ operations for containers, summations, time, etc. over Arduino.
-*   **Exceptions & Error Handling:** ❌ **Do not use try-catch blocks or C++ exceptions for control flow.** Unrecoverable, fatal errors (e.g., OTA failures, critical allocation failures) MUST call `throw std::runtime_error("message")`.
-    *   **Architecture Note:** This intentional `throw` is caught by a top-level `std::set_terminate(TerminateHandler)` which logs the panic and forces a system reboot.
-    *   **AI Agent Rule:** 🛑 Do NOT flag `throw std::runtime_error()` paths as "missing error path tests" or "missing test coverage." Do not attempt to write unit tests for these terminal states. It is a false positive; this is the intended terminal recovery path.
+*   **Standard:** Uses **C++26** (`-std=gnu++26`), but defers to Arduino conventions for compatibility. Prefer industry-standard C++ operations for containers, summations, time, etc. over Arduino.
+*   **Exceptions & Error Handling:** ❌ **C++ exceptions are disabled** (`-fno-exceptions`; see `[base] build_flags` in `platformio.ini`). Do not write `try`, `catch`, or `throw` anywhere. Unrecoverable, fatal errors (e.g., OTA failures, critical allocation failures) MUST call `Panic("printf-style message", ...)`, declared in `include/nd_panic.h`.
+    *   **Architecture Note:** `Panic()` logs the message together with the file/line/function of the caller, records it in the RTC flight recorder for post-mortem, and reboots. The older `throw std::runtime_error(...)` path was retired: the exception machinery (unwind tables, `.eh_frame`, `.gcc_except_table`, typeinfo, `__cxa_*`) cost ~130KB of flash, and nothing in the image ever unwinds a stack.
+    *   **Terminal Safety Net:** `std::set_terminate(TerminateHandler)` is still installed for the paths that do not go through `Panic()` (a violated `noexcept`, a bad `std::function` target, ...).
+    *   **AI Agent Rule:** 🛑 Do NOT flag `Panic()` paths as "missing error path tests" or "missing test coverage." Do not attempt to write unit tests for these terminal states. It is a false positive; this is the intended terminal recovery path.
 *   **Data Types:** ESP32 has hardware floating point but emulates double. **Prefer `float`** data types and function calls over `double`.
 *   **Memory:**
     *   ESP32 Targets vary between 320K and 16MB (PSRAM) of RAM.
@@ -28,7 +29,7 @@ This file contains critical context, constraints, and architectural information 
     *   Prefer embedding large arrays as member variables inside `Effect` classes. Since `Effect` objects are dynamically allocated and large, they will automatically land in PSRAM, saving you the overhead of managing a second heap pointer.
     *   Avoid large stack allocations.
 *   **Concurrency:** Multiple tasks run on potentially multiple cores. The design generally assumes only one task clearly owns each data. There are very few `std::lock_guard` or `std::mutex` locks needed.
-*   **Best Practices:** Use C++20 best practices, like returning `std::optional`, relying upon RVO and NVRO, not using in/out parameters. Prefer constant, smart data structures and containers and `<algorithm>` over manually coded loops.
+*   **Best Practices:** Use C++26 best practices, like returning `std::optional`, relying upon RVO and NVRO, not using in/out parameters. Prefer constant, smart data structures and containers and `<algorithm>` over manually coded loops.
 *   **Style:**
     *   Code mostly follows Microsoft C++ style guide. Match format to neighboring code in the same file or sibling files.
     *   **Indentation:** 4 spaces.
@@ -38,7 +39,7 @@ This file contains critical context, constraints, and architectural information 
         *   Error codes: `bool function() { return false; }` or custom error enums.
         *   `std::optional<T>` for functions that may not return a value.
         *   Prefer early error returns instead of deeply nested if-statements.
-*   **Enums:** Prefer `class enum` to bare `enum`.
+*   **Enums:** Prefer `enum class` to bare `enum`.
 *   **Explicit Naming:** For structure members, typedefs, enum members, return types, etc., use explicitly named values.
 
 **Logging:** Use macros `debugV`, `debugE`, `debugI`, `debugW`, `debugF`, `debugT`, `debugD`. These accept variadic C++ `std::printf` format strings and should be used sparingly.
@@ -72,7 +73,7 @@ This file contains critical context, constraints, and architectural information 
 NightDriverStrip is a comprehensive C++ firmware framework for the ESP32 microcontroller designed to drive various LED displays, including WS2812B strips and HUB75 matrices.
 
 ### Key Technologies
-*   **Firmware:** C++20, Arduino Framework, PlatformIO.
+*   **Firmware:** C++26, Arduino Framework, PlatformIO.
 *   **Frontend:** React, Vite, Material UI (in `site/`).
 *   **Hardware Support:** ESP32, ESP32-S3, ESP32-C3.
 *   **Graphics Engine:** Custom `GFXBase` extending `Adafruit_GFX`.
@@ -111,7 +112,7 @@ Accessible via Serial (115200). core logic in `src/debug_cli.cpp`. Supports fuzz
 *   **Guards:** Guard network-specific code with `#if ENABLE_WIFI`.
 
 ### Adding New Effects
-*   **Do not modify existing files in `effects/matrix/`.**
+*   **Treat existing files in `effects/matrix/` as read-only, with one exception:** a surgical, minimal fix to a genuine bug is allowed; do not restructure, restyle, or "modernize" them, and do not touch unrelated lines in the same file.
 *   Implement new effects directly in their header files (e.g., `include/effects/matrix/PatternNewEffect.h`). **Implement NO corresponding `.cpp` file.**
 *   Generously use color utilities from `FastLED.h` and math functions from `lib8tion.h`.
 
@@ -128,6 +129,7 @@ To maintain build stability across Av2 and Av3, adhere to these strict rules:
 4.  **Interface Decoupling**: Use `interfaces.h` for core types (`IJSONSerializable`, `SettingSpec`). This prevents pulling `ledstripeffect.h` or `jsonserializer.h` into low-level components.
 5.  **Include Skepticism**: Prefer forward declarations over includes in headers. Keep heavy display/driver includes in `.cpp` files.
 6.  **Non-Trivial Classes**: Class method implementations MUST reside in `.cpp` files. Headers should be declaration-only.
+    *   **Exception**: Effect classes under `include/effects/` are header-only by design (see "Adding New Effects"). This rule exists to stop headers from becoming transitive-include magnets, and an effect header is a leaf.
 7.  **Arduino3 Collisions**: Use `nd_network.h` for project networking; `network.h` is reserved for the Arduino framework.
 
 ---
@@ -143,3 +145,4 @@ To maintain build stability across Av2 and Av3, adhere to these strict rules:
 *   **Audit Tools**: Run `python3 tools/audit_globals_order.py` and `python3 tools/audit_include_rules.py`.
 *   **List Available Targets**: `python3 tools/show_envs.py`.
 *   **Build All**: `python tools/build_all.py`.
+*   **🚨 Reading the size report:** PlatformIO's `Flash:` percentage **excludes the `.eh_frame` section**, even though `.eh_frame` is allocated and sits inside a `LOAD` segment, so it really *is* written into `firmware.bin`. On kitch that hid ~130KB: the report said "95.4%" while the actual app image was 102.9% of `app0`. Decide whether a board fits by comparing `firmware.bin`'s size against the app partition in `config/partitions_custom-*.csv`, never by the percentage. `tools/merge_image.py` now enforces this on every build and fails it if the app image does not fit.

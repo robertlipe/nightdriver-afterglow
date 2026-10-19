@@ -61,3 +61,21 @@ Low priority
     - `IS_IDF5` is now effectively a constant `true` since we no longer support IDF4 (having moved to Arduino3).
     - Remove `IS_IDF5` macros and all the code in the `#else` (IDF4) paths. Affected files include `remotecontrol.cpp`, `soundanalyzer.cpp`, and `soundanalyzer.h`.
     - Remove includes of `esp_idf_version.h` and checks for `ESP_IDF_VERSION` (except in vendored code like `amoled/`).
+
+Build system / platformio.ini  (recorded 2026-10-13, after the esp-hub75 move)
+
+- [ ] Split the monolithic `platformio.ini` into `custom_*.ini` includes
+      ("custom_$EVERYTHING.ini") so each env composes hardware + capability
+      sections instead of duplicating flags. Design north star:
+      `docs/universal_firmware_architecture.md` (aspirational, not a plan of record).
+- [ ] Cut environment count and cold-build time. Same memo.
+- [ ] esp-hub75 hardware bring-up on `ws_s3_hub75-64x64` (Waveshare
+      ESP32-S3-RGB-Matrix). Software side is green on esp-hub75 (PR #97); this is
+      blocked on the RMA'd board.
+- [ ] `dev_ws_s3_hub75` declares `board_build.arduino.memory_type = opi_opi`, but
+      the comment above the env says the offboard PSRAM is QSPI. Confirm against
+      the board; likely `opi_qspi`.
+- [ ] Triage `m5stackdemo` and `ledstrip_feather_wrover`: presumed broken (never
+      run by the maintainer), no verdict yet. Fix or delete.
+- [ ] Triage stale remote branches: `fix/ci-windows-and-fastled-pin`,
+      `jules-fix-windows-ci-parallel-*`, `node`, `robertlipe-patch-1`.

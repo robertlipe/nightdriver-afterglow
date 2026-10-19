@@ -13,7 +13,8 @@ def audit_directory(dir_path):
 
     for root, dirs, files in os.walk(dir_path):
         # Skip include/effects as they are leaf nodes that inherit globals.h from parents
-        if 'include/effects' in root:
+        norm_root = root.replace('\\', '/')
+        if 'include/effects' in norm_root:
             continue
 
         for file in files:
@@ -85,7 +86,7 @@ def main():
         print("Violations found:")
         for path, reason in all_v:
             # make path relative
-            rel_path = os.path.relpath(path, proj_dir)
+            rel_path = os.path.relpath(path, proj_dir).replace('\\', '/')
             print(f"{rel_path}: {reason}")
         sys.exit(1)
 

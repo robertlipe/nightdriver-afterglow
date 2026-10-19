@@ -51,6 +51,8 @@
 #include <freertos/task.h>
 #include <utility>
 
+#include "nd_panic.h"
+
 class LEDStripEffect;
 
 // Stack size for the taskmgr's idle threads
@@ -128,7 +130,7 @@ public:
         else if (iCore == 1)
             return _taskIdle1.GetCPUUsage();
         else
-            throw std::runtime_error("Invalid core passed to GetCPUUsagePercentCPU");
+            Panic("Invalid core passed to GetCPUUsagePercentCPU");
     }
 
     TaskManager()

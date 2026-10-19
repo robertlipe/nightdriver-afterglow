@@ -36,12 +36,12 @@
 #include <memory>
 #include <numbers>
 #include <numeric>
-#include <stdexcept>
 #include <unordered_map>
 
 #include "effectmanager.h"
 #include "effects/matrix/Boid.h"
 #include "gfxbase.h"
+#include "nd_panic.h"
 #include "systemcontainer.h"
 
 #if ENABLE_AUDIO
@@ -143,7 +143,7 @@ CRGB GFXBase::getPixel(int16_t x, int16_t y) const
     if (isValidPixel(x, y))
         return leds[XY(x, y)];
     else
-        throw std::runtime_error(str_sprintf("Invalid index in getPixel: x=%d, y=%d, NUM_LEDS=%d", x, y, NUM_LEDS).c_str());
+        Panic("Invalid index in getPixel: x=%d, y=%d, NUM_LEDS=%d", x, y, NUM_LEDS);
 }
 
 // getPixel
@@ -155,7 +155,7 @@ CRGB GFXBase::getPixel(int16_t i) const
     if (isValidPixel(i))
         return leds[i];
     else
-        throw std::runtime_error(str_sprintf("Invalid index in getPixel: i=%d, NUM_LEDS=%d", i, NUM_LEDS).c_str());
+        Panic("Invalid index in getPixel: i=%d, NUM_LEDS=%d", i, NUM_LEDS);
 }
 
 void GFXBase::drawPixel(int16_t x, int16_t y, uint16_t color)
@@ -1474,10 +1474,12 @@ void GFXBase::DrawCaptionOverlay()
             setTextWrap(false);
             setTextColor(to16bit(255, 255, 255), to16bit(0, 0, 0));
             setCursor(2, _height - 8);
-            String output = "LED: " + String(g_Values.FPS);
+            char output[64];
 #if ENABLE_AUDIO
             extern class SoundAnalyzerBase g_Analyzer;
-            output += " AUD: " + String(g_Analyzer.AudioFPS());
+            snprintf(output, sizeof(output), "LED: %lu AUD: %d", (unsigned long)g_Values.FPS, g_Analyzer.AudioFPS());
+#else
+            snprintf(output, sizeof(output), "LED: %lu", (unsigned long)g_Values.FPS);
 #endif
             print(output);
         }
@@ -1505,10 +1507,10 @@ void GFXBase::DrawCaptionOverlay()
     const size_t kCharWidth = 6;
     const size_t kCharHeight = 8;
     // Adafruit_GFX default font has 1 pixel of trailing horizontal space and 1 pixel of trailing vertical space.
-    // Subtracting the trailing space corrects the visual centering to match the old SmartMatrix font.
+    // Subtracting the trailing space corrects the visual centering to match the old Adafruit font.
     int w = strCaption.length() * kCharWidth - 1;
 
-    // Shift down by 1 pixel so the baseline matches the old SmartMatrix visual placement.
+    // Shift down by 1 pixel so the baseline matches the old Adafruit visual placement.
     int y = (int)_height - 1 - (int)kCharHeight;
     unsigned long elapsed = millis() - captionStartTime;
 

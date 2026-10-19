@@ -39,40 +39,47 @@ static temperature_sensor_handle_t s_temp_sensor = nullptr;
 #ifdef DHT11_PIN
 static bool s_dhtSensorPresent = false;
 
-bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
+namespace
 {
-    uint8_t data[5] = {0};
 
-    // 1. Send start signal
-    pinMode(pin, OUTPUT);
-    digitalWrite(pin, LOW);
-    delay(20); // Keep low for at least 18ms
+struct InterruptGuard
+{
+    InterruptGuard()
+    {
+        noInterrupts();
+    }
 
-    // 2. End the start signal by setting it HIGH for a brief period
-    digitalWrite(pin, HIGH);
-    delayMicroseconds(2); // Short active-high drive to overcome line capacitance
+    ~InterruptGuard()
+    {
+        interrupts();
+    }
 
-    // 3. Switch to input with pullup and let the line stabilize
-    pinMode(pin, INPUT_PULLUP);
+    InterruptGuard(const InterruptGuard&) = delete;
+    InterruptGuard& operator=(const InterruptGuard&) = delete;
+};
 
-    // Disable interrupts for the 4ms critical timing window to prevent FreeRTOS ticks from preempting
-    noInterrupts();
+struct PulseMeasurer
+{
+    int pin;
+    uint32_t cyclesPerUs;
 
-    // Dynamically calculate timeout cycles based on the CPU frequency to support any clock speed.
-    const uint32_t cyclesPerUs = ESP.getCpuFreqMHz();
-    const uint32_t handshakeTimeoutCycles = 500 * cyclesPerUs; // 500us timeout
-    const uint32_t bitTimeoutCycles = 500 * cyclesPerUs;       // 500us timeout
+    bool WaitForState(bool targetState, uint32_t timeoutCycles) const
+    {
+        uint32_t start = esp_cpu_get_cycle_count();
+        while (digitalRead(pin) != targetState)
+        {
+            if (esp_cpu_get_cycle_count() - start > timeoutCycles)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
 
-    // We do NOT use esp_timer_get_time() for elapsed check inside critical section to avoid function call overhead.
-    // Instead, we measure the elapsed cycles.
-    uint32_t startCycleCount = esp_cpu_get_cycle_count();
-
-    // Lambda helper to measure pulse durations in CPU cycles. Returns -1 on timeout.
-    auto measurePulse = [pin](bool state, uint32_t timeoutCycles) -> int32_t
+    int32_t MeasurePulse(bool state, uint32_t timeoutCycles) const
     {
         uint32_t start = esp_cpu_get_cycle_count();
         uint32_t transitionCycle = 0;
-        const uint32_t cyclesPerUs = ESP.getCpuFreqMHz();
         const uint32_t stableCycles = 3 * cyclesPerUs; // 3 microseconds stability window
 
         while (true)
@@ -84,9 +91,6 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
                     transitionCycle = esp_cpu_get_cycle_count();
                 }
 
-                // Verify the transition is stable by ensuring it stays in the new state for 3us.
-                // 3us is safely below any valid DHT11 pulse width (min ~26us) but far above
-                // nanosecond-scale contact bounce or signal rise-time oscillations.
                 uint32_t checkStart = esp_cpu_get_cycle_count();
                 bool stable = true;
                 while (esp_cpu_get_cycle_count() - checkStart < stableCycles)
@@ -111,39 +115,67 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
             }
         }
         return transitionCycle - start;
-    };
+    }
+};
 
-    // Helper lambda for simple state waiting without cycles measurement
-    auto waitForState = [pin](bool targetState, uint32_t timeoutCycles) -> bool
-    {
-        uint32_t start = esp_cpu_get_cycle_count();
-        while (digitalRead(pin) != targetState)
-        {
-            if (esp_cpu_get_cycle_count() - start > timeoutCycles)
-            {
-                return false;
-            }
-        }
-        return true;
-    };
+void SendStartSignal(int pin)
+{
+    // 1. Send start signal
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, LOW);
+    delay(20); // Keep low for at least 18ms
 
+    // 2. End start signal by setting it HIGH for a brief period
+    digitalWrite(pin, HIGH);
+    delayMicroseconds(2); // Short active-high drive to overcome line capacitance
+
+    // 3. Switch to input with pullup and let line stabilize
+    pinMode(pin, INPUT_PULLUP);
+}
+
+enum class HandshakeStatus
+{
+    Success,
+    DidNotGoLow,
+    DidNotGoHigh,
+    LowPremature,
+    Bit0StartTimeout
+};
+
+enum class BitstreamStatus
+{
+    Success,
+    LowTimeout,
+    HighTimeout,
+    Bit39RecoveredZero,
+    Bit39RecoveredOne,
+    Bit39RecoveryFailed
+};
+
+struct BitstreamResult
+{
+    BitstreamStatus status = BitstreamStatus::Success;
+    int failedBitIndex = -1;
+    uint8_t expectedSum = 0;
+    uint8_t checksumZero = 0;
+    uint8_t checksumOne = 0;
+};
+
+HandshakeStatus PerformHandshake(const PulseMeasurer& pm, uint32_t handshakeTimeoutCycles, uint32_t cyclesPerUs)
+{
     // Wait for DHT to pull LOW (start of response)
-    if (!waitForState(LOW, handshakeTimeoutCycles))
+    if (!pm.WaitForState(LOW, handshakeTimeoutCycles))
     {
-        interrupts();
-        debugD("DHT11 handshake failed: Pin did not go LOW");
-        return false;
+        return HandshakeStatus::DidNotGoLow;
     }
 
     // Wait for DHT to release LOW and go HIGH (start of 80us HIGH response)
-    if (!waitForState(HIGH, handshakeTimeoutCycles))
+    if (!pm.WaitForState(HIGH, handshakeTimeoutCycles))
     {
-        interrupts();
-        debugD("DHT11 handshake failed: Pin did not go HIGH");
-        return false;
+        return HandshakeStatus::DidNotGoHigh;
     }
 
-    // Delay 30us to get past any rise-time oscillations and reach the stable middle of the 80us HIGH phase.
+    // Delay 30us to get past any rise-time oscillations and reach stable middle of 80us HIGH phase
     uint32_t delayStart = esp_cpu_get_cycle_count();
     uint32_t delayCycles = 30 * cyclesPerUs;
     while (esp_cpu_get_cycle_count() - delayStart < delayCycles)
@@ -151,105 +183,81 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
         // Busy wait
     }
 
-    // Verify the line is still HIGH
-    if (digitalRead(pin) != HIGH)
+    // Verify line is still HIGH
+    if (digitalRead(pm.pin) != HIGH)
     {
-        interrupts();
-        debugD("DHT11 handshake failed: Pin went LOW prematurely during 80us HIGH phase");
-        return false;
+        return HandshakeStatus::LowPremature;
     }
 
-    // Wait for the line to go LOW. This transition is the start of the 50us LOW pulse of Bit 0.
-    if (!waitForState(LOW, handshakeTimeoutCycles))
+    // Wait for line to go LOW to start Bit 0
+    if (!pm.WaitForState(LOW, handshakeTimeoutCycles))
     {
-        interrupts();
-        debugD("DHT11 handshake failed: Pin did not go LOW to start Bit 0");
-        return false;
+        return HandshakeStatus::Bit0StartTimeout;
     }
 
-    // 3. Read the 40-bit transmission
+    return HandshakeStatus::Success;
+}
+
+BitstreamResult TryRecoverBit39(uint8_t data[5])
+{
+    BitstreamResult res;
+    res.expectedSum = data[0] + data[1] + data[2] + data[3];
+    res.checksumZero = data[4];
+    res.checksumOne  = data[4] | 1;
+
+    if (res.checksumZero == res.expectedSum)
+    {
+        data[4] = res.checksumZero;
+        res.status = BitstreamStatus::Bit39RecoveredZero;
+        return res;
+    }
+
+    if (res.checksumOne == res.expectedSum)
+    {
+        data[4] = res.checksumOne;
+        res.status = BitstreamStatus::Bit39RecoveredOne;
+        return res;
+    }
+
+    res.status = BitstreamStatus::Bit39RecoveryFailed;
+    return res;
+}
+
+BitstreamResult ReadBitstream(const PulseMeasurer& pm, uint32_t bitTimeoutCycles, uint8_t data[5])
+{
     for (int i = 0; i < 40; ++i)
     {
-        // Every bit starts with a 50us low pulse
-        int32_t lowDuration = measurePulse(LOW, bitTimeoutCycles);
+        int32_t lowDuration = pm.MeasurePulse(LOW, bitTimeoutCycles);
         if (lowDuration < 0)
         {
-            interrupts(); // Re-enable interrupts before returning
-            debugD("DHT11 bit %d low timeout", i);
-            return false;
+            return {BitstreamStatus::LowTimeout, i};
         }
 
-        // The duration of the high pulse determines if it's a 0 (~28us) or a 1 (~70us)
-        int32_t highDuration = measurePulse(HIGH, bitTimeoutCycles);
-
+        int32_t highDuration = pm.MeasurePulse(HIGH, bitTimeoutCycles);
         int byteIndex = i / 8;
         data[byteIndex] <<= 1;
 
         if (highDuration < 0)
         {
-            // If we timed out on the high pulse of the very last bit (index 39), we can reconstruct it
-            // because the 40th bit is the LSB of the 8-bit checksum. The expected checksum is uniquely
-            // determined by the sum of the first 4 bytes, so we can verify if 0 or 1 matches.
             if (i == 39)
             {
-                interrupts(); // Re-enable interrupts
-
-                uint8_t expectedSum = data[0] + data[1] + data[2] + data[3];
-                uint8_t checksumWithZero = data[4]; // Already shifted left
-                uint8_t checksumWithOne  = data[4] | 1;
-
-                if (checksumWithZero == expectedSum)
-                {
-                    data[4] = checksumWithZero;
-                    humidity = static_cast<float>(data[0]);
-                    float tempC = static_cast<float>(data[2]);
-                    tempF = (tempC * 9.0f / 5.0f) + 32.0f;
-                    debugD("DHT11 bit 39 high timeout recovered as 0 via checksum matching.");
-                    return true;
-                }
-                else if (checksumWithOne == expectedSum)
-                {
-                    data[4] = checksumWithOne;
-                    humidity = static_cast<float>(data[0]);
-                    float tempC = static_cast<float>(data[2]);
-                    tempF = (tempC * 9.0f / 5.0f) + 32.0f;
-                    debugD("DHT11 bit 39 high timeout recovered as 1 via checksum matching.");
-                    return true;
-                }
-                else
-                {
-                    debugD("DHT11 bit 39 high timeout recovery failed. Expected sum: %02x, got %02x or %02x",
-                           expectedSum, checksumWithZero, checksumWithOne);
-                    return false;
-                }
+                return TryRecoverBit39(data);
             }
-            else
-            {
-                interrupts(); // Re-enable interrupts before returning
-                debugD("DHT11 bit %d high timeout", i);
-                return false;
-            }
+
+            return {BitstreamStatus::HighTimeout, i};
         }
 
-        // Robust comparison: if the HIGH pulse duration is greater than the LOW pulse duration, it's a 1.
         if (highDuration > lowDuration)
         {
             data[byteIndex] |= 1;
         }
     }
 
-    uint32_t elapsedCycles = esp_cpu_get_cycle_count() - startCycleCount;
+    return {BitstreamStatus::Success, -1};
+}
 
-    interrupts(); // Re-enable interrupts
-
-    // If it took longer than 6ms (6000us), discard.
-    if (elapsedCycles > (6000 * cyclesPerUs))
-    {
-        debugD("DHT11 read took too long: %u cycles", elapsedCycles);
-        return false;
-    }
-
-    // 4. Verify checksum
+bool DecodeAndValidate(const uint8_t data[5], float& tempF, float& humidity)
+{
     uint8_t checksum = data[0] + data[1] + data[2] + data[3];
     if (checksum != data[4])
     {
@@ -258,12 +266,90 @@ bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
         return false;
     }
 
-    // 5. Decode variables
     humidity = static_cast<float>(data[0]);
     float tempC = static_cast<float>(data[2]);
     tempF = (tempC * 9.0f / 5.0f) + 32.0f;
-
     return true;
+}
+
+} // namespace
+
+bool SensorManager::ReadDHT11(int pin, float& tempF, float& humidity)
+{
+    uint8_t data[5] = {0};
+
+    SendStartSignal(pin);
+
+    const uint32_t cyclesPerUs = ESP.getCpuFreqMHz();
+    const uint32_t handshakeTimeoutCycles = 500 * cyclesPerUs;
+    const uint32_t bitTimeoutCycles = 500 * cyclesPerUs;
+    const PulseMeasurer pm{pin, cyclesPerUs};
+
+    uint32_t elapsedCycles = 0;
+    HandshakeStatus handshakeStatus = HandshakeStatus::Success;
+    BitstreamResult bitstreamResult;
+
+    {
+        InterruptGuard guard;
+        uint32_t startCycleCount = esp_cpu_get_cycle_count();
+
+        handshakeStatus = PerformHandshake(pm, handshakeTimeoutCycles, cyclesPerUs);
+        if (handshakeStatus == HandshakeStatus::Success)
+        {
+            bitstreamResult = ReadBitstream(pm, bitTimeoutCycles, data);
+            elapsedCycles = esp_cpu_get_cycle_count() - startCycleCount;
+        }
+    }
+
+    // Process Handshake logging outside of critical section
+    switch (handshakeStatus)
+    {
+    case HandshakeStatus::DidNotGoLow:
+        debugD("DHT11 handshake failed: Pin did not go LOW");
+        return false;
+    case HandshakeStatus::DidNotGoHigh:
+        debugD("DHT11 handshake failed: Pin did not go HIGH");
+        return false;
+    case HandshakeStatus::LowPremature:
+        debugD("DHT11 handshake failed: Pin went LOW prematurely during 80us HIGH phase");
+        return false;
+    case HandshakeStatus::Bit0StartTimeout:
+        debugD("DHT11 handshake failed: Pin did not go LOW to start Bit 0");
+        return false;
+    case HandshakeStatus::Success:
+        break;
+    }
+
+    // Process Bitstream logging outside of critical section
+    switch (bitstreamResult.status)
+    {
+    case BitstreamStatus::LowTimeout:
+        debugD("DHT11 bit %d low timeout", bitstreamResult.failedBitIndex);
+        return false;
+    case BitstreamStatus::HighTimeout:
+        debugD("DHT11 bit %d high timeout", bitstreamResult.failedBitIndex);
+        return false;
+    case BitstreamStatus::Bit39RecoveredZero:
+        debugD("DHT11 bit 39 high timeout recovered as 0 via checksum matching.");
+        break;
+    case BitstreamStatus::Bit39RecoveredOne:
+        debugD("DHT11 bit 39 high timeout recovered as 1 via checksum matching.");
+        break;
+    case BitstreamStatus::Bit39RecoveryFailed:
+        debugD("DHT11 bit 39 high timeout recovery failed. Expected sum: %02x, got %02x or %02x",
+               bitstreamResult.expectedSum, bitstreamResult.checksumZero, bitstreamResult.checksumOne);
+        return false;
+    case BitstreamStatus::Success:
+        break;
+    }
+
+    if (elapsedCycles > (6000 * cyclesPerUs))
+    {
+        debugD("DHT11 read took too long: %u cycles", elapsedCycles);
+        return false;
+    }
+
+    return DecodeAndValidate(data, tempF, humidity);
 }
 #endif
 
