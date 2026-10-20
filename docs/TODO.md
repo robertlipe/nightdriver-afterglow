@@ -171,14 +171,30 @@ Watchdog / uptime observation (recorded 2026-10-19)
       At roughly one reboot per month this is not urgent, but it is a real
       defect.
 
-      Diagnosis of why there was NO evidence for those two barks: the display
-      half is already built and works. `DoUptime()` (debug_cli.cpp:537-541)
-      already prints `Persistent Panic Message` out of the RTC-persistent
+      Diagnosis of why `uptime` showed no panic message: the display half is
+      already built and works. `DoUptime()` (debug_cli.cpp:537-541) already
+      prints `Persistent Panic Message` out of the RTC-persistent
       `l_rtcPanicRecord`, and `RTC_PanicRecord` lives in `RTC_NOINIT_ATTR` RAM
       (debug_cli.h:44) so it survives a software reboot. The gap is that the
       IDF TWDT reset path resets the chip directly and never calls
       `PanicAt()`, so nothing ever wrote that record. `ESP_RST_TASK_WDT` is a
       hardware path; `Panic()` is the software path, and they are not connected.
+      Reproducer already exists: `crashme wdt` (debug_cli.cpp:619) spins in
+      `while(true)` purely to trip the TWDT.
+
+      BUT -- the two barks almost certainly DID leave evidence, just not in the
+      place we were looking. The C6 sdkconfig has BOTH
+      `CONFIG_ESP_TASK_WDT_PANIC 1` (TWDT timeout escalates to the IDF panic
+      handler, not just a plain reset) and `CONFIG_ESP_COREDUMP_ENABLE 1` /
+      `CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH 1`. So a bark dumps the crashing
+      task's stack, task list and backtrace into the 64KB `coredump` partition
+      at 0x370000 in `config/partitions_custom-a3.csv` -- which is flash, so it
+      SURVIVES the reboot. FIRST ACTION, before any code change: if those two
+      devices are still running the firmware that barked,
+      `tools/panic_tool.py --ip <addr>` fetches `http://<addr>/coredump` and
+      decodes it with espcoredump. The one hard requirement is that the `.elf`
+      matches the flashed binary -- see the ELF-stamp item below. If no dump is
+      found, `DoClearCoredump` in the CLI can rule out a stale one.
 
       Also note the triggering mechanism: `TaskManager::begin()`
       (taskmgr.cpp) deliberately REMOVES the system idle tasks from the TWDT
@@ -192,28 +208,81 @@ Watchdog / uptime observation (recorded 2026-10-19)
 - [ ] Wire the TWDT path into Panic() so a bark leaves a breadcrumb (forgotten
       special case). Give the TWDT a callback (`esp_task_wdt_init` / the TWDT
       panic handler) that calls `PanicAt()` with the offending task name before
-      the reset, so a bark records file/line/function like any other panic
-      instead of resetting silently. Small and self-contained; converts "one
-      reboot a month with no evidence" into a diagnosable event.
+      the reset, so a bark records file/line/function into `l_rtcPanicRecord`
+      and shows up in `uptime` like any other panic. This is the ergonomic fix
+      (a readable breadcrumb without a coredump round-trip); the forensic path
+      above already captures the stack. Small and self-contained.
       Caveat to respect: `PanicAt()` (main.cpp:301) is `[[noreturn]]` and calls
       `esp_restart()` after a `Serial.flush()` + 100ms delay, which is fine
       from a watchdog callback only if it is safe to format and print from that
       context -- verify against the TWDT callback's ISR/task constraints before
       committing to the same code path, and fall back to writing the RTC record
-      only (skipping the console print) if it is not.
+      only (skipping the console print) if it is not. Note also that a custom
+      TWDT callback and `CONFIG_ESP_TASK_WDT_PANIC` interact, so decide which
+      one owns the escalation rather than having both.
+      Sequencing: see the IdleTask item below -- retire the idle-burner first.
 
-- [ ] The coredump path is already built and may still hold evidence. Both
-      `partitions_custom-a3.csv` and the other tables have a 64KB `coredump`
-      partition, `tools/panic_tool.py --ip <addr>` fetches `http://<ip>/coredump`
-      and runs espcoredump, and `DoClearCoredump` exists in the CLI. A TWDT bark
-      writes a core dump there, and that partition survives reboots. If the bark
-      happened on the still-running firmware, the dump may be readable right now
-      -- but the ELF MUST match the flashed binary or the decode is useless.
-      This is the concrete lesson from the two 31d/26d barks: no saved binary,
-      no post-mortem. Action: stamp the git SHA + build date into a readable
-      symbol so a device can report which binary it is running (e.g. from
-      `uptime`), so we know which `.elf` to go find. Consider also keeping the
-      last N `.elf` files per env.
+- [ ] Make a device able to report WHICH BINARY it is running. This is the one
+      genuinely missing piece and the real lesson from the two 31d/26d barks:
+      the coredump may be sitting in flash right now, but an ELF that matches
+      the flashed image is required to decode it, and none was saved. Action:
+      stamp the git SHA + build date into a readable symbol and surface it from
+      the CLI (`uptime`, `status`, or a new `buildinfo`), so a device can be
+      asked which build it is. Consider keeping the last N `.elf` files per env
+      as a side effect of the build. Cheap, and it protects every future
+      post-mortem, not just this one.
+
+- [ ] Retire the IdleTask busy-loop CPU measurement (do this BEFORE the TWDT
+      callback above -- see the sequencing note below). `IdleTask`
+      (`include/taskmgr.h:72-105`, ~30 lines) spins at `tskIDLE_PRIORITY + 1`
+      calling `delayMicroseconds()` purely to measure how much time it *could*
+      have burned, and derives `GetCPUUsage()` as "100 less the idle time we
+      managed to squander". To make room for those burners,
+      `TaskManager::begin()` (taskmgr.cpp) removes the SYSTEM idle tasks from
+      the TWDT and re-adds its own Idle0/Idle1. That is what makes the watchdog
+      need hand-feeding, so this machinery creates the problem the TWDT
+      callback would then patch around.
+
+      The modern replacement is `vTaskGetRunTimeStats()`
+      (`CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS`), which reports per-task CPU
+      directly instead of inferring it from squandered idle time. Bonus: the
+      CPU then gets to actually idle, which matters for power management and
+      for not perturbing the scheduler.
+
+      Scope note: `TaskManager` is really two unrelated things in one class.
+      The task launcher half -- `StartNetworkThread`, `StartDebugThread`,
+      `StartSocketThread`, `StartEffectThread`, `NotifyNetworkThread`,
+      `GetStackUsageSummary`, and the `*_STACK_SIZE` / `*_PRIORITY` / `*_CORE`
+      constants -- is load-bearing threading policy and should stay (under a
+      name like ThreadManager). Only the idle-burner half is up for deletion.
+      Do NOT read this as "delete NightDriverTaskManager".
+
+      Unicore sweep, VERIFIED (the earlier guess that `taskmgr.cpp:44-45`'s
+      `#define CONFIG_FREERTOS_NUMBER_OF_CORES 2` fallback fires on the C6 was
+      WRONG -- a previous note here said so and has been corrected). The macro
+      is declared long before line 44: `taskmgr.h:48` includes `<Arduino.h>`,
+      which includes `freertos/FreeRTOS.h`, which includes `FreeRTOSConfig.h`,
+      which includes `sdkconfig.h`, and the C6 sdkconfig.h defines
+      `CONFIG_FREERTOS_NUMBER_OF_CORES 1` (and `CONFIG_FREERTOS_UNICORE 1`).
+      So the `#ifndef` never triggers and the build correctly takes the
+      single-core paths. Two real consequences to keep in mind:
+        * `GetCPUUsagePercent(1)` on a unicore target still hits
+          `Panic("Invalid core passed to GetCPUUsagePercentCPU")`
+          (taskmgr.h:133), so passing core 1 on a C6 is a crash path today.
+          Consumers: webserver.cpp:840-842 and screen.cpp:188. Worth guarding.
+
+      Metrics caveat is NOT a blocker: the maintainer's calibration is that
+      `>90` catastrophic and `<10` unrealistic, and 64-vs-58 is noise, so the
+      numbers only need to stay in a plausible band -- they do not need to be
+      numerically comparable to the old implementation. `CPU_USED` /
+      `CPU_USED_CORE0` / `CPU_USED_CORE1` are surfaced in the web UI
+      (webserver.cpp:840-842) and on screen (screen.cpp:188).
+
+      Sequencing: retire the idle-burner FIRST, then wire the TWDT callback
+      into Panic(). Doing the callback first means writing it for a watchdog
+      configuration that is about to disappear, and then rewriting it. Kitch is
+      the right proving ground -- it is the constrained single-core target where
+      this machinery is least justified.
 
 Networking / naming (recorded 2026-10-19)
 
