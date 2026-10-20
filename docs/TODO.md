@@ -169,9 +169,51 @@ Watchdog / uptime observation (recorded 2026-10-19)
 - [ ] Investigate the Task Watchdog bark. Two long-running units reported
       `Last boot reason: (6): Task Watchdog barked` with uptimes of 31d and 26d.
       At roughly one reboot per month this is not urgent, but it is a real
-      defect. The RTC flight recorder / `Panic()` path should have recorded a
-      call site for the last failure -- check it. Worth correlating against OTA
-      updates, WiFi reconnects, and the heavy effect list before chasing.
+      defect.
+
+      Diagnosis of why there was NO evidence for those two barks: the display
+      half is already built and works. `DoUptime()` (debug_cli.cpp:537-541)
+      already prints `Persistent Panic Message` out of the RTC-persistent
+      `l_rtcPanicRecord`, and `RTC_PanicRecord` lives in `RTC_NOINIT_ATTR` RAM
+      (debug_cli.h:44) so it survives a software reboot. The gap is that the
+      IDF TWDT reset path resets the chip directly and never calls
+      `PanicAt()`, so nothing ever wrote that record. `ESP_RST_TASK_WDT` is a
+      hardware path; `Panic()` is the software path, and they are not connected.
+
+      Also note the triggering mechanism: `TaskManager::begin()`
+      (taskmgr.cpp) deliberately REMOVES the system idle tasks from the TWDT
+      and adds its own Idle0/Idle1 measurement tasks in their place, because
+      the measurement tasks burn idle time on purpose. So a TWDT bark here is
+      most likely one of those replacement idle tasks failing to be fed --
+      i.e. something starved the low-priority measurement task, which points at
+      a hot effect loop or a spinning task rather than a random crash. Bound
+      the search there first.
+
+- [ ] Wire the TWDT path into Panic() so a bark leaves a breadcrumb (forgotten
+      special case). Give the TWDT a callback (`esp_task_wdt_init` / the TWDT
+      panic handler) that calls `PanicAt()` with the offending task name before
+      the reset, so a bark records file/line/function like any other panic
+      instead of resetting silently. Small and self-contained; converts "one
+      reboot a month with no evidence" into a diagnosable event.
+      Caveat to respect: `PanicAt()` (main.cpp:301) is `[[noreturn]]` and calls
+      `esp_restart()` after a `Serial.flush()` + 100ms delay, which is fine
+      from a watchdog callback only if it is safe to format and print from that
+      context -- verify against the TWDT callback's ISR/task constraints before
+      committing to the same code path, and fall back to writing the RTC record
+      only (skipping the console print) if it is not.
+
+- [ ] The coredump path is already built and may still hold evidence. Both
+      `partitions_custom-a3.csv` and the other tables have a 64KB `coredump`
+      partition, `tools/panic_tool.py --ip <addr>` fetches `http://<ip>/coredump`
+      and runs espcoredump, and `DoClearCoredump` exists in the CLI. A TWDT bark
+      writes a core dump there, and that partition survives reboots. If the bark
+      happened on the still-running firmware, the dump may be readable right now
+      -- but the ELF MUST match the flashed binary or the decode is useless.
+      This is the concrete lesson from the two 31d/26d barks: no saved binary,
+      no post-mortem. Action: stamp the git SHA + build date into a readable
+      symbol so a device can report which binary it is running (e.g. from
+      `uptime`), so we know which `.elf` to go find. Consider also keeping the
+      last N `.elf` files per env.
 
 Networking / naming (recorded 2026-10-19)
 
