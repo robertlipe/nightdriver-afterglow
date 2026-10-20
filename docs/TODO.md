@@ -252,14 +252,18 @@ Watchdog / uptime observation (recorded 2026-10-19)
       app-SHA does not match the device's `esp_app_get_elf_sha256_str()`; (b) a
       fetched dump should be saved alongside the SHA it was taken from.
 
-- [ ] Stop destroying the evidence on every OTA push. `go-k1` and `go-k2` both
-      do `(/bin/echo "clearcoredump" ; sleep 1) | telnet $PORT` IMMEDIATELY
-      BEFORE `pio run --target upload`. Clearing before a push that may itself
-      be the thing that breaks is exactly backwards -- it erases the post-mortem
-      from the previous run right when it is most wanted. (This is why the
-      coredump is a "mirage": even if the bip barked and dumped, the next
-      deploy wipes it.) Fix: fetch/archive any existing coredump BEFORE the
-      upload, then optionally clear, then push.
+- [ ] `go-k1` / `go-k2` clear the coredump before every push -- this is
+      DELIBERATE and correct for "going to production", and should NOT be
+      "fixed" into an unconditional fetch-then-clear. The `clearcoredump`
+      immediately before `pio run --target upload` exists precisely so a stale
+      dump (e.g. one taken under Arduino 3) does not survive into new firmware
+      and get mis-decoded against a different build. The maintainer's rule:
+      keep clearing by default, and only fetch-before-push when versions are
+      deliberately being kept for comparison ("don't do that until I have
+      versions ready to go to production"). So the item is not "stop
+      destroying evidence"; it is: when a dump is worth keeping, add an
+      explicit archive step for that specific push, rather than changing the
+      default behaviour.
 
 - [ ] Actually save the .elf on every OTA push. The user's own conclusion:
       "this time, actually save the stupid .elf, probably in the go-k1 and
