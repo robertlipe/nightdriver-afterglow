@@ -225,12 +225,53 @@ Watchdog / uptime observation (recorded 2026-10-19)
 - [ ] Make a device able to report WHICH BINARY it is running. This is the one
       genuinely missing piece and the real lesson from the two 31d/26d barks:
       the coredump may be sitting in flash right now, but an ELF that matches
-      the flashed image is required to decode it, and none was saved. Action:
-      stamp the git SHA + build date into a readable symbol and surface it from
-      the CLI (`uptime`, `status`, or a new `buildinfo`), so a device can be
-      asked which build it is. Consider keeping the last N `.elf` files per env
-      as a side effect of the build. Cheap, and it protects every future
-      post-mortem, not just this one.
+      the flashed image is required to decode it, and none was saved.
+
+      The identity is already in the image, FOR FREE -- no new firmware data
+      needed. `esp_app_get_elf_sha256_str()` (declared in
+      `esp_app_format/include/esp_app_desc.h`, `app_elf_sha256_str[]`) returns
+      the SHA-256 that IDF already stamps into every app image. Surface it from
+      the CLI (`uptime`, `status`, or a new `buildinfo`) and from the web status
+      JSON. Then `panic_tool.py` can REFUSE to decode a dump when the ELF's
+      app-SHA does not match the device's, instead of silently guessing.
+
+- [ ] The diagnostic pipeline currently reports false confidence -- fix this
+      BEFORE trusting any more coredump output. `tools/panic_tool.py` takes the
+      ELF from `--elf`, else `DEFAULT_ELF_PATH = .pio/build/kitch/firmware.elf`
+      (line 11), and if that is missing it runs
+      `find .pio/build -name firmware.elf` and uses `found_elfs[0]`
+      (lines 304-308) -- the FIRST match in directory order, with no filtering
+      by environment and no identity check anywhere in the file. It then calls
+      `auto_detect_arch(elf_path)` (line 311), which infers the target from the
+      ELF, so a wrong-but-consistent ELF produces a self-consistent WRONG
+      decode: real symbol names and real line numbers belonging to different
+      code. That is why the task list it produced for 192.168.2.103 looked
+      "freakishly believable" -- addresses land inside real functions in the
+      wrong binary. It is not a crash, it is a plausible-looking fabrication.
+      Two required fixes: (a) hard-fail, do not guess, when the ELF's
+      app-SHA does not match the device's `esp_app_get_elf_sha256_str()`; (b) a
+      fetched dump should be saved alongside the SHA it was taken from.
+
+- [ ] Stop destroying the evidence on every OTA push. `go-k1` and `go-k2` both
+      do `(/bin/echo "clearcoredump" ; sleep 1) | telnet $PORT` IMMEDIATELY
+      BEFORE `pio run --target upload`. Clearing before a push that may itself
+      be the thing that breaks is exactly backwards -- it erases the post-mortem
+      from the previous run right when it is most wanted. (This is why the
+      coredump is a "mirage": even if the bip barked and dumped, the next
+      deploy wipes it.) Fix: fetch/archive any existing coredump BEFORE the
+      upload, then optionally clear, then push.
+
+- [ ] Actually save the .elf on every OTA push. The user's own conclusion:
+      "this time, actually save the stupid .elf, probably in the go-k1 and
+      go-k2 scripts that do the OTA push." Pair each deploy with a copy of
+      `.pio/build/<env>/firmware.elf` tagged by env + git SHA + date (or by the
+      app-ELF SHA, which is self-identifying). Keep the last N per env. Without
+      this, the coredump partition is write-only folklore.
+
+      Deployment note: the two kitch units run Arduino 3 while this branch
+      builds Arduino 4. Do not decode a dump from a device against an ELF built
+      from the other core -- it is not merely imprecise, it is meaningless.
+      Decide which core is being pushed before attaching the ladder.
 
 - [ ] Retire the IdleTask busy-loop CPU measurement (do this BEFORE the TWDT
       callback above -- see the sequencing note below). `IdleTask`
