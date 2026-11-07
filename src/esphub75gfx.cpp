@@ -43,7 +43,10 @@ void ESPHUB75GFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devi
     Hub75Config config{};
     config.panel_width = MATRIX_WIDTH;
     config.panel_height = MATRIX_HEIGHT;
-    config.scan_pattern = Hub75ScanPattern::SCAN_1_16;
+    // Stands in for the old Hub75ScanPattern::SCAN_1_16; the concrete scan rate is
+    // inferred from panel_height now, and STANDARD_TWO_SCAN is the standard 1/16-1/32
+    // wiring with no coordinate remapping.
+    config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
     config.double_buffer = true;
     config.shift_driver = Hub75ShiftDriver::GENERIC;
 
@@ -107,7 +110,7 @@ void ESPHUB75GFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devi
 
     driver = std::make_unique<Hub75Driver>(config);
     if (!driver) Panic("Failed to allocate ESPHome matrix driver!");
-    driver->begin();
+    if (!driver->begin()) Panic("Failed to initialize ESPHome HUB75 driver!");
 
     // Allocate frame drawing buffer in PSRAM
     drawBuffer = std::make_unique<CRGB[]>(MATRIX_WIDTH * MATRIX_HEIGHT);
