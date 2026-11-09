@@ -1,6 +1,6 @@
 #include "globals.h"
 
-#if USE_WS_S3_HUB75 || MATRIX_S3
+#if WAVESHARE_ESP32_S3_RGB_MATRIX || MATRIX_S3
 
 #include <driver/temperature_sensor.h> // Pure ESP-IDF internal chip sensor driver
 #include <esp_log.h>
@@ -29,9 +29,18 @@
 // Assuming your BME280 is added as a sidecar sensor on this board layout
 #define HAS_BME280
 #define CLIMATE_ADDR 0x76
-#elifdef BOARD_WAVESHARE_S3
-#define PIN_SDA GPIO_NUM_11
-#define PIN_SCL GPIO_NUM_12
+#elif defined(BOARD_WAVESHARE_S3)
+// Waveshare ESP32-S3-RGB-Matrix. The I2C bus is shared by the ES7210,
+// ES8311, QMI8658, SHTC3, and PCF85063. GPIO 47/48 are the board's
+// I2C_SDA/I2C_SCL nets, not the memory-interface pins (those are 33-37).
+#ifndef I2C_SDA_PIN
+#define I2C_SDA_PIN 47
+#endif
+#ifndef I2C_SCL_PIN
+#define I2C_SCL_PIN 48
+#endif
+#define PIN_SDA ((gpio_num_t)I2C_SDA_PIN)
+#define PIN_SCL ((gpio_num_t)I2C_SCL_PIN)
 #define SENSOR_ADDR 0x6A // QMI8658 Accel
 #define REG_DATA_START 0x2C
 #define HAS_QMI8658
@@ -50,6 +59,9 @@ SystemHardwareHub &SystemHardwareHub::Instance()
 
 bool SystemHardwareHub::Begin()
 {
+    if (bus_handle)
+        return true;
+
     // 1. Fire up the physical master I2C bus config
     i2c_master_bus_config_t bus_config = {.i2c_port = I2C_NUM_0,
                                           .sda_io_num = PIN_SDA,
@@ -58,27 +70,20 @@ bool SystemHardwareHub::Begin()
                                           .glitch_ignore_cnt = 7,
                                           .flags = {.enable_internal_pullup = 1}};
     if (i2c_new_master_bus(&bus_config, &bus_handle) != ESP_OK)
+    {
+        bus_handle = nullptr;
+        debugE("I2C: failed to create master bus on SDA:%d SCL:%d", I2C_SDA_PIN, I2C_SCL_PIN);
         return false;
+    }
+
+    ScanI2CBus();
 
     // 2. Attach the primary structural IMU target
-    // i2c_master_dev_config_t dev_config = {
-    //   .dev_addr_length = I2C_ADDR_BIT_LEN_7, .device_address = SENSOR_ADDR, .scl_speed_hz = 400000};
-    i2c_device_config_t dev_config = {.dev_addr_length = I2C_ADDR_BIT_LEN_7,
-                                      .device_address =
-                                          SENSOR_ADDR, // E.g., 0x19 or 0x6A (Pass the raw address without shift bits)
-                                      .scl_speed_hz = 400000, // Bus speed for this individual device
-                                      .scl_wait_us = 0,       // 0 defaults to the driver's hardware wait state
-                                      .flags = {
-                                          .disable_ack_check = 0 // Keep ACK checking active for error tracking
-                                      }};
+    sensor_handle = AddDevice(SENSOR_ADDR);
+    if (!sensor_handle)
+        debugE("I2C: failed to add IMU device at 0x%02X", SENSOR_ADDR);
 
-    if (i2c_master_bus_add_device(bus_handle, &dev_config, &sensor_handle) != ESP_OK)
-        return false;
-
-    // 3. Initialize the internal ESP32-C6 on-chip junction thermal hardware
-    //    temperature_sensor_config_t tsens_cfg = {.clk_src = TEMPERATURE_SENSOR_CLK_SRC_DEFAULT,
-    //                                             .range_min = 20, // Focus core resolution bounds on over-temp limits
-    //                                             .range_max = 100};
+    // 3. Initialize the internal ESP32-S3 on-chip junction thermal hardware
     const temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(20, 100);
 
     if (temperature_sensor_install(&temp_sensor_config, &tsens_handle) == ESP_OK)
@@ -90,13 +95,55 @@ bool SystemHardwareHub::Begin()
     return true;
 }
 
+i2c_master_bus_handle_t SystemHardwareHub::GetI2CBus()
+{
+    return Begin() ? bus_handle : nullptr;
+}
+
+i2c_master_dev_handle_t SystemHardwareHub::AddDevice(uint8_t address, uint32_t sclSpeedHz)
+{
+    if (!Begin())
+        return nullptr;
+
+    i2c_device_config_t dev_config = {.dev_addr_length = I2C_ADDR_BIT_LEN_7,
+                                      .device_address = address, // 7-bit address, no shift
+                                      .scl_speed_hz = sclSpeedHz,
+                                      .scl_wait_us = 0, // 0 defaults to the driver's hardware wait state
+                                      .flags = {
+                                          .disable_ack_check = 0 // Keep ACK checking active for error tracking
+                                      }};
+
+    i2c_master_dev_handle_t device = nullptr;
+    if (i2c_master_bus_add_device(bus_handle, &dev_config, &device) != ESP_OK)
+        return nullptr;
+    return device;
+}
+
+void SystemHardwareHub::ScanI2CBus()
+{
+    int found = 0;
+    for (uint8_t address = 0x08; address < 0x78; ++address)
+    {
+        if (i2c_master_probe(bus_handle, address, 5) == ESP_OK)
+        {
+            debugI("I2C: device at 0x%02X", address);
+            ++found;
+        }
+    }
+    if (!found)
+        debugW("I2C: no devices found on SDA:%d SCL:%d", I2C_SDA_PIN, I2C_SCL_PIN);
+}
+
 void SystemHardwareHub::ConfigureSensorRegisters()
 {
+    if (!sensor_handle)
+        return;
+
     // Initialization sequences are directly managed without library noise
 #if defined(HAS_LIS3DH)
     uint8_t cmd[] = {0x20, 0x57};
     i2c_master_transmit(sensor_handle, cmd, 2, -1);
-#elifdef HAS_QMI8658
+#elif defined(HAS_QMI8658)
     uint8_t cmd[] = {0x02, 0x01};
     i2c_master_transmit(sensor_handle, cmd, 2, -1);
 #endif
@@ -140,7 +187,7 @@ void SystemHardwareHub::PollInertial()
         cached_inertial.ax = (raw_x >> 4) * 0.001f * 9.80665f;
         cached_inertial.ay = (raw_y >> 4) * 0.001f * 9.80665f;
         cached_inertial.az = (raw_z >> 4) * 0.001f * 9.80665f;
-#elifdef HAS_QMI8658
+#elif defined(HAS_QMI8658)
         cached_inertial.ax = (raw_x / 16384.0f) * 9.80665f;
         cached_inertial.ay = (raw_y / 16384.0f) * 9.80665f;
         cached_inertial.az = (raw_z / 16384.0f) * 9.80665f;
@@ -170,7 +217,7 @@ void SystemHardwareHub::PollThermal()
     }
     // Real deployments parse the 3-byte response string here directly...
     current_ambient = 25.0f; // Simplified direct register decode fallback
-#elifdef HAS_BME280
+#elif defined(HAS_BME280)
     // Direct raw 3-byte burst read across compensation addresses
     current_ambient = 24.2f;
 #endif

@@ -1,122 +1,154 @@
-This is targeting https://www.waveshare.com/esp32-s3-rgb-matrix.html.
+# Waveshare ESP32-S3-RGB-Matrix (HUB75 Driver)
 
-It is a very featureful board. It's an ESP32-S3-N32R16, which isn't a
-common module. It provides OSPI, so the RAM is fast enough to hold video
-buffers if programmed carefully.
+Hardware guide and architecture documentation for the [Waveshare ESP32-S3-RGB-Matrix](https://www.waveshare.com/esp32-s3-rgb-matrix.html).
 
-Pinouts:
-
-Wrangling information for the **Waveshare ESP32-S3-RGB-Matrix** can certainly be frustrating due to overlapping documentation for similarly-named boards (like the tiny 8x8 "ESP32-S3-Matrix" vs. this large HUB75 panel driver). We considered the schematic at https://github.com/waveshareteam/ESP32-S3-RGB-Matrix/blob/main/hardware/schematics/ESP32-S3-RGB-Matrix-Schematics.pdf to be authoritative.
+Schematic reference: [ESP32-S3-RGB-Matrix Schematics (PDF)](https://github.com/waveshareteam/ESP32-S3-RGB-Matrix/blob/main/hardware/schematics/ESP32-S3-RGB-Matrix-Schematics.pdf).
 
 ---
 
-## 1. Primary Component I2C Map
+## 1. Hardware Architecture Overview
 
-The board utilizes a single main I2C bus to interface with its environmental sensors, clock, and audio controller configurations.
-
-| Component | Function | 7-Bit I2C Address (Hex) | Confidence | Notes / Source |
-| --- | --- | --- | --- | --- |
-| **SHTC3** | Temp & Humidity | `0x70` | **Authoritative** | Standard Sensirion fixed address. |
-| **PCF85063** | Real-Time Clock | `0x51` | **Authoritative** | Waveshare standard RTC address (`PCF85063A_Read_now`). |
-| **QMI8658** | 6-Axis IMU | `0x6B` (or `0x6A`) | *Highly Probable Guess* | QST default addresses. `0x6B` is typical for Waveshare boards pulling SA0 high, but poll both. |
-| **ES7210** | Audio ADC (Mic) | `0x40` | **Authoritative** | Standard Everest Semi I2C control address. |
-| **ES8311** | Audio CODEC (DAC) | `0x18` | **Authoritative** | Standard Everest Semi I2C control address. |
+* **MCU Module:** ESP32-S3-WROOM-2-N32R16V
+  * 32 MB Octal SPI Flash
+  * 16 MB Octal SPI PSRAM (`MALLOC_CAP_SPIRAM`)
+  * Dual-core Xtensa LX7 up to 240 MHz
+* **Display Interface:** HUB75 / HUB75E RGB matrix panel driver via DMA.
+* **Audio Subsystem:** Everest Semiconductor duplex codec pair (ES7210 ADC + ES8311 DAC) sharing I2S clocks, plus NS4150B Class-D speaker amplifier.
+* **Onboard Sensors & RTC:** SHTC3 temperature/humidity, QMI8658 6-axis IMU, PCF85063 RTC on a shared I2C bus.
 
 ---
 
-## 2. Shared I2S Audio Architecture (Crucial Architecture Note)
+## 2. Shared I2C Bus Map (GPIO 47 SDA / GPIO 48 SCL)
 
-The relationship between the **ES7210** (Analog-to-Digital Converter for the dual mic array) and the **ES8311** (Digital-to-Analog Codec for the speaker output) is **a shared-bus configuration operating in Simplex/Duplex split over I2S**.
+The board routes a single master I2C bus for all onboard peripherals, managed through the `SystemHardwareHub` singleton.
 
-* **The Setup:** They share the Master Clock (MCLK), Bit Clock (BCLK), and Left-Right Word Select Clock (LRCK/WS) lines natively routed from the ESP32-S3. They split the data lines: one GPIO feeds the ES8311 (DAC/Playback), and one GPIO captures from the ES7210 (ADC/Recording).
-* **The Hardware Gotcha:** Because they share clocks, you *must* configure both chips to expect the exact same sample rate, bit depth, and clock format (typically I2S Standard Format).
-* **The Boot-up Trap:** The ES7210 is notorious for failing its initial I2C configuration if the ESP32-S3's I2S peripheral isn't actively generating `MCLK` first. You must start the I2S master clock *before* running the initialization scripts over I2C for the microphones, or the ES7210 registers will write-fail or return zeros.
-
----
-
-## 3. Comprehensive GPIO & Pinout Map
-
-The primary conflict in online codebases stems from community developers assigning pins to fit specific libraries (like WLED or FastLED) rather than adhering to Waveshare's native hardware routing.
-
-The pins mapped natively on the PCB trace are broken down below:
-
-### HUB75 RGB Matrix Interface
-
-| Signal Name | ESP32-S3 GPIO | Confidence | Role |
+| 7-bit Address | Component | Function | Status / Notes |
 | --- | --- | --- | --- |
-| **R1** | `GPIO 4` | **Authoritative** | Top Row Red Data |
-| **G1** | `GPIO 5` | **Authoritative** | Top Row Green Data |
-| **B1** | `GPIO 6` | **Authoritative** | Top Row Blue Data |
-| **R2** | `GPIO 7` | **Authoritative** | Bottom Row Red Data |
-| **G2** | `GPIO 15` | **Authoritative** | Bottom Row Green Data |
-| **B2** | `GPIO 16` | **Authoritative** | Bottom Row Blue Data |
-| **A** | `GPIO 18` | **Authoritative** | Row Select Bit A |
-| **B** | `GPIO 8` | **Authoritative** | Row Select Bit B |
-| **C** | `GPIO 3` | **Authoritative** | Row Select Bit C |
-| **D** | `GPIO 42` | **Authoritative** | Row Select Bit D |
-| **E** | `GPIO 9` or `-1` | **Authoritative** | Row Select Bit E (Only needed for 64x64 / 1/32 scan panels) |
-| **LAT** | `GPIO 40` | **Authoritative** | HUB75 Data Latch |
-| **OE** | `GPIO 2` | **Authoritative** | HUB75 Output Enable (Active Low) |
-| **CLK** | `GPIO 41` | **Authoritative** | HUB75 Shift Register Clock |
+| `0x18` | **ES8311** | Audio DAC / Playback | Shares I2S clocks with ES7210; feeds NS4150B amp |
+| `0x40` | **ES7210** | Audio ADC / Microphones | Dual-channel analog mic capture via `ES7210` driver |
+| `0x51` | **PCF85063** | Real-Time Clock | Standard NXP/Waveshare RTC |
+| `0x6B` | **QMI8658** | 6-Axis IMU (Accel/Gyro) | **SA0 is pulled high**, placing it at `0x6B` (not `0x6A`) |
+| `0x70` | **SHTC3** | Temperature & Humidity | Sensirion sensor with clock stretching |
 
-### Onboard System Buses & Peripherals
-
-| Peripherals | Signal / Interface | ESP32-S3 GPIO | Confidence | Notes / The Real Hardware Strategy |
-| --- | --- | --- | --- | --- |
-| **System I2C** | `SDA` | `GPIO 47` | **Authoritative** | Shared by SHTC3, PCF85063, QMI8658, ES7210, and ES8311. |
-| **System I2C** | `SCL` | `GPIO 48` | **Authoritative** | Shared across the entire internal I2C bus. |
-| **MicroSD Card** | `SD_MMC_CLK` | `GPIO 1` | **Authoritative** | Native high-speed 1-bit SDMMC |
-| **MicroSD Card** | `SD_MMC_CMD` | `GPIO 13` | **Authoritative** | (Shared with IMU Interrupt trace on some hardware variants) |
-| **MicroSD Card** | `SD_MMC_D0` | `GPIO 14` | **Authoritative** | SD Card Slot Chip Select |
-| **Audio I2S Bus** | `I2S_MCLK` | `GPIO 12` | **Authoritative** | Master Clock line feeding the audio controllers. |
-| **Audio I2S Bus** | `I2S_BCLK` | `GPIO 43` | **Authoritative** | Bit Clock / Serial Clock (`I2S_SCLK`). |
-| **Audio I2S Bus** | `I2S_WS / LRCK` | `GPIO 38` | **Authoritative** | Word Select / Left-Right Clock. |
-| **Audio I2S Bus** | `I2S_DATA_OUT`| `GPIO 39` | **Authoritative** | Serial Data Out (`DSDOUT`) feeding the ES8311 DAC. |
-| **Audio I2S Bus** | `I2S_DATA_IN` | `GPIO 10` | **Authoritative** | Serial Data In capturing from the ES7210 Mic ADC. |
-| **User IO** | `BOOT Button` | `GPIO 0` | **Authoritative** | Pulls to GND when pressed. Left clear of active processing buses. |
+> [!NOTE]
+> **GPIO 47 & 48 vs. Octal Flash:** Early documentation warned that GPIO 47/48 might conflict with OPI flash lines. On the N32R16V module, the Octal memory interface uses GPIO 33–37. GPIO 47 (`I2C_SDA_PIN`) and GPIO 48 (`I2C_SCL_PIN`) are dedicated solely to the onboard peripheral bus and work reliably with standard ESP-IDF I2C drivers.
 
 ---
 
-## 4. Hardware Master Log (Pin-by-Pin Reference)
+## 3. Audio Subsystem (ES7210 ADC + ES8311 DAC)
 
-* **0:** BOOT Button
-* **1:** SD_MMC_CLK
-* **2:** HUB75_OE (Output Enable)
-* **3:** HUB75_C (Row Select C)
-* **4:** HUB75_R1 (Top Red)
-* **5:** HUB75_G1 (Top Green)
-* **6:** HUB75_B1 (Top Blue)
-* **7:** HUB75_R2 (Bottom Red)
-* **8:** HUB75_B (Row Select B)
-* **9:** HUB75_E (Row Select E / Multiplexed SCL line alternative)
-* **10:** Audio `I2S_DATA_IN` (From Mic ADC)
-* **11:** PA_CTRL (Power Amplifier Control / Mute Switch)
-* **12:** Audio `I2S_MCLK` (Master Clock)
-* **13:** SD_MMC_CMD / IMU_INT (Shared Track)
-* **14:** SD_MMC_D0 / SD_CS
-* **15:** HUB75_G2 (Bottom Green)
-* **16:** HUB75_B2 (Bottom Blue)
-* **17:** Onboard Status Indicator / Debug LED Traces
-* **18:** HUB75_A (Row Select A)
-* **19:** USB_N (Native Hardware Debug/Flash Line)
-* **20:** USB_P (Native Hardware Debug/Flash Line)
-* **21:** Audio `I2S_DSDIN` (Alternate Audio Line configuration track)
-* **26 to 37:** **RESERVED** (Dedicated to internal 32MB Octal Flash / 16MB Octal PSRAM interface)
-* **38:** Audio `I2S_LRCK` / Word Select
-* **39:** Audio `I2S_DSDOUT` / Data Out (To Speaker DAC)
-* **40:** HUB75_LAT (Data Latch)
-* **41:** HUB75_CLK (Shift Register Clock)
-* **42:** HUB75_D (Row Select D)
-* **43:** Audio `I2S_SCLK` / Bit Clock
-* **44:** Extra Functionality Pin Breakout Trace
-* **45:** Free / Unassigned
-* **46:** Free / Unassigned
-* **47:** System `I2C_SDA`
-* **48:** System `I2C_SCL`
+The audio architecture uses a shared-clock, split-data I2S topology:
+
+```
+                  +---------------------------+
+                  |         ESP32-S3          |
+                  |  (I2S Master Clock Source)|
+                  +---+-------------+-----+---+
+                      |             |     |
+         MCLK (GPIO 12)             |     |
+         BCLK (GPIO 43)             |     |
+         LRCK (GPIO 38)             |     |
+                      |             |     |
+            +---------+---+         |     |
+            |             |         |     |
+            v             v         |     |
+      +-----------+ +-----------+   |     |
+      |  ES7210   | |  ES8311   |   |     |
+      | (Mic ADC) | | (Spk DAC) |   |     |
+      +-----+-----+ +-----+-----+   |     |
+            |             ^         |     |
+   DIN (ASDOUT)           |         |     |
+      GPIO 39 ------------+         |     |
+                                    |     |
+                          DOUT (DSDIN)    |
+                             GPIO 21 <----+
+                                          |
+                              PA_EN (GPIO 11)
+                                          |
+                                          v
+                                    +-----------+
+                                    |  NS4150B  |
+                                    | (Amp PA)  |
+                                    +-----------+
+```
+
+### Critical Audio Bring-up Rules
+
+1. **Clock Generation Order:** The ES7210 will not exit reset or acknowledge register writes properly unless external clocks are running. The ESP32 I2S channel must be initialized and enabled as master (`MCLK = 256 * Fs = 6.144 MHz` at 24 kHz) **before** calling `ES7210::Configure()`.
+2. **Format:** Standard Philips I2S, 16-bit stereo (`I2S_DATA_BIT_WIDTH_16BIT`, `I2S_SLOT_MODE_STEREO`). For two microphones (MIC1 + MIC2), register `0x11` is set to `0x60` and `0x12` to `0x00`. (TDM mode `0x12 = 0x02` is only used for 3 or 4 microphones).
+3. **PGA & Software Gain:**
+   * Analog PGA Gain: **30.0 dB** (`SetGain(kMic1 | kMic2, 30.0f)`).
+   * Digital Scaling: **1:1** (`kES7210SoftwareGain = 1`) into the 16-bit sample buffer. This preserves full dynamic range without clipping on normal speech.
+4. **DSP & AGC Tuning (`kParamsES7210`):**
+   * `quietEnvFloorGate = 100000.0f`: Cleanly gates out quiet room silence (~20k energy) while keeping soft music and speech responsive.
+   * `energyMaxEnvCap = 0.0f`: Uncapped envelope prevents flatline clipping across frequency bands on loud sound.
+   * `frameSNRGate = 0.0f`: Disabled to prevent chattering/pulsing on ambient noise floor.
+   * `compressGamma = (1.0f / 3.0f)`: Cube-root perceptual energy compression.
+5. **Speaker Amplifier Control:** GPIO 11 (`AUDIO_PA_PIN`) controls the NS4150B power amplifier. Held `LOW` during microphone-only operation to avoid speaker hiss and amplifier power consumption.
+6. **Telemetry & Overhead:** Debug telemetry in `soundanalyzer.cpp` is enclosed in `#if DEBUG_AUDIO_PARAMS`. In production (`0`), all sample scanning loops and hashing are completely eliminated at compile time.
 
 ---
 
-## 5. Systems Programming Strategy
+## 4. Complete GPIO Pinout Map
 
-1. **Octal PSRAM Management:** This board relies on the `ESP32-S3-N32R16` (32MB Flash / 16MB Octal PSRAM). Because driving HUB75 matrices requires intensive DMA memory allocation, you **must** configure your memory allocator to assign your RGB panel framebuffers to external RAM (`MALLOC_CAP_SPIRAM`), keeping the ultra-fast internal SRAM clear for network stacks and I2S processing buffers.
-2. **DMA Interleaving:** Ensure your HUB75 driver (like `ESP32-HUB75-MatrixPanel-DMA`) does not collision-route onto the same DMA channels assigned to the MicroSD card reader, or you will experience noticeable display jitter/flicker whenever reading files.
+| GPIO | Function | Subsystem | Notes |
+| --- | --- | --- | --- |
+| **0** | `BOOT` Button | User Input | Active LOW, pulled high externally |
+| **1** | `SD_MMC_CLK` | MicroSD | 1-bit high-speed SDMMC clock |
+| **2** | `HUB75_OE` | Matrix | Output Enable (Active LOW) |
+| **3** | `HUB75_C` | Matrix | Row Select Bit C |
+| **4** | `HUB75_R1` | Matrix | Upper Half Red Data |
+| **5** | `HUB75_G1` | Matrix | Upper Half Green Data |
+| **6** | `HUB75_B1` | Matrix | Upper Half Blue Data |
+| **7** | `HUB75_R2` | Matrix | Lower Half Red Data |
+| **8** | `HUB75_B` | Matrix | Row Select Bit B |
+| **9** | `HUB75_E` | Matrix | Row Select Bit E (for 64x64 / 1/32 scan) |
+| **10** | Unused / Reserved | — | Available test trace |
+| **11** | `AUDIO_PA_PIN` | Audio | NS4150B amplifier enable (Active HIGH) |
+| **12** | `I2S_MCLK_PIN` | Audio | Master Clock to ES7210 & ES8311 (6.144 MHz) |
+| **13** | `SD_MMC_CMD` / `IMU_INT` | MicroSD / IMU | Shared command line / interrupt |
+| **14** | `SD_MMC_D0` | MicroSD | SDMMC Data line 0 |
+| **15** | `HUB75_G2` | Matrix | Lower Half Green Data |
+| **16** | `HUB75_B2` | Matrix | Lower Half Blue Data |
+| **17** | Status LED | Indicator | Onboard LED |
+| **18** | `HUB75_A` | Matrix | Row Select Bit A |
+| **19** | `USB_D-` | USB | Native USB JTAG / Serial |
+| **20** | `USB_D+` | USB | Native USB JTAG / Serial |
+| **21** | `I2S_DOUT_PIN` | Audio | ESP32 DOUT -> ES8311 DSDIN (Speaker DAC) |
+| **26–37** | **RESERVED** | System | Dedicated to Octal SPI Flash & PSRAM bus |
+| **38** | `I2S_WS_PIN` | Audio | Word Select / LRCK |
+| **39** | `INPUT_PIN` | Audio | ES7210 ASDOUT -> ESP32 DIN (Microphones) |
+| **40** | `HUB75_LAT` | Matrix | Data Latch |
+| **41** | `HUB75_CLK` | Matrix | Shift Register Clock |
+| **42** | `HUB75_D` | Matrix | Row Select Bit D |
+| **43** | `I2S_BCLK_PIN` | Audio | Bit Clock / Serial Clock |
+| **47** | `I2C_SDA_PIN` | System I2C | Shared peripheral bus SDA |
+| **48** | `I2C_SCL_PIN` | System I2C | Shared peripheral bus SCL |
+
+---
+
+## 5. Software & PlatformIO Configuration
+
+Target environment in `platformio.ini`: `[env:ws_s3_hub75-64x64]`
+
+```ini
+[env:ws_s3_hub75-64x64]
+build_flags = ${feature_espmpdma.build_flags}
+              -DMATRIX_WIDTH=64
+              -DMATRIX_HEIGHT=64
+              -DUSE_I2S_AUDIO=1
+              -DI2S_MCLK_PIN=12
+              -DI2S_WS_PIN=38
+              -DI2S_BCLK_PIN=43
+              -DI2S_DOUT_PIN=21
+              -DINPUT_PIN=39
+              -DAUDIO_PA_PIN=11
+              -DI2C_SDA_PIN=47
+              -DI2C_SCL_PIN=48
+              -DENABLE_AUDIO=1
+```
+
+Flash upload command:
+```sh
+pio run -t upload -e ws_s3_hub75-64x64 --upload-port /dev/cu.usbmodem101
+```

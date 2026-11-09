@@ -26,11 +26,20 @@ class SystemHardwareHub
   public:
     static SystemHardwareHub &Instance();
 
+    // Creates the shared I2C master bus on first call. Safe to call repeatedly.
     bool Begin();
     void Tick(); // Non-blocking: drives register reads & delta calculations
 
     InertialMetrics GetInertial() const;
     ThermalMetrics GetThermal() const;
+
+    // The one I2C bus for all on-board peripherals. Codec drivers and future
+    // sensors must attach here rather than creating a second master bus.
+    i2c_master_bus_handle_t GetI2CBus();
+
+    // Attach a device to the shared bus. Returns nullptr on failure. The caller
+    // owns the handle and is responsible for any required cleanup at teardown.
+    i2c_master_dev_handle_t AddDevice(uint8_t address, uint32_t sclSpeedHz = 400000);
 
   private:
     SystemHardwareHub() = default;
@@ -39,6 +48,7 @@ class SystemHardwareHub
     i2c_master_bus_handle_t bus_handle = nullptr;
     i2c_master_dev_handle_t sensor_handle = nullptr;
 
+    void ScanI2CBus();
     void PollInertial();
 
     mutable std::mutex cache_mutex;

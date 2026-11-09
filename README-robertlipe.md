@@ -102,11 +102,12 @@ This file documents the custom reliability, diagnostic, and performance improvem
 - **Feature**: Added the `tinyled-demo` environment to support the Waveshare ESP32-S3-Matrix (the cracker-sized 8x8 WS2812 board). It is completely decoupled from HUB75 matrix dependencies (relying strictly on FastLED and `NUM_LEDS=64`) for high frame rate, low overhead, 1D strip demonstrations.
 - **RMT driver_ng Update**: Replaced deprecated/duplicate `rmt_driver_install` calls with `rmt_rx_start` inside `src/remotecontrol.cpp` to satisfy ESP-IDF 5's rewritten RMT driver constraints.
 - ** IDF5 Audio Update**: Correct feedback on audio gain and spectrum responsiveness in ESP-IDF port.
+- **Waveshare ESP32-S3-RGB-Matrix Audio Bring-up**: Added a standalone ES7210 microphone ADC driver operating in 16-bit stereo Philips I2S over the shared I2C bus (managed by SystemHardwareHub). Calibrated the audio DSP and AGC pipeline (30 dB PGA gain, 1:1 software scaling, 100k noise gate, uncapped AGC) to deliver responsive audio visualization without ambient hyperactivity or speech flatlining.
 
 ### 2. The Great LittleFS Migration (`include/userfs.h`)
 - **Issue**: SPIFFS is officially deprecated in ESP-IDF 5 and notoriously slow/fragile on large partitions.
-- **Fix**: Completely ripped and replaced SPIFFS with LittleFS across the entire codebase. 
-- **Abstraction Layer**: Introduced the `UserFilesystem` (`UserFS`) wrapper. This seamlessly manages `LittleFS` vs `SPIFFS` dependencies at compile-time (preventing LDF bloat). 
+- **Fix**: Completely ripped and replaced SPIFFS with LittleFS across the entire codebase.
+- **Abstraction Layer**: Introduced the `UserFilesystem` (`UserFS`) wrapper. This seamlessly manages `LittleFS` vs `SPIFFS` dependencies at compile-time (preventing LDF bloat).
 - **OTA Caveat**: While `UserFS` will intelligently reformat old SPIFFS partitions on boot (`formatOnFail = true`), **changing the partition table via OTA is a guaranteed brick**. If a device's partition boundaries change between versions, you will be climbing a ladder with a USB cable. Proceed with caution. If there is data on the device you wish to preserve (effect settings) you should use nightdriverclient.py's backup and restore options to do so BEFORE flashging this to the devic
 ### 3. Strict Typing & API Deprecation Fixes
 - **Modern C++ Reality Check**: Now targets C++26. jThe codebase was already targeting C++20 (or `2a`), but jumping off GCC 8 means we are now using a compiler where C++26 is actually standardized and supported natively, rather than just being an experimental guess at future language features. This unlocks stability and clarity in library features (std::fmt, std::to_array) or language features like `constexpr if` and `class template array deduction`.

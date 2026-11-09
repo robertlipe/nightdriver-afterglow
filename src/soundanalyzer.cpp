@@ -39,6 +39,14 @@
 #include "soundanalyzer.h"
 #include "values.h"
 
+#if WAVESHARE_ESP32_S3_RGB_MATRIX
+#include "systemhardwarehub.h"
+#endif
+
+#ifndef DEBUG_AUDIO_PARAMS
+#define DEBUG_AUDIO_PARAMS 0
+#endif
+
 #if ENABLE_AUDIO
 
 #include <arduinoFFT.h>
@@ -485,6 +493,67 @@ void SoundAnalyzerBase::InitM5()
 void SoundAnalyzerBase::InitI2S()
 {
 #if (USE_I2S_AUDIO || ELECROW)
+#if WAVESHARE_ESP32_S3_RGB_MATRIX
+    debugI("Audio: Initializing ES7210 I2S input on MCLK:%d BCLK:%d WS:%d DIN:%d",
+           I2S_MCLK_PIN, I2S_BCLK_PIN, I2S_WS_PIN, INPUT_PIN);
+
+    // The Waveshare board does not use a bare INMP441-style microphone. It has
+    // an ES7210 ADC and an ES8311 DAC sharing MCLK/BCLK/LRCK. The ESP32 is the
+    // I2S master and must generate MCLK for both codecs; the ES7210 is a slave
+    // that returns 16-bit stereo samples on DIN.
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+    ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, NULL, &_rx_handle));
+
+    i2s_std_config_t std_cfg = {
+        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(SAMPLING_FREQUENCY),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
+        .gpio_cfg = {
+            .mclk = (gpio_num_t)I2S_MCLK_PIN,
+            .bclk = (gpio_num_t)I2S_BCLK_PIN,
+            .ws = (gpio_num_t)I2S_WS_PIN,
+            .dout = I2S_GPIO_UNUSED,
+            .din = (gpio_num_t)INPUT_PIN,
+        },
+    };
+
+    ESP_ERROR_CHECK(i2s_channel_init_std_mode(_rx_handle, &std_cfg));
+    ESP_ERROR_CHECK(i2s_channel_enable(_rx_handle));
+
+    // The codec needs running clocks before it will leave reset, so enable the
+    // I2S channel first and configure the ES7210 second.
+    auto &hub = SystemHardwareHub::Instance();
+    if (!hub.Begin())
+    {
+        debugE("Audio: unable to initialize the shared I2C bus; ES7210 unavailable");
+    }
+    else if (!_es7210.Begin(hub.GetI2CBus()))
+    {
+        debugE("Audio: ES7210 not found; check I2C address and bus pins");
+    }
+    else if (!_es7210.Configure(ES7210::kMic1 | ES7210::kMic2, 30.0f))
+    {
+        debugE("Audio: ES7210 configuration failed");
+    }
+    else
+    {
+        debugI("Audio: ES7210 microphone input ready");
+    }
+
+    // The codec emits a click/DC transient as it comes out of reset. Discard a
+    // few frames so that the analyzer's auto-gain is not poisoned at startup.
+    for (int i = 0; i < 8; ++i)
+    {
+        size_t ignored = 0;
+        i2s_channel_read(_rx_handle, _i2sSampleBuffer.data(), sizeof(_i2sSampleBuffer), &ignored, 100 / portTICK_PERIOD_MS);
+    }
+
+#if defined(AUDIO_PA_PIN)
+    // Keep the speaker amplifier disabled while we only need the microphones.
+    // This also keeps an unconfigured ES8311 from driving noise into the amp.
+    pinMode(AUDIO_PA_PIN, OUTPUT);
+    digitalWrite(AUDIO_PA_PIN, LOW);
+#endif
+#else
     debugI("Audio: Initializing I2S Digital Mic (Modern) on BCLK:%d WS:%d DIN:%d", I2S_BCLK_PIN, I2S_WS_PIN, INPUT_PIN);
     // Digital Microphones (INMP441, etc.) - Standard I2S Mode
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
@@ -504,6 +573,7 @@ void SoundAnalyzerBase::InitI2S()
 
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(_rx_handle, &std_cfg));
     ESP_ERROR_CHECK(i2s_channel_enable(_rx_handle));
+#endif
 #endif
 }
 
@@ -561,6 +631,53 @@ size_t SoundAnalyzerBase::SampleI2S()
 {
     size_t bytesReadTotal = 0;
 #if (USE_I2S_AUDIO || ELECROW)
+#if WAVESHARE_ESP32_S3_RGB_MATRIX
+    constexpr int kChannels = 2;
+    constexpr size_t bytesToRead = sizeof(_i2sSampleBuffer);
+    size_t bytesRead = 0;
+
+    esp_err_t err = i2s_channel_read(_rx_handle, _i2sSampleBuffer.data(), bytesToRead, &bytesRead, 100 / portTICK_PERIOD_MS);
+    if (err != ESP_OK || bytesRead != bytesToRead)
+        return 0;
+
+    // The ES7210 analog PGA is configured for 30 dB. Use 1:1 digital scaling
+    // into the 16-bit sample buffer so the full dynamic range is preserved
+    // without premature digital clipping on loud sound or speech.
+    constexpr int32_t kES7210SoftwareGain = 1;
+    for (size_t i = 0; i < MAX_SAMPLES; i++)
+    {
+        const int32_t sample = static_cast<int32_t>(_i2sSampleBuffer[i * kChannels]) * kES7210SoftwareGain;
+        ptrSampleBuffer[i] = static_cast<int16_t>(std::clamp<int32_t>(sample, -32768, 32767));
+    }
+
+#if DEBUG_AUDIO_PARAMS
+    static uint32_t lastI2SLog = 0;
+    if (millis() - lastI2SLog > 1000)
+    {
+        lastI2SLog = millis();
+        int16_t mn = 32767;
+        int16_t mx = -32768;
+        int64_t sum = 0;
+        uint32_t hash = 2166136261u;
+        for (size_t i = 0; i < MAX_SAMPLES; i++)
+        {
+            mn = std::min(mn, ptrSampleBuffer[i]);
+            mx = std::max(mx, ptrSampleBuffer[i]);
+            sum += ptrSampleBuffer[i];
+        }
+        for (size_t i = 0; i < bytesRead / sizeof(int16_t); i++)
+        {
+            hash ^= static_cast<uint16_t>(_i2sSampleBuffer[i]);
+            hash *= 16777619u;
+        }
+        debugI("I2S: err=%d bytes=%u min=%d max=%d mean=%.0f hash=%08x first=%d,%d,%d,%d",
+               err, (unsigned)bytesRead, mn, mx, (double)sum / MAX_SAMPLES, hash,
+               ptrSampleBuffer[0], ptrSampleBuffer[1], ptrSampleBuffer[2], ptrSampleBuffer[3]);
+    }
+#endif
+
+    bytesReadTotal = MAX_SAMPLES * sizeof(ptrSampleBuffer[0]);
+#else
     static int32_t tempBuffer[MAX_SAMPLES * 2];
     constexpr int kChannels = 2;
     size_t bytesToRead = MAX_SAMPLES * kChannels * sizeof(int32_t);
@@ -577,6 +694,7 @@ size_t SoundAnalyzerBase::SampleI2S()
         ptrSampleBuffer[i] = (int16_t)std::clamp((int)(s32 >> 15), -32768, 32767);
     }
     bytesReadTotal = bytesRead / kChannels / 2; // Rough approximation of output samples converted to bytes
+#endif
 #endif
     return bytesReadTotal;
 }
@@ -728,9 +846,12 @@ const PeakData & SoundAnalyzer<Params>::ProcessPeaksEnergy()
 
     // Manually clamp back the bands, as they are vastly over-represented
 
-    if (frameMax > _energyMaxEnv)
+    const float envMax = (_params.energyMaxEnvCap > 0.0f)
+                             ? std::min(frameMax, _params.energyMaxEnvCap)
+                             : frameMax;
+    if (envMax > _energyMaxEnv)
     {
-        _energyMaxEnv = frameMax;
+        _energyMaxEnv = envMax;
     }
     else
     {
@@ -757,11 +878,23 @@ const PeakData & SoundAnalyzer<Params>::ProcessPeaksEnergy()
         _vPeaks.fill(0.0f);
         _Peaks.fill(0.0f);
         UpdateVU(0.0f);
+#if DEBUG_AUDIO_PARAMS
+        static uint32_t lastGatedLog = 0;
+        if (millis() - lastGatedLog > 1000)
+        {
+            lastGatedLog = millis();
+            debugI("Audio: GATED envFloor=%.0f gate=%.0f maxEnv=%.0f frameMax=%.0f",
+                   envFloorRaw, _params.quietEnvFloorGate, _energyMaxEnv, frameMax);
+        }
+#endif
         return _Peaks;
     }
 
     float envFloor = std::max(_params.energyMinEnv, envFloorRaw);
     float normDen = std::max(_energyMaxEnv, envFloor);
+    if (_params.energyMaxEnvCap > 0.0f)
+        normDen = std::min(normDen, _params.energyMaxEnvCap);
+
     const float invEnv = 1.0f / normDen;
     float sumNorm = 0.0f;
 
@@ -790,6 +923,15 @@ const PeakData & SoundAnalyzer<Params>::ProcessPeaksEnergy()
         sumNorm += vNew;
     }
     UpdateVU(sumNorm / (float)NUM_BANDS);
+#if DEBUG_AUDIO_PARAMS
+    static uint32_t lastActiveLog = 0;
+    if (millis() - lastActiveLog > 1000)
+    {
+        lastActiveLog = millis();
+        debugI("Audio: ACTIVE envFloor=%.0f maxEnv=%.0f frameMax=%.0f VU=%.2f PeakVU=%.2f",
+               envFloorRaw, _energyMaxEnv, frameMax, this->VU(), this->PeakVU());
+    }
+#endif
     return _Peaks;
 }
 
@@ -798,6 +940,7 @@ template class SoundAnalyzer<kParamsMesmerizer>;
 template class SoundAnalyzer<kParamsM5>;
 template class SoundAnalyzer<kParamsM5Plus2>;
 template class SoundAnalyzer<kParamsI2SExternal>;
+template class SoundAnalyzer<kParamsES7210>;
 
 #endif
 

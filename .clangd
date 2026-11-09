@@ -1,9 +1,8 @@
 CompileFlags:
   Remove:
-    - -m*
-    - -fno-tree-switch-conversion
     - -fstrict-volatile-bitfields
-    - -Wno-frame-address
-
-  Add:
-    - -std=gnu++2b
+    - -fno-jump-tables
+    - -fno-tree-switch-conversion
+    - -fno-rtti
+    - -mlongcalls
+    - -mdisable-hardware-atomics
