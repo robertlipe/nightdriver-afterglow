@@ -828,6 +828,7 @@ static const command core_commands[] = {
     {"ls", "Show filesytem directory", "NAME", DoDirectoryListing},                    // Function pointer
     {"partitions", "Display partition table", "Partition Table:", DoPartitions},
     {"reboot", "Reboot system", "Rebooting. Please stand by...", [](const cli_argv &) { esp_restart(); }},
+#if USE_MATRIX
     {"rotate", "[0|90|180|270] | [auto [on|off]] Get or set display orientation", "Orientation:",
      [](const cli_argv &argv) {
 #if HAS_SYSTEM_HARDWARE_HUB
@@ -879,7 +880,7 @@ static const command core_commands[] = {
              cli_printf("Rotation: %d deg, Auto-orientation: %s\n",
                         deg, is_auto ? "enabled" : "disabled");
          }
-#elif USE_MATRIX
+#else
          if (g_ptrSystem && g_ptrSystem->HasDevices() && argv.size() > 1)
          {
              std::string_view arg = argv[1];
@@ -896,10 +897,9 @@ static const command core_commands[] = {
          {
              cli_printf("Usage: rotate [0|90|180|270]\n");
          }
-#else
-         cli_printf("Rotation not supported on strip displays.\n");
 #endif
      }},
+#endif
     {"setpanic", "<msg> Set persistent panic message for next boot", "Setting...", DoSetPanic},
     {"simbeat", "[on|off] [bpm] Simulate audio beat", "Simulate Beat:",
      [](const cli_argv &argv) {
@@ -939,9 +939,9 @@ static const command core_commands[] = {
         }
     }},
     {"statuslog", "[on|off] Show/change periodic status logs", "Status logs.", DoStatusLog},
+#if HAS_SYSTEM_HARDWARE_HUB
     {"tap", "[on|off] Enable/disable bezel tap to advance effect", "Tap detection:",
      [](const cli_argv &argv) {
-#if HAS_SYSTEM_HARDWARE_HUB
          if (argv.size() > 1)
          {
              std::string_view arg = argv[1];
@@ -965,20 +965,16 @@ static const command core_commands[] = {
              cli_printf("Tap detection: %s\n",
                         SystemHardwareHub::Instance().IsTapDetectionEnabled() ? "enabled" : "disabled");
          }
-#else
-         cli_printf("Tap detection not supported on this hardware.\n");
-#endif
      }},
+#endif
+#if configUSE_TRACE_FACILITY && configUSE_STATS_FORMATTING_FUNCTIONS
     {"tasks", "Display FreeRTOS task list", "Task List:",
      [](const cli_argv &) {
-#if configUSE_TRACE_FACILITY && configUSE_STATS_FORMATTING_FUNCTIONS
          char buf[1024];
          vTaskList(buf);
          cli_printf("\nName          State      Prio  Stack  Num Core\n%s", buf);
-#else
-         cli_printf("Task list not enabled in FreeRTOS config\n");
-#endif
      }},
+#endif
     {"tempoffset", "[degrees] View or set ambient temperature calibration offset (°F)", "Temperature offset:",
      [](const cli_argv &argv) {
          if (argv.size() > 1)
