@@ -51,6 +51,7 @@
 #include "debug_cli.h"
 #include "deviceconfig.h"
 #include "effectmanager.h"
+#include "gfxbase.h"
 #include "ledstripeffect.h"
 #include "nd_network.h"
 #include "sensors.h"
@@ -878,7 +879,7 @@ static const command core_commands[] = {
              cli_printf("Rotation: %d deg, Auto-orientation: %s\n",
                         deg, is_auto ? "enabled" : "disabled");
          }
-#else
+#elif USE_MATRIX
          if (g_ptrSystem && g_ptrSystem->HasDevices() && argv.size() > 1)
          {
              std::string_view arg = argv[1];
@@ -895,6 +896,8 @@ static const command core_commands[] = {
          {
              cli_printf("Usage: rotate [0|90|180|270]\n");
          }
+#else
+         cli_printf("Rotation not supported on strip displays.\n");
 #endif
      }},
     {"setpanic", "<msg> Set persistent panic message for next boot", "Setting...", DoSetPanic},

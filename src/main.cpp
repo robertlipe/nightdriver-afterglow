@@ -734,17 +734,18 @@ void loop()
                 strOutput += str_sprintf("LED FPS: %lu ", (unsigned long)g_Values.FPS);
 
                 #if USE_WS281X
-                    if (g_Values.ThermalThrottle < 255)
-                        strOutput += str_sprintf("LED Bright: %3.0lf%% [THROTTLED], LED Watts: %lu, ", (double)g_Values.Brite, (unsigned long)g_Values.Watts);
-                    else
-                        strOutput += str_sprintf("LED Bright: %3.0lf%%, LED Watts: %lu, ", (double)g_Values.Brite, (unsigned long)g_Values.Watts);
+                    strOutput += str_sprintf("LED Bright: %3.0lf%%%s, LED Watts: %lu, ",
+                                             (double)g_Values.Brite,
+                                             g_Values.ThermalThrottle < 255 ? " [THROTTLED]" : "",
+                                             (unsigned long)g_Values.Watts);
                 #endif
 
                 #if USE_HUB75
-                    if (g_Values.ThermalThrottle < 255)
-                        strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%% [THROTTLED], ", 0, g_Values.MatrixPowerMilliwatts, (double)g_Values.Brite);
-                    else
-                        strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%%, ", 0, g_Values.MatrixPowerMilliwatts, (double)g_Values.Brite);
+                    strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%%%s, ",
+                                             0,
+                                             g_Values.MatrixPowerMilliwatts,
+                                             (double)g_Values.Brite,
+                                             g_Values.ThermalThrottle < 255 ? " [THROTTLED]" : "");
                 #endif
 
                 #if ENABLE_AUDIO
