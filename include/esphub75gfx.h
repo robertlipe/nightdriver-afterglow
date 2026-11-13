@@ -66,6 +66,8 @@ public:
 
     void SetBrightness(uint8_t amount) override;
 
+    void setRotation(uint8_t r) override;
+
     void PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsDrawn) override;
 };
 

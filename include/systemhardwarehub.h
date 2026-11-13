@@ -55,6 +55,16 @@ class SystemHardwareHub
     // owns the handle and is responsible for any required cleanup at teardown.
     i2c_master_dev_handle_t AddDevice(uint8_t address, uint32_t sclSpeedHz = 400000);
 
+    // Auto-Orientation and Display Rotation
+    bool IsAutoOrientationEnabled() const { return auto_orientation_enabled; }
+    void SetAutoOrientationEnabled(bool enable) { auto_orientation_enabled = enable; }
+    uint8_t GetCurrentRotation() const { return current_rotation; }
+    void SetManualRotation(uint8_t rotation);
+
+    // Bezel Tap Detection
+    bool IsTapDetectionEnabled() const { return tap_detection_enabled; }
+    void SetTapDetectionEnabled(bool enable) { tap_detection_enabled = enable; }
+
   private:
     SystemHardwareHub() = default;
     ~SystemHardwareHub() = default;
@@ -66,6 +76,7 @@ class SystemHardwareHub
 
     void ScanI2CBus();
     void PollInertial();
+    void ApplyRotation(uint8_t rotation);
 
     mutable std::mutex cache_mutex;
     InertialMetrics cached_inertial{0, 0, 0, false};
@@ -73,6 +84,14 @@ class SystemHardwareHub
 
     uint64_t last_fast_tick = 0;
     uint64_t last_slow_tick = 0;
+
+    bool auto_orientation_enabled = true;
+    uint8_t current_rotation = 0; // 0 = normal (0 deg), 2 = inverted (180 deg)
+    int orientation_stable_count = 0;
+
+    bool tap_detection_enabled = true;
+    InertialMetrics prev_inertial{0, 0, 0, false};
+    uint64_t last_tap_time = 0;
 
     enum class ClimateState
     {
@@ -114,6 +133,14 @@ class SystemHardwareHub
 
     i2c_master_bus_handle_t GetI2CBus() { return nullptr; }
     i2c_master_dev_handle_t AddDevice(uint8_t, uint32_t = 400000) { return nullptr; }
+
+    bool IsAutoOrientationEnabled() const { return false; }
+    void SetAutoOrientationEnabled(bool) {}
+    uint8_t GetCurrentRotation() const { return 0; }
+    void SetManualRotation(uint8_t) {}
+
+    bool IsTapDetectionEnabled() const { return false; }
+    void SetTapDetectionEnabled(bool) {}
 
   private:
     SystemHardwareHub() = default;

@@ -1,7 +1,7 @@
 # Architecture & Implementation Plan: Waveshare ESP32-S3-RGB-Matrix Bring-Up
 
 **Target:** Waveshare ESP32-S3-RGB-Matrix (HUB75 Panel Driver, ESP32-S3-WROOM-2-N32R16V)  
-**Status:** Phase 1 Complete & Verified (Audio ES7210); Phase 2 (Sensors) in Progress.
+**Status:** Phase 1 (Audio ES7210), Phase 2 (Sensors), Phase 3 (RTC), and Phase 6 (Motion & Orientation) Complete.
 
 ---
 
@@ -38,7 +38,7 @@ All onboard peripherals share a single physical master I2C bus on **GPIO 47 (SDA
 * **DSP & Normalization Tuning:**
   * Analog PGA gain calibrated to **30.0 dB**.
   * Software multiplier set to **1:1** to preserve 16-bit dynamic range without digital clipping.
-  * `quietEnvFloorGate` set to **100,000** (giving 4× margin over room ambient noise ~20k while keeping whisper/quiet music responsive).
+  * `quietEnvFloorGate` tuned from **100,000.0f** down to **40,000.0f** to allow normal, comfortable room listening levels to punch cleanly through the squelch gate without false triggering on silence.
   * `energyMaxEnvCap` set to **0.0f** (uncapped) and `frameSNRGate` set to **0.0f** to eliminate artificial 4/4 chattering and speech flatlining.
 * **Telemetry Gating:** Rate-limited telemetry loops enclosed in `#if DEBUG_AUDIO_PARAMS` to eliminate runtime CPU/memory overhead in production.
 * **Designated Initializers:** Modernized all `AudioInputParams` instances in `include/soundanalyzer.h` to C++20 designated initializers.
@@ -77,6 +77,26 @@ All onboard peripherals share a single physical master I2C bus on **GPIO 47 (SDA
 * **Cold Boot Sync:** Added `SyncSystemTimeFromRTC()` on boot in `SystemHardwareHub::Begin()`: checks the `OS` (Oscillator Stop) flag in register `0x04` to ensure power integrity, decodes BCD to `struct tm`, and invokes `settimeofday()` so clock effects have valid real-world wall-clock time offline.
 * **NTP Commit:** Implemented `WriteRTC()` with atomic `STOP` bit latching in `Control_1` (`0x00`) to prevent register ripple race conditions during updates.
 * **Sync Hook:** Wired `SyncRTCTimeFromSystem()` into `NTPTimeClient::ProcessPendingSyncNotification()` to automatically commit accurate UTC time to the hardware RTC upon achieving NTP synchronization.
+
+---
+
+### ✅ Phase 6: Motion Interactions & Orientation Control (DONE)
+* **Auto-Orientation / 180° Inversion:**
+  * Supported in both display drivers:
+    * `ESPMPDMAGFX`: delegating `setRotation(r)` to `MatrixPanel_I2S_DMA::setRotation()`, transforming coordinates at the DMA level.
+    * `ESPHUB75GFX`: mapping `setRotation(r)` to native ESPHome `driver->set_rotation(Hub75Rotation::ROTATE_*)`.
+  * Monitored vertical gravity axis $a_x$ in `SystemHardwareHub`: triggers 180° inversion when $a_x < -4.0\text{ m/s}^2$ and normal when $a_x > +4.0\text{ m/s}^2$, debounced across 200 ms to eliminate lap or flip jitter. Verified live on hardware!
+  * Added CLI command `rotate [0|180|auto]` to query or manually override rotation.
+* **Bezel Tap / Knock Detection:**
+  * Computes 3D acceleration jerk magnitude $|\Delta \vec{a}|$ across consecutive 50 Hz IMU samples.
+  * Detects sharp mechanical impulse spikes ($|\Delta \vec{a}| > 18.0\text{ m/s}^2$) with 600 ms debouncing, triggering `g_ptrSystem->GetEffectManager().NextEffect()`.
+  * Added CLI command `tap [on|off]` to enable/disable tap advancement.
+* **Tilt-Reactive Sand (`PatternSMSand.h`):**
+  * Reads horizontal tilt vector $a_y$ from `SystemHardwareHub`.
+  * Automatically inverts tilt coordinate when display rotation is 180°, keeping physical gravity aligned with real-world down.
+  * Biases peak scattering probability towards the lower side.
+  * Enables plateau avalanching when $|a_y| > 0.20g$.
+  * Drifts the top sand emitter towards the elevated edge so sand streams down the incline.
 
 ---
 

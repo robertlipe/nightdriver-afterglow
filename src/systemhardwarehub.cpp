@@ -9,6 +9,9 @@
 #include <sys/time.h>
 
 #include "byte_utils.h"
+#include "effectmanager.h"
+#include "gfxbase.h"
+#include "systemcontainer.h"
 #include "values.h"
 
 #if MATRIX_S3
@@ -203,19 +206,97 @@ void SystemHardwareHub::PollInertial()
         int16_t raw_y = ReadFromMemory<int16_t>(&raw_buffer[2]);
         int16_t raw_z = ReadFromMemory<int16_t>(&raw_buffer[4]);
 
-        std::lock_guard<std::mutex> lock(cache_mutex);
+        {
+            std::lock_guard<std::mutex> lock(cache_mutex);
 #if defined(HAS_LIS3DH)
-        cached_inertial.ax = (raw_x >> 4) * 0.001f * 9.80665f;
-        cached_inertial.ay = (raw_y >> 4) * 0.001f * 9.80665f;
-        cached_inertial.az = (raw_z >> 4) * 0.001f * 9.80665f;
+            cached_inertial.ax = (raw_x >> 4) * 0.001f * 9.80665f;
+            cached_inertial.ay = (raw_y >> 4) * 0.001f * 9.80665f;
+            cached_inertial.az = (raw_z >> 4) * 0.001f * 9.80665f;
 #elif defined(HAS_QMI8658)
-        // QMI8658 at +/-4g has 8192 LSB/g sensitivity
-        cached_inertial.ax = (raw_x / 8192.0f) * 9.80665f;
-        cached_inertial.ay = (raw_y / 8192.0f) * 9.80665f;
-        cached_inertial.az = (raw_z / 8192.0f) * 9.80665f;
+            // QMI8658 at +/-4g has 8192 LSB/g sensitivity
+            cached_inertial.ax = (raw_x / 8192.0f) * 9.80665f;
+            cached_inertial.ay = (raw_y / 8192.0f) * 9.80665f;
+            cached_inertial.az = (raw_z / 8192.0f) * 9.80665f;
 #endif
-        cached_inertial.valid = true;
+            cached_inertial.valid = true;
+        }
+
+        uint64_t now = esp_timer_get_time();
+
+        // 1. Bezel tap / knock detection
+        if (prev_inertial.valid && tap_detection_enabled)
+        {
+            float dax = cached_inertial.ax - prev_inertial.ax;
+            float day = cached_inertial.ay - prev_inertial.ay;
+            float daz = cached_inertial.az - prev_inertial.az;
+            float jerk_sq = dax * dax + day * day + daz * daz;
+
+            // Spike threshold: 18.0 m/s^2 (~1.8g delta). 18^2 = 324.0
+            // Debounce: 600 ms (600,000 us) between consecutive taps
+            if (jerk_sq > 324.0f && (now - last_tap_time >= 600000))
+            {
+                last_tap_time = now;
+                debugI("Bezel tap detected (jerk: %.1f m/s^2)! Advancing effect...", sqrtf(jerk_sq));
+                if (g_ptrSystem && g_ptrSystem->HasEffectManager())
+                {
+                    g_ptrSystem->GetEffectManager().NextEffect();
+                }
+            }
+        }
+        prev_inertial = cached_inertial;
+
+        // 2. Auto-orientation (180-degree flip)
+        if (auto_orientation_enabled)
+        {
+            uint8_t target_rotation = current_rotation;
+            // Waveshare panel: ax points down (+9.8 m/s^2 when upright)
+            if (cached_inertial.ax > 4.0f)
+            {
+                target_rotation = 0;
+            }
+            else if (cached_inertial.ax < -4.0f)
+            {
+                target_rotation = 2;
+            }
+
+            if (target_rotation != current_rotation)
+            {
+                orientation_stable_count++;
+                // 10 consecutive ticks (200ms) to filter out brief bumps
+                if (orientation_stable_count >= 10)
+                {
+                    current_rotation = target_rotation;
+                    orientation_stable_count = 0;
+                    ApplyRotation(current_rotation);
+                }
+            }
+            else
+            {
+                orientation_stable_count = 0;
+            }
+        }
     }
+}
+
+void SystemHardwareHub::ApplyRotation(uint8_t rotation)
+{
+    if (g_ptrSystem && g_ptrSystem->HasDevices())
+    {
+        for (auto &dev : g_ptrSystem->GetDevices())
+        {
+            dev->setRotation(rotation);
+        }
+        int deg = (rotation == 1) ? 90 : (rotation == 2) ? 180 : (rotation == 3) ? 270 : 0;
+        debugI("Display rotation set to %d degrees", deg);
+    }
+}
+
+void SystemHardwareHub::SetManualRotation(uint8_t rotation)
+{
+    auto_orientation_enabled = false;
+    current_rotation = rotation;
+    orientation_stable_count = 0;
+    ApplyRotation(current_rotation);
 }
 
 void SystemHardwareHub::ProcessClimateState(uint64_t now)

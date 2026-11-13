@@ -169,7 +169,7 @@ inline constexpr AudioInputParams kParamsES7210
     .frameSNRGate          = 0.0f,
     .postScale             = 1.5f,
     .compressGamma         = (1.0f / 3.0f),
-    .quietEnvFloorGate     = 100000.0f,
+    .quietEnvFloorGate     = 40000.0f,
     .liveAttackPerSec      = 1000.0f,
     .energyMaxEnvCap       = 0.0f
 };
