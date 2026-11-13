@@ -100,6 +100,26 @@ All onboard peripherals share a single physical master I2C bus on **GPIO 47 (SDA
 
 ---
 
+### ✅ Phase 7: Unified Thermal Self-Preservation & Calibration Offset (DONE)
+* **Thermal Self-Preservation ("Detector vs Extinguisher"):**
+  * **Detector (`SensorManager::EvaluateThermal`):** Single, unified thermal evaluator shared across all temperature sources (DHT11, internal silicon junction sensor, and SHTC3/BME280).
+  * **Dual-Tier Tripwires:**
+    * *Critical Shutdown (`ThermalThrottle = 0`):* Ambient $\ge 140^\circ\text{F}$ ($60^\circ\text{C}$), Die $\ge 195^\circ\text{F}$ ($90.5^\circ\text{C}$), or Die surge $\ge 25^\circ\text{F/min}$ while $\ge 140^\circ\text{F}$. Blanks LED displays completely.
+    * *Warning Throttle (`ThermalThrottle = 25`, ~10% brightness):* Ambient $\ge 125^\circ\text{F}$ ($51.7^\circ\text{C}$), Die $\ge 175^\circ\text{F}$ ($79.4^\circ\text{C}$), Ambient climb $\ge 8^\circ\text{F/min}$ while $\ge 105^\circ\text{F}$, or Die climb $\ge 15^\circ\text{F/min}$ while $\ge 125^\circ\text{F}$.
+    * *Hysteresis Recovery:* Ambient $< 115^\circ\text{F}$, Die $< 160^\circ\text{F}$, and climb rate $\le 1^\circ\text{F/min}$ before returning to `Normal` (`ThermalThrottle = 255`).
+  * **Extinguisher:** Wired `g_Values.ThermalThrottle` into `HUB75GFX::PostProcessFrame` and `WS281xGFX::PostProcessFrame` to immediately cut thermal dissipation by 90% or 100%.
+* **Temperature Calibration Offset (Option C):**
+  * Persistent setting `tempOffset` stored in `DeviceConfig` (`"tempOffset"`, default `0.0f`).
+  * CLI command `tempoffset [offset]` to inspect and tune calibration in real-time.
+  * Safety decoupling: `tempOffset` is applied only to reported user-facing ambient temperature (`g_Values.AmbientTemp`); `EvaluateThermal` operates strictly on raw sensor readings so user offsets never bypass emergency shutdown.
+* **Telemetry & Reporting Fixes:**
+  * Fixed HUB75 brightness telemetry bug where status logs reported `MatrixScaledBrightness / 2.55` (always 100% regardless of user brightness).
+  * Now reports true effective output `g_Values.Brite` computed from $\min(\text{brightness}, \text{fader}, \text{powerLimit}, \text{thermalThrottle})$.
+  * Removed duplicate `Power: ... Brite: ...` print from status line. Added `[THROTTLED]` indicator when thermal limiter is active.
+  * Added `thermal` CLI command to inspect current thermal state, throttle percentage, and climb rates.
+
+---
+
 ### ⏳ Phase 4: Secondary Audio Output (ES8311 DAC + NS4150B PA)
 * Keep PA enable (GPIO 11) `LOW` during normal operation.
 * When playback support is needed: configure ES8311 via I2C (`0x18`) to receive I2S audio on GPIO 21 (`I2S_DOUT_PIN`) sharing MCLK/BCLK/LRCK, then set GPIO 11 `HIGH`.
