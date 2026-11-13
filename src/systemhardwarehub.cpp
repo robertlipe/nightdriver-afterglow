@@ -3,11 +3,12 @@
 
 #if HAS_SYSTEM_HARDWARE_HUB
 
+#include <ctime>
 #include <esp_log.h>
 #include <esp_timer.h>
+#include <sys/time.h>
 
 #include "byte_utils.h"
-#include "systemhardwarehub.h"
 #include "values.h"
 
 #if MATRIX_S3
@@ -47,6 +48,8 @@
 #define HAS_QMI8658
 #define HAS_SHTC3 // Waveshare's environment chip selection
 #define CLIMATE_ADDR 0x70
+#define HAS_PCF85063
+#define RTC_ADDR 0x51
 #endif
 
 SystemHardwareHub &SystemHardwareHub::Instance()
@@ -85,6 +88,18 @@ bool SystemHardwareHub::Begin()
     climate_handle = AddDevice(CLIMATE_ADDR);
     if (!climate_handle)
         debugE("I2C: failed to add climate sensor at 0x%02X", CLIMATE_ADDR);
+#endif
+
+#if defined(RTC_ADDR)
+    rtc_handle = AddDevice(RTC_ADDR);
+    if (!rtc_handle)
+    {
+        debugE("I2C: failed to add RTC device at 0x%02X", RTC_ADDR);
+    }
+    else
+    {
+        SyncSystemTimeFromRTC();
+    }
 #endif
 
     ConfigureSensorRegisters();
@@ -285,7 +300,7 @@ void SystemHardwareHub::ProcessClimateState(uint64_t now)
                     g_Values.AmbientHumidity = rh;
                 }
 
-                debugI("Climate: Ambient %.1f F, Humidity %.1f%%",
+                debugV("Climate: Ambient %.1f F, Humidity %.1f%%",
                        g_Values.AmbientTemp.value_or(0.0f), g_Values.AmbientHumidity.value_or(0.0f));
             }
 
@@ -360,6 +375,138 @@ ThermalMetrics SystemHardwareHub::GetThermal() const
 {
     std::lock_guard<std::mutex> lock(cache_mutex);
     return cached_thermal;
+}
+
+namespace
+{
+inline uint8_t BcdToDec(uint8_t val)
+{
+    return static_cast<uint8_t>(((val >> 4) * 10) + (val & 0x0F));
+}
+
+inline uint8_t DecToBcd(uint8_t val)
+{
+    return static_cast<uint8_t>(((val / 10) << 4) | (val % 10));
+}
+} // namespace
+
+bool SystemHardwareHub::ReadRTC(struct tm &timeinfo)
+{
+#if defined(HAS_PCF85063)
+    if (!rtc_handle)
+        return false;
+
+    uint8_t start_reg = 0x04; // Seconds register
+    uint8_t buf[7] = {0};
+
+    if (i2c_master_transmit_receive(rtc_handle, &start_reg, 1, buf, sizeof(buf), 50) != ESP_OK)
+    {
+        debugW("RTC: failed to read PCF85063 time registers");
+        return false;
+    }
+
+    // Bit 7 of seconds register is OS (Oscillator Stop flag).
+    // If set, power was lost or oscillator stopped; time integrity is unverified.
+    if (buf[0] & 0x80)
+    {
+        debugW("RTC: oscillator stop flag detected (uninitialized or battery depleted)");
+        return false;
+    }
+
+    timeinfo.tm_sec = BcdToDec(buf[0] & 0x7F);
+    timeinfo.tm_min = BcdToDec(buf[1] & 0x7F);
+    timeinfo.tm_hour = BcdToDec(buf[2] & 0x3F);
+    timeinfo.tm_mday = BcdToDec(buf[3] & 0x3F);
+    timeinfo.tm_wday = buf[4] & 0x07;
+    timeinfo.tm_mon = BcdToDec(buf[5] & 0x1F) - 1; // 0-indexed month
+    timeinfo.tm_year = BcdToDec(buf[6]) + 100;     // Years since 1900 (e.g. 26 + 100 = 126 for 2026)
+    timeinfo.tm_isdst = -1;
+
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool SystemHardwareHub::WriteRTC(const struct tm &timeinfo)
+{
+#if defined(HAS_PCF85063)
+    if (!rtc_handle)
+        return false;
+
+    // 1. Halt the divider chain by asserting STOP bit (bit 5 in Control_1, 0x00)
+    uint8_t stop_cmd[] = {0x00, 0x20};
+    if (i2c_master_transmit(rtc_handle, stop_cmd, sizeof(stop_cmd), 50) != ESP_OK)
+    {
+        debugW("RTC: failed to assert STOP bit");
+        return false;
+    }
+
+    // 2. Burst write time/calendar registers (0x04..0x0A)
+    uint8_t tx_buf[8];
+    tx_buf[0] = 0x04; // Starting register address
+    tx_buf[1] = DecToBcd(timeinfo.tm_sec) & 0x7F; // Bit 7 (OS) cleared to 0
+    tx_buf[2] = DecToBcd(timeinfo.tm_min) & 0x7F;
+    tx_buf[3] = DecToBcd(timeinfo.tm_hour) & 0x3F;
+    tx_buf[4] = DecToBcd(timeinfo.tm_mday) & 0x3F;
+    tx_buf[5] = static_cast<uint8_t>(timeinfo.tm_wday & 0x07);
+    tx_buf[6] = DecToBcd(timeinfo.tm_mon + 1) & 0x1F;
+    tx_buf[7] = DecToBcd((timeinfo.tm_year >= 100) ? (timeinfo.tm_year - 100) : timeinfo.tm_year);
+
+    if (i2c_master_transmit(rtc_handle, tx_buf, sizeof(tx_buf), 50) != ESP_OK)
+    {
+        debugW("RTC: failed to write time registers");
+        return false;
+    }
+
+    // 3. Clear STOP bit (restart clock and reset divider chain)
+    uint8_t start_cmd[] = {0x00, 0x00};
+    if (i2c_master_transmit(rtc_handle, start_cmd, sizeof(start_cmd), 50) != ESP_OK)
+    {
+        debugW("RTC: failed to clear STOP bit");
+        return false;
+    }
+
+    debugI("RTC: updated PCF85063 time to %04d-%02d-%02d %02d:%02d:%02d UTC",
+           timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+           timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool SystemHardwareHub::SyncSystemTimeFromRTC()
+{
+    struct tm timeinfo = {};
+    if (!ReadRTC(timeinfo))
+        return false;
+
+    time_t t = mktime(&timeinfo);
+    if (t < 1700000000) // Sanity check (prior to late 2023 is invalid)
+    {
+        debugW("RTC: timestamp %lld before valid epoch floor", static_cast<long long>(t));
+        return false;
+    }
+
+    struct timeval tv = {.tv_sec = t, .tv_usec = 0};
+    settimeofday(&tv, nullptr);
+
+    char time_str[64];
+    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S UTC", &timeinfo);
+    debugI("RTC: synchronized system time from PCF85063: %s", time_str);
+    return true;
+}
+
+bool SystemHardwareHub::SyncRTCTimeFromSystem()
+{
+    time_t now = time(nullptr);
+    if (now < 1700000000)
+        return false;
+
+    struct tm timeinfo;
+    gmtime_r(&now, &timeinfo); // Store UTC in RTC
+    return WriteRTC(timeinfo);
 }
 #endif
 

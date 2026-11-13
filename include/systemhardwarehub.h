@@ -3,6 +3,7 @@
 #include "globals.h"
 
 #include <cstdint>
+#include <ctime>
 #include <driver/i2c_master.h>
 #include <mutex>
 
@@ -40,6 +41,12 @@ class SystemHardwareHub
     InertialMetrics GetInertial() const;
     ThermalMetrics GetThermal() const;
 
+    // Real-Time Clock (PCF85063) operations
+    bool ReadRTC(struct tm &timeinfo);
+    bool WriteRTC(const struct tm &timeinfo);
+    bool SyncSystemTimeFromRTC();
+    bool SyncRTCTimeFromSystem();
+
     // The one I2C bus for all on-board peripherals. Codec drivers and future
     // sensors must attach here rather than creating a second master bus.
     i2c_master_bus_handle_t GetI2CBus();
@@ -55,6 +62,7 @@ class SystemHardwareHub
     i2c_master_bus_handle_t bus_handle = nullptr;
     i2c_master_dev_handle_t sensor_handle = nullptr;
     i2c_master_dev_handle_t climate_handle = nullptr;
+    i2c_master_dev_handle_t rtc_handle = nullptr;
 
     void ScanI2CBus();
     void PollInertial();
@@ -98,6 +106,11 @@ class SystemHardwareHub
 
     InertialMetrics GetInertial() const { return {}; }
     ThermalMetrics GetThermal() const { return {}; }
+
+    bool ReadRTC(struct tm &) { return false; }
+    bool WriteRTC(const struct tm &) { return false; }
+    bool SyncSystemTimeFromRTC() { return false; }
+    bool SyncRTCTimeFromSystem() { return false; }
 
     i2c_master_bus_handle_t GetI2CBus() { return nullptr; }
     i2c_master_dev_handle_t AddDevice(uint8_t, uint32_t = 400000) { return nullptr; }

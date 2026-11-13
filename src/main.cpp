@@ -753,10 +753,10 @@ void loop()
                     strOutput += str_sprintf("Serial FPS: %d, ", g_Analyzer.SerialFPS());
                 #endif
 
-		debugI("%s", strOutput.c_str());
+                debugI("%s", strOutput.c_str());
 
-		if (ESP.getFreeHeap() < 15000)
-		    debugW("Danger: Memory perilously low (< 15K). Expect bad things to happen!");
+                if (ESP.getFreeHeap() < 15000)
+                    debugW("Danger: Memory perilously low (< 15K). Expect bad things to happen!");
 
                 #if INCOMING_WIFI_ENABLED
                     auto& bufferManager = g_ptrSystem->GetBufferManagers()[0];

@@ -72,9 +72,11 @@ All onboard peripherals share a single physical master I2C bus on **GPIO 47 (SDA
 
 ---
 
-### ⏳ Phase 3: PCF85063 Real-Time Clock (`0x51`)
-* Initialize I2C device handle for address `0x51`.
-* Implement time read/write methods to synchronize system RTC on startup before NTP syncs, and update RTC when SNTP achieves lock.
+### ✅ Phase 3: PCF85063 Real-Time Clock (`0x51`) (DONE)
+* **Hardware Device Attached:** Added `rtc_handle` at I2C address `0x51` on shared master bus.
+* **Cold Boot Sync:** Added `SyncSystemTimeFromRTC()` on boot in `SystemHardwareHub::Begin()`: checks the `OS` (Oscillator Stop) flag in register `0x04` to ensure power integrity, decodes BCD to `struct tm`, and invokes `settimeofday()` so clock effects have valid real-world wall-clock time offline.
+* **NTP Commit:** Implemented `WriteRTC()` with atomic `STOP` bit latching in `Control_1` (`0x00`) to prevent register ripple race conditions during updates.
+* **Sync Hook:** Wired `SyncRTCTimeFromSystem()` into `NTPTimeClient::ProcessPendingSyncNotification()` to automatically commit accurate UTC time to the hardware RTC upon achieving NTP synchronization.
 
 ---
 
