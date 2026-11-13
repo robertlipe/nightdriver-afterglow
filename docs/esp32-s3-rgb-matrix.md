@@ -152,3 +152,39 @@ Flash upload command:
 ```sh
 pio run -t upload -e ws_s3_hub75-64x64 --upload-port /dev/cu.usbmodem101
 ```
+
+---
+
+## 6. Onboard Peripherals & SystemHardwareHub
+
+All onboard I2C devices are arbitrated cooperatively by the non-blocking `SystemHardwareHub` singleton:
+
+* **SHTC3 (`0x70`):** Polled asynchronously via a 3-stage non-blocking state machine (`Idle` -> `Waking` -> `Measuring` -> `Idle`) that sleeps the sensor between reads to prevent self-heating. Metrics feed `g_Values.AmbientTemp` and `g_Values.AmbientHumidity`.
+* **QMI8658 6-Axis IMU (`0x6B`):** Burst reads accelerometer data at 50 Hz. Exposes calibrated gravity vectors $[a_x, a_y, a_z]$ in $\text{m/s}^2$.
+* **PCF85063 RTC (`0x51`):** Synchronizes system time on cold boot when valid (`OS` bit clear in register `0x04`). Receives atomic time updates from NTP upon network synchronization (`SyncRTCTimeFromSystem`).
+
+---
+
+## 7. Motion Interactions & Thermal Self-Preservation
+
+* **Auto-Orientation:** Automatically inverts the display 180° when the board is turned upside-down ($a_x < -4.0\,\text{m/s}^2$ vs $> +4.0\,\text{m/s}^2$ with 200 ms hysteresis). Supported natively across both `ESPMPDMAGFX` (hardware DMA rotation) and `ESPHUB75GFX` (ESPHome driver rotation).
+* **Bezel Knock / Tap Detection:** Computes 3D acceleration jerk magnitude $|\Delta \vec{a}|$ across consecutive 50 Hz IMU samples. Mechanical impulse spikes ($|\Delta \vec{a}| > 18.0\,\text{m/s}^2$) advance to the next effect, debounced across 600 ms.
+* **Tilt-Reactive Sand:** `PatternSMSand` reads horizontal tilt ($a_y$) from `SystemHardwareHub`, automatically inverting tilt coordinate when the display is rotated 180°. Biases sand avalanche probability and drifts the sand emitter towards the elevated edge.
+* **Unified Thermal Self-Preservation:** Dual-tier tripwires protect high-density LEDs and driver chips from thermal destruction:
+  * **Warning (Tripwire 1):** Ambient $\ge 125^\circ\text{F}$, Die $\ge 175^\circ\text{F}$, or rapid surge $\ge 8^\circ\text{F/min}$ Ambient / $\ge 15^\circ\text{F/min}$ Die $\implies$ Brightness clamped to 10% (`ThermalThrottle = 25`).
+  * **Critical (Tripwire 2):** Ambient $\ge 140^\circ\text{F}$, Die $\ge 195^\circ\text{F}$, or emergency surge $\ge 25^\circ\text{F/min} \implies$ Output blacked out (`ThermalThrottle = 0`).
+  * **Hysteresis Recovery:** System must cool $5^\circ\text{F}$ below trip thresholds before throttle relaxes.
+  * **Temperature Offset:** Persistent calibration offset (`tempoffset`) corrects board self-heating for ambient reporting without impacting raw thermal safety tripwires.
+
+---
+
+## 8. Interactive CLI Commands
+
+The debug CLI provides interactive runtime control over board peripherals:
+
+| Command | Arguments | Description |
+| --- | --- | --- |
+| `rotate` | `[0 \| 180 \| 270 \| auto [on\|off]]` | Get or set display rotation, or toggle automatic IMU-driven orientation |
+| `tap` | `[on \| off]` | Enable or disable knock/tap detection for advancing visual effects |
+| `thermal` | — | Display real-time thermal sensor metrics, rise-rates, tripwire thresholds, and throttle status |
+| `tempoffset` | `[<offset_degF>]` | Get or set persistent ambient temperature calibration offset (e.g. `tempoffset -5.5`) |
