@@ -120,6 +120,7 @@ bool DeviceConfig::SerializeToJSON(JsonObject& jsonObject, bool includeSensitive
     jsonDoc[GlobalColorTag] = globalColor;
     jsonDoc[ApplyGlobalColorsTag] = applyGlobalColors;
     jsonDoc[SecondColorTag] = secondColor;
+    jsonDoc[TempOffsetTag] = tempOffset;
     #if ENABLE_WIFI
     jsonDoc[PortalTimeoutSecondsTag] = portalTimeoutSeconds;
     #endif
@@ -161,6 +162,7 @@ bool DeviceConfig::DeserializeFromJSON(const JsonObjectConst& jsonObject, bool s
     SetIfPresentIn(jsonObject, globalColor, GlobalColorTag);
     SetIfPresentIn(jsonObject, applyGlobalColors, ApplyGlobalColorsTag);
     SetIfPresentIn(jsonObject, secondColor, SecondColorTag);
+    SetIfPresentIn(jsonObject, tempOffset, TempOffsetTag);
     #if ENABLE_WIFI
     bool portalTimeoutPresent = jsonObject[PortalTimeoutSecondsTag].is<uint32_t>();
     SetIfPresentIn(jsonObject, portalTimeoutSeconds, PortalTimeoutSecondsTag);
@@ -330,6 +332,13 @@ const std::vector<std::reference_wrapper<SettingSpec>>& DeviceConfig::GetSetting
             SettingSpec::SettingType::Integer
         );
         #endif
+
+        settingSpecs.emplace_back(
+            TempOffsetTag,
+            "Temperature offset",
+            "Calibration offset in degrees Fahrenheit to apply to ambient temperature readings.",
+            SettingSpec::SettingType::Float
+        );
 
 
         settingSpecReferences.insert(settingSpecReferences.end(), settingSpecs.begin(), settingSpecs.end());
@@ -594,3 +603,8 @@ void DeviceConfig::SetPortalTimeoutSeconds(uint32_t newPortalTimeoutSeconds)
     SetAndSave(portalTimeoutSeconds, newPortalTimeoutSeconds);
 }
 #endif
+
+void DeviceConfig::SetTempOffset(float newTempOffset)
+{
+    SetAndSave(tempOffset, newTempOffset);
+}

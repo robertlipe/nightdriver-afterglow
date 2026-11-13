@@ -53,6 +53,7 @@
 #include "effectmanager.h"
 #include "ledstripeffect.h"
 #include "nd_network.h"
+#include "sensors.h"
 #include "soundanalyzer.h"
 #include "systemcontainer.h"
 #include "systemhardwarehub.h"
@@ -974,6 +975,54 @@ static const command core_commands[] = {
 #else
          cli_printf("Task list not enabled in FreeRTOS config\n");
 #endif
+     }},
+    {"tempoffset", "[degrees] View or set ambient temperature calibration offset (°F)", "Temperature offset:",
+     [](const cli_argv &argv) {
+         if (argv.size() > 1)
+         {
+             float offset = std::stof(std::string(argv[1]));
+             g_ptrSystem->GetDeviceConfig().SetTempOffset(offset);
+             cli_printf("Ambient temperature offset set to %.1f °F\n", offset);
+             auto rawOpt = SensorManager::GetRawAmbientTemp();
+             if (rawOpt.has_value())
+             {
+                 g_Values.AmbientTemp = *rawOpt + offset;
+                 cli_printf("Calibrated ambient temperature: %.1f °F (Raw: %.1f °F)\n",
+                            *g_Values.AmbientTemp, *rawOpt);
+             }
+         }
+         else
+         {
+             cli_printf("Ambient temperature offset: %.1f °F\n",
+                        g_ptrSystem->GetDeviceConfig().GetTempOffset());
+             if (g_Values.AmbientTemp.has_value())
+             {
+                 cli_printf("Current calibrated ambient temp: %.1f °F\n",
+                            *g_Values.AmbientTemp);
+             }
+         }
+     }},
+    {"thermal", "Display thermal safety and throttling status", "Thermal status:",
+     [](const cli_argv &) {
+         cli_printf("Thermal State: %s (Throttle: %d/255, %3.0f%%)\n",
+                    SensorManager::GetThermalStateName(),
+                    g_Values.ThermalThrottle,
+                    (g_Values.ThermalThrottle / 2.55));
+         if (g_Values.InternalTemp.has_value())
+         {
+             cli_printf("  Die Temp:     %.1f °F (Rate: %+.1f °F/min)\n",
+                        *g_Values.InternalTemp,
+                        SensorManager::GetDieRiseRate());
+         }
+         if (g_Values.AmbientTemp.has_value())
+         {
+             auto raw = SensorManager::GetRawAmbientTemp().value_or(*g_Values.AmbientTemp);
+             cli_printf("  Ambient Temp: %.1f °F (Raw: %.1f °F, Offset: %+.1f °F, Rate: %+.1f °F/min)\n",
+                        *g_Values.AmbientTemp,
+                        raw,
+                        g_ptrSystem->GetDeviceConfig().GetTempOffset(),
+                        SensorManager::GetAmbientRiseRate());
+         }
      }},
     {"uptime", "Show system uptime", "Showing uptime...", DoUptime},
     {"+", "Nudge brightness up", "Brightness +10", [](const cli_argv &) {

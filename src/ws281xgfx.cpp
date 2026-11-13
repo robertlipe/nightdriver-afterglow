@@ -157,7 +157,7 @@ void WS281xGFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsD
         FastLED[i].setLeds(effectManager.g(i)->leds, pixelsDrawn);
         fadeLightBy(FastLED[i].leds(), FastLED[i].size(), 255 - g_ptrSystem->GetDeviceConfig().GetBrightness());
     }
-    FastLED.show(g_Values.Fader); //Shows the pixels
+    FastLED.show(min(g_Values.Fader, g_Values.ThermalThrottle)); //Shows the pixels
 
     g_Values.FPS = FastLED.getFPS();
     #ifdef POWER_LIMIT_MW
@@ -165,6 +165,7 @@ void WS281xGFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsD
     #else
         g_Values.Brite = 100.0 * g_ptrSystem->GetDeviceConfig().GetBrightness() / 255;
     #endif
+    g_Values.Brite = (g_Values.Brite * min(g_Values.Fader, g_Values.ThermalThrottle)) / 255.0f;
     g_Values.Watts = calculate_unscaled_power_mW(effectManager.g()->leds, pixelsDrawn) / 1000; // 1000 for mw->W
 }
 

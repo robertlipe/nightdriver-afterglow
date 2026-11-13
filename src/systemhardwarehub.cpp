@@ -9,8 +9,10 @@
 #include <sys/time.h>
 
 #include "byte_utils.h"
+#include "deviceconfig.h"
 #include "effectmanager.h"
 #include "gfxbase.h"
+#include "sensors.h"
 #include "systemcontainer.h"
 #include "values.h"
 
@@ -371,7 +373,8 @@ void SystemHardwareHub::ProcessClimateState(uint64_t now)
                     float tempC = -45.0f + 175.0f * ((float)raw_t / 65535.0f);
                     float tempF = tempC * 1.8f + 32.0f;
                     current_ambient = tempC;
-                    g_Values.AmbientTemp = tempF;
+                    float offset = g_ptrSystem ? g_ptrSystem->GetDeviceConfig().GetTempOffset() : 0.0f;
+                    g_Values.AmbientTemp = tempF + offset;
                 }
 
                 if (checkCRC(&buf[3], 2, buf[5]))
@@ -403,8 +406,11 @@ void SystemHardwareHub::ProcessClimateState(uint64_t now)
 #endif
 }
 
-void SystemHardwareHub::EvaluateThermalMetrics(uint64_t now, float current_ambient)
+void SystemHardwareHub::EvaluateThermalMetrics(uint64_t, float current_ambient)
 {
+    float rawAmbientF = (current_ambient * 1.8f) + 32.0f;
+    SensorManager::EvaluateThermal(rawAmbientF, g_Values.InternalTemp);
+
     float current_die_temp = 0.0f;
 
     // Die temperature from internal sensor (managed by SensorManager)
@@ -413,36 +419,14 @@ void SystemHardwareHub::EvaluateThermalMetrics(uint64_t now, float current_ambie
         current_die_temp = (*g_Values.InternalTemp - 32.0f) * (5.0f / 9.0f);
     }
 
-    // =========================================================
-    // CRITICAL MATH BOUNDARY: EVALUATING THERMAL RATE OF RISE
-    // =========================================================
-    float time_delta_minutes = (float)(now - last_delta_timestamp) / 60000000.0f;
-    float rate_of_rise = 0.0f;
-
-    if (last_delta_timestamp > 0 && time_delta_minutes > 0.001f)
-    {
-        // Calculate velocity of temperature growth (°C per Minute)
-        rate_of_rise = (current_die_temp - previous_die_temp) / time_delta_minutes;
-    }
-
-    last_delta_timestamp = now;
-    previous_die_temp = current_die_temp;
+    float rate_of_rise = (SensorManager::GetDieRiseRate() * 5.0f / 9.0f); // Convert F/min to C/min
 
     // Update shared cache blocks
     std::lock_guard<std::mutex> lock(cache_mutex);
     cached_thermal.ambient_temp = current_ambient;
     cached_thermal.die_temp = current_die_temp;
     cached_thermal.die_rate_of_rise = rate_of_rise;
-
-    // EMERGENCY TRIPWIRE: Flag active if absolute temp > 80C OR if we surge > 10°C/minute
-    if (current_die_temp > 80.0f || rate_of_rise > 10.0f)
-    {
-        cached_thermal.thermal_emergency = true;
-    }
-    else
-    {
-        cached_thermal.thermal_emergency = false;
-    }
+    cached_thermal.thermal_emergency = (g_Values.ThermalThrottle < 255);
     cached_thermal.valid = true;
 }
 

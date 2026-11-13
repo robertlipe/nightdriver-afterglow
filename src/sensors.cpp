@@ -21,10 +21,13 @@
 //
 //---------------------------------------------------------------------------
 
+#include "deviceconfig.h"
 #include "sensors.h"
+#include "systemcontainer.h"
 #include "systemhardwarehub.h"
 #include "values.h"
 
+#include <algorithm>
 #include <esp_cpu.h>
 #include <esp_timer.h>
 #include <soc/soc_caps.h>
@@ -388,6 +391,185 @@ void SensorManager::begin()
 #endif
 }
 
+namespace
+{
+static ThermalState s_thermalState = ThermalState::Normal;
+
+static std::optional<float> s_lastRawAmbientF;
+static std::optional<float> s_lastDieF;
+
+static uint32_t s_lastAmbientCheckMs = 0;
+static uint32_t s_lastDieCheckMs = 0;
+
+static float s_ambientRiseRate = 0.0f; // °F / min
+static float s_dieRiseRate = 0.0f;     // °F / min
+
+static std::optional<float> s_latestRawAmbientF;
+} // namespace
+
+void SensorManager::EvaluateThermal(std::optional<float> rawAmbientTempF, std::optional<float> rawDieTempF)
+{
+    uint32_t now = millis();
+
+    if (rawAmbientTempF.has_value())
+    {
+        s_latestRawAmbientF = *rawAmbientTempF;
+        if (s_lastRawAmbientF.has_value() && s_lastAmbientCheckMs > 0)
+        {
+            uint32_t dt = now - s_lastAmbientCheckMs;
+            if (dt >= 8000)
+            {
+                float dt_min = (float)dt / 60000.0f;
+                s_ambientRiseRate = (*rawAmbientTempF - *s_lastRawAmbientF) / dt_min;
+                s_lastRawAmbientF = *rawAmbientTempF;
+                s_lastAmbientCheckMs = now;
+            }
+        }
+        else
+        {
+            s_lastRawAmbientF = *rawAmbientTempF;
+            s_lastAmbientCheckMs = now;
+        }
+    }
+
+    if (rawDieTempF.has_value())
+    {
+        if (s_lastDieF.has_value() && s_lastDieCheckMs > 0)
+        {
+            uint32_t dt = now - s_lastDieCheckMs;
+            if (dt >= 8000)
+            {
+                float dt_min = (float)dt / 60000.0f;
+                s_dieRiseRate = (*rawDieTempF - *s_lastDieF) / dt_min;
+                s_lastDieF = *rawDieTempF;
+                s_lastDieCheckMs = now;
+            }
+        }
+        else
+        {
+            s_lastDieF = *rawDieTempF;
+            s_lastDieCheckMs = now;
+        }
+    }
+
+    // Determine target thermal state:
+    // 1. Critical Tripwire: Ambient >= 140°F, Die >= 195°F, or Die surge >= 25°F/min while >= 140°F
+    bool isCritical = false;
+    if (s_latestRawAmbientF && *s_latestRawAmbientF >= 140.0f)
+        isCritical = true;
+    if (rawDieTempF && *rawDieTempF >= 195.0f)
+        isCritical = true;
+    if (rawDieTempF && *rawDieTempF >= 140.0f && s_dieRiseRate >= 25.0f)
+        isCritical = true;
+
+    // 2. Warning Tripwire: Ambient >= 125°F, Die >= 175°F, Ambient surge >= 8°F/min while >= 105°F, or Die surge >= 15°F/min while >= 125°F
+    bool isWarning = false;
+    if (s_latestRawAmbientF && *s_latestRawAmbientF >= 125.0f)
+        isWarning = true;
+    if (rawDieTempF && *rawDieTempF >= 175.0f)
+        isWarning = true;
+    if (s_latestRawAmbientF && *s_latestRawAmbientF >= 105.0f && s_ambientRiseRate >= 8.0f)
+        isWarning = true;
+    if (rawDieTempF && *rawDieTempF >= 125.0f && s_dieRiseRate >= 15.0f)
+        isWarning = true;
+
+    ThermalState nextState = ThermalState::Normal;
+
+    if (isCritical)
+    {
+        nextState = ThermalState::Critical;
+    }
+    else if (isWarning)
+    {
+        nextState = ThermalState::Warning;
+    }
+    else
+    {
+        // Apply hysteresis when cooling down
+        if (s_thermalState == ThermalState::Critical)
+        {
+            bool ambientCooled = !s_latestRawAmbientF || *s_latestRawAmbientF < 135.0f;
+            bool dieCooled = !rawDieTempF || *rawDieTempF < 185.0f;
+            if (!ambientCooled || !dieCooled)
+                nextState = ThermalState::Critical;
+            else
+                nextState = ThermalState::Warning;
+        }
+        else if (s_thermalState == ThermalState::Warning)
+        {
+            bool ambientSafe = !s_latestRawAmbientF || (*s_latestRawAmbientF < 115.0f && s_ambientRiseRate <= 1.0f);
+            bool dieSafe = !rawDieTempF || (*rawDieTempF < 160.0f && s_dieRiseRate <= 1.0f);
+            if (!ambientSafe || !dieSafe)
+                nextState = ThermalState::Warning;
+            else
+                nextState = ThermalState::Normal;
+        }
+    }
+
+    // Extinguisher action:
+    if (nextState == ThermalState::Critical)
+    {
+        g_Values.ThermalThrottle = 0;
+        if (s_thermalState != ThermalState::Critical)
+        {
+            debugE("!!! THERMAL CRITICAL: Die: %.1f F, Ambient: %.1f F. Emergency display shutdown! !!!",
+                   rawDieTempF.value_or(0.0f), s_latestRawAmbientF.value_or(0.0f));
+        }
+    }
+    else if (nextState == ThermalState::Warning)
+    {
+        g_Values.ThermalThrottle = 25; // ~10% brightness
+        if (s_thermalState != ThermalState::Warning)
+        {
+            debugW("!!! THERMAL WARNING: Die: %.1f F (+%.1f F/min), Ambient: %.1f F (+%.1f F/min). Throttling display to 10%% !!!",
+                   rawDieTempF.value_or(0.0f), s_dieRiseRate,
+                   s_latestRawAmbientF.value_or(0.0f), s_ambientRiseRate);
+        }
+    }
+    else // Normal
+    {
+        g_Values.ThermalThrottle = 255;
+        if (s_thermalState != ThermalState::Normal)
+        {
+            debugI("Thermal conditions normalized (Die: %.1f F, Ambient: %.1f F). Full brightness restored.",
+                   rawDieTempF.value_or(0.0f), s_latestRawAmbientF.value_or(0.0f));
+        }
+    }
+
+    s_thermalState = nextState;
+}
+
+ThermalState SensorManager::GetThermalState()
+{
+    return s_thermalState;
+}
+
+const char* SensorManager::GetThermalStateName()
+{
+    switch (s_thermalState)
+    {
+    case ThermalState::Normal:   return "Normal";
+    case ThermalState::Warning:  return "Warning (Throttled)";
+    case ThermalState::Critical: return "Critical (Emergency Shutdown)";
+    default:                     return "Unknown";
+    }
+}
+
+float SensorManager::GetAmbientRiseRate()
+{
+    return s_ambientRiseRate;
+}
+
+float SensorManager::GetDieRiseRate()
+{
+    return s_dieRiseRate;
+}
+
+std::optional<float> SensorManager::GetRawAmbientTemp()
+{
+    return s_latestRawAmbientF;
+}
+
 void SensorManager::Update()
 {
 #if HAS_TEMP_SENSOR
@@ -401,21 +583,18 @@ void SensorManager::Update()
     }
 #endif
 
+    std::optional<float> rawAmbient;
+
 #ifdef DHT11_PIN
     if (s_dhtSensorPresent)
     {
         float temp = 0, hum = 0;
         if (ReadDHT11(DHT11_PIN, temp, hum))
         {
-            g_Values.AmbientTemp = temp;
+            rawAmbient = temp;
+            float offset = g_ptrSystem ? g_ptrSystem->GetDeviceConfig().GetTempOffset() : 0.0f;
+            g_Values.AmbientTemp = temp + offset;
             g_Values.AmbientHumidity = hum;
-
-            // Thermal Protection Check: if temp > 120F, throttle brightness
-            if (temp > 120.0f)
-            {
-                Serial.printf("!!! THERMAL WARNING: Cabinet temperature %.1f F !!! Throttling brightness.\n", temp);
-                g_Values.Brite = std::min(g_Values.Brite, 10.0f);
-            }
         }
     }
     else
@@ -429,12 +608,16 @@ void SensorManager::Update()
             if (ReadDHT11(DHT11_PIN, temp, hum))
             {
                 s_dhtSensorPresent = true;
-                g_Values.AmbientTemp = temp;
+                rawAmbient = temp;
+                float offset = g_ptrSystem ? g_ptrSystem->GetDeviceConfig().GetTempOffset() : 0.0f;
+                g_Values.AmbientTemp = temp + offset;
                 g_Values.AmbientHumidity = hum;
                 debugI("DHT11 sensor detected on GPIO %d after background retry %d. Temp: %.1f F, Humidity: %.1f%%",
-                       DHT11_PIN, s_retryCount, temp, hum);
+                       DHT11_PIN, s_retryCount, temp + offset, hum);
             }
         }
     }
 #endif
+
+    EvaluateThermal(rawAmbient, g_Values.InternalTemp);
 }

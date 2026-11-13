@@ -730,19 +730,21 @@ void loop()
                     strOutput += str_sprintf("WiFi: %s, MAC: %s, IP: %s ", nd_network::WLtoString(nd_network::GetWiFiStatus()), nd_network::GetMacAddress(":").c_str(), nd_network::GetWiFiLocalIP().c_str());
                 #endif
 
-                #if USE_HUB75
-                    strOutput += str_sprintf("Power: %d mW, Brite: %3.0lf%%, ", g_Values.MatrixPowerMilliwatts, g_Values.MatrixScaledBrightness / 2.55);
-                #endif
-
                 strOutput += str_sprintf("Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize());
                 strOutput += str_sprintf("LED FPS: %lu ", (unsigned long)g_Values.FPS);
 
                 #if USE_WS281X
-                    strOutput += str_sprintf("LED Bright: %3.0lf%%, LED Watts: %lu, ", g_Values.Brite, (unsigned long)g_Values.Watts);
+                    if (g_Values.ThermalThrottle < 255)
+                        strOutput += str_sprintf("LED Bright: %3.0lf%% [THROTTLED], LED Watts: %lu, ", (double)g_Values.Brite, (unsigned long)g_Values.Watts);
+                    else
+                        strOutput += str_sprintf("LED Bright: %3.0lf%%, LED Watts: %lu, ", (double)g_Values.Brite, (unsigned long)g_Values.Watts);
                 #endif
 
                 #if USE_HUB75
-                    strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%%, ", 0, g_Values.MatrixPowerMilliwatts, g_Values.MatrixScaledBrightness / 2.55);
+                    if (g_Values.ThermalThrottle < 255)
+                        strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%% [THROTTLED], ", 0, g_Values.MatrixPowerMilliwatts, (double)g_Values.Brite);
+                    else
+                        strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%%, ", 0, g_Values.MatrixPowerMilliwatts, (double)g_Values.Brite);
                 #endif
 
                 #if ENABLE_AUDIO
