@@ -39,7 +39,7 @@
 #include "soundanalyzer.h"
 #include "values.h"
 
-#if WAVESHARE_ESP32_S3_RGB_MATRIX
+#if USE_ES7210_AUDIO
 #include "systemhardwarehub.h"
 #endif
 
@@ -493,7 +493,7 @@ void SoundAnalyzerBase::InitM5()
 void SoundAnalyzerBase::InitI2S()
 {
 #if (USE_I2S_AUDIO || ELECROW)
-#if WAVESHARE_ESP32_S3_RGB_MATRIX
+#if USE_ES7210_AUDIO
     debugI("Audio: Initializing ES7210 I2S input on MCLK:%d BCLK:%d WS:%d DIN:%d",
            I2S_MCLK_PIN, I2S_BCLK_PIN, I2S_WS_PIN, INPUT_PIN);
 
@@ -631,7 +631,7 @@ size_t SoundAnalyzerBase::SampleI2S()
 {
     size_t bytesReadTotal = 0;
 #if (USE_I2S_AUDIO || ELECROW)
-#if WAVESHARE_ESP32_S3_RGB_MATRIX
+#if USE_ES7210_AUDIO
     constexpr int kChannels = 2;
     constexpr size_t bytesToRead = sizeof(_i2sSampleBuffer);
     size_t bytesRead = 0;

@@ -46,7 +46,7 @@
 #include <driver/i2s_std.h>
 #include <esp_adc/adc_continuous.h>
 
-#if WAVESHARE_ESP32_S3_RGB_MATRIX
+#if USE_ES7210_AUDIO
 #include "es7210.h"
 #endif
 
@@ -598,7 +598,7 @@ class SoundAnalyzerBase : public ISoundAnalyzer
     i2s_chan_handle_t _rx_handle = nullptr;
     adc_continuous_handle_t _adc_handle = nullptr;
 
-#if WAVESHARE_ESP32_S3_RGB_MATRIX
+#if USE_ES7210_AUDIO
     // The ES7210 emits interleaved 16-bit stereo samples. Keep the read buffer
     // here rather than on the 4 KB audio task stack.
     ES7210 _es7210;
@@ -666,7 +666,7 @@ class SoundAnalyzer : public SoundAnalyzerBase
     using ProjectSoundAnalyzer = SoundAnalyzer<kParamsM5Plus2>;
     #elif USE_M5
     using ProjectSoundAnalyzer = SoundAnalyzer<kParamsM5>;
-    #elif WAVESHARE_ESP32_S3_RGB_MATRIX
+    #elif USE_ES7210_AUDIO
     using ProjectSoundAnalyzer = SoundAnalyzer<kParamsES7210>;
     #elif USE_I2S_AUDIO
     using ProjectSoundAnalyzer = SoundAnalyzer<kParamsI2SExternal>;

@@ -1,13 +1,14 @@
 #include "globals.h"
+#include "systemhardwarehub.h"
 
-#if WAVESHARE_ESP32_S3_RGB_MATRIX || MATRIX_S3
+#if HAS_SYSTEM_HARDWARE_HUB
 
-#include <driver/temperature_sensor.h> // Pure ESP-IDF internal chip sensor driver
 #include <esp_log.h>
 #include <esp_timer.h>
 
 #include "byte_utils.h"
 #include "systemhardwarehub.h"
+#include "values.h"
 
 #if MATRIX_S3
 #define BOARD_ADAFRUIT_MATRIX_S3 1
@@ -41,15 +42,12 @@
 #endif
 #define PIN_SDA ((gpio_num_t)I2C_SDA_PIN)
 #define PIN_SCL ((gpio_num_t)I2C_SCL_PIN)
-#define SENSOR_ADDR 0x6A // QMI8658 Accel
-#define REG_DATA_START 0x2C
+#define SENSOR_ADDR 0x6B // QMI8658 Accel (SA0 pulled high on Waveshare board)
+#define REG_DATA_START 0x35
 #define HAS_QMI8658
 #define HAS_SHTC3 // Waveshare's environment chip selection
 #define CLIMATE_ADDR 0x70
 #endif
-
-// Globally static handle for internal ESP32 TSENS peripheral configuration
-static temperature_sensor_handle_t tsens_handle = nullptr;
 
 SystemHardwareHub &SystemHardwareHub::Instance()
 {
@@ -83,13 +81,11 @@ bool SystemHardwareHub::Begin()
     if (!sensor_handle)
         debugE("I2C: failed to add IMU device at 0x%02X", SENSOR_ADDR);
 
-    // 3. Initialize the internal ESP32-S3 on-chip junction thermal hardware
-    const temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(20, 100);
-
-    if (temperature_sensor_install(&temp_sensor_config, &tsens_handle) == ESP_OK)
-    {
-        temperature_sensor_enable(tsens_handle);
-    }
+#if defined(CLIMATE_ADDR)
+    climate_handle = AddDevice(CLIMATE_ADDR);
+    if (!climate_handle)
+        debugE("I2C: failed to add climate sensor at 0x%02X", CLIMATE_ADDR);
+#endif
 
     ConfigureSensorRegisters();
     return true;
@@ -144,8 +140,22 @@ void SystemHardwareHub::ConfigureSensorRegisters()
     uint8_t cmd[] = {0x20, 0x57};
     i2c_master_transmit(sensor_handle, cmd, 2, -1);
 #elif defined(HAS_QMI8658)
-    uint8_t cmd[] = {0x02, 0x01};
-    i2c_master_transmit(sensor_handle, cmd, 2, -1);
+    // QMI8658 initialization:
+    uint8_t who_am_i_reg = 0x00;
+    uint8_t who_am_i_val = 0;
+    if (i2c_master_transmit_receive(sensor_handle, &who_am_i_reg, 1, &who_am_i_val, 1, 50) == ESP_OK)
+    {
+        debugI("QMI8658 WHO_AM_I = 0x%02X (expected 0x05)", who_am_i_val);
+    }
+    // CTRL1 (0x02): auto-increment enabled (0x60)
+    uint8_t ctrl1[] = {0x02, 0x60};
+    i2c_master_transmit(sensor_handle, ctrl1, sizeof(ctrl1), 100);
+    // CTRL2 (0x03): Accelerometer +/-4g (0x10), 128Hz ODR (0x05) -> 0x15
+    uint8_t ctrl2[] = {0x03, 0x15};
+    i2c_master_transmit(sensor_handle, ctrl2, sizeof(ctrl2), 100);
+    // CTRL7 (0x08): Enable accelerometer (bit 0 = 1) -> 0x01
+    uint8_t ctrl7[] = {0x08, 0x01};
+    i2c_master_transmit(sensor_handle, ctrl7, sizeof(ctrl7), 100);
 #endif
 }
 
@@ -160,12 +170,8 @@ void SystemHardwareHub::Tick()
         PollInertial();
     }
 
-    // Lazy loop: Thermal metrics and Emergency delta processing at ~1Hz (1s)
-    if (now - last_slow_tick >= 1000000)
-    {
-        last_slow_tick = now;
-        PollThermal();
-    }
+    // Non-blocking asynchronous climate state machine
+    ProcessClimateState(now);
 }
 
 void SystemHardwareHub::PollInertial()
@@ -176,7 +182,7 @@ void SystemHardwareHub::PollInertial()
     uint8_t start_reg = REG_DATA_START;
     uint8_t raw_buffer[6] = {0};
 
-    if (i2c_master_transmit_receive(sensor_handle, &start_reg, 1, raw_buffer, 6, -1) == ESP_OK)
+    if (i2c_master_transmit_receive(sensor_handle, &start_reg, 1, raw_buffer, 6, 50) == ESP_OK)
     {
         int16_t raw_x = ReadFromMemory<int16_t>(&raw_buffer[0]);
         int16_t raw_y = ReadFromMemory<int16_t>(&raw_buffer[2]);
@@ -188,44 +194,132 @@ void SystemHardwareHub::PollInertial()
         cached_inertial.ay = (raw_y >> 4) * 0.001f * 9.80665f;
         cached_inertial.az = (raw_z >> 4) * 0.001f * 9.80665f;
 #elif defined(HAS_QMI8658)
-        cached_inertial.ax = (raw_x / 16384.0f) * 9.80665f;
-        cached_inertial.ay = (raw_y / 16384.0f) * 9.80665f;
-        cached_inertial.az = (raw_z / 16384.0f) * 9.80665f;
+        // QMI8658 at +/-4g has 8192 LSB/g sensitivity
+        cached_inertial.ax = (raw_x / 8192.0f) * 9.80665f;
+        cached_inertial.ay = (raw_y / 8192.0f) * 9.80665f;
+        cached_inertial.az = (raw_z / 8192.0f) * 9.80665f;
 #endif
         cached_inertial.valid = true;
     }
 }
 
-void SystemHardwareHub::PollThermal()
+void SystemHardwareHub::ProcessClimateState(uint64_t now)
+{
+#if defined(HAS_SHTC3)
+    if (!climate_handle)
+        return;
+
+    switch (climate_state)
+    {
+    case ClimateState::Idle:
+        // Poll every 10 seconds without blocking the loop
+        if (now - last_slow_tick >= 10000000)
+        {
+            last_slow_tick = now;
+            // SHTC3 Wakeup: send 0x35 0x17
+            uint8_t wakeup_cmd[] = {0x35, 0x17};
+            if (i2c_master_transmit(climate_handle, wakeup_cmd, sizeof(wakeup_cmd), 50) == ESP_OK)
+            {
+                climate_state = ClimateState::Waking;
+                climate_state_timestamp = now;
+            }
+        }
+        break;
+
+    case ClimateState::Waking:
+        // SHTC3 requires <= 240 us to wake up; advance after >= 1 ms
+        if (now - climate_state_timestamp >= 1000)
+        {
+            // Start measurement: Normal power, clock stretching disabled, T first (0x78 0x66)
+            uint8_t measure_cmd[] = {0x78, 0x66};
+            if (i2c_master_transmit(climate_handle, measure_cmd, sizeof(measure_cmd), 50) == ESP_OK)
+            {
+                climate_state = ClimateState::Measuring;
+                climate_state_timestamp = now;
+            }
+            else
+            {
+                climate_state = ClimateState::Idle;
+            }
+        }
+        break;
+
+    case ClimateState::Measuring:
+        // Measurement takes typ 10.8ms, max 12.1ms; read back after >= 15 ms
+        if (now - climate_state_timestamp >= 15000)
+        {
+            float current_ambient = 0.0f;
+            uint8_t buf[6] = {0};
+            if (i2c_master_receive(climate_handle, buf, sizeof(buf), 50) == ESP_OK)
+            {
+                // Sensirion SHTC3 CRC-8: poly 0x31, init 0xFF
+                auto checkCRC = [](const uint8_t *data, size_t len, uint8_t checksum) -> bool {
+                    uint8_t crc = 0xFF;
+                    for (size_t i = 0; i < len; ++i)
+                    {
+                        crc ^= data[i];
+                        for (int bit = 0; bit < 8; ++bit)
+                        {
+                            if (crc & 0x80)
+                                crc = (crc << 1) ^ 0x31;
+                            else
+                                crc <<= 1;
+                        }
+                    }
+                    return crc == checksum;
+                };
+
+                if (checkCRC(&buf[0], 2, buf[2]))
+                {
+                    uint16_t raw_t = (buf[0] << 8) | buf[1];
+                    float tempC = -45.0f + 175.0f * ((float)raw_t / 65535.0f);
+                    float tempF = tempC * 1.8f + 32.0f;
+                    current_ambient = tempC;
+                    g_Values.AmbientTemp = tempF;
+                }
+
+                if (checkCRC(&buf[3], 2, buf[5]))
+                {
+                    uint16_t raw_rh = (buf[3] << 8) | buf[4];
+                    float rh = 100.0f * ((float)raw_rh / 65535.0f);
+                    g_Values.AmbientHumidity = rh;
+                }
+
+                debugI("Climate: Ambient %.1f F, Humidity %.1f%%",
+                       g_Values.AmbientTemp.value_or(0.0f), g_Values.AmbientHumidity.value_or(0.0f));
+            }
+
+            // Put SHTC3 back to sleep to minimize self-heating (0xB0 0x98)
+            uint8_t sleep_cmd[] = {0xB0, 0x98};
+            i2c_master_transmit(climate_handle, sleep_cmd, sizeof(sleep_cmd), 50);
+
+            EvaluateThermalMetrics(now, current_ambient);
+            climate_state = ClimateState::Idle;
+        }
+        break;
+    }
+#elif defined(HAS_BME280)
+    if (now - last_slow_tick >= 10000000)
+    {
+        last_slow_tick = now;
+        EvaluateThermalMetrics(now, 24.2f);
+    }
+#endif
+}
+
+void SystemHardwareHub::EvaluateThermalMetrics(uint64_t now, float current_ambient)
 {
     float current_die_temp = 0.0f;
-    float current_ambient = 0.0f;
 
-    // 1. Query internal silicon junction driver
-    if (tsens_handle && temperature_sensor_get_celsius(tsens_handle, &current_die_temp) != ESP_OK)
+    // Die temperature from internal sensor (managed by SensorManager)
+    if (g_Values.InternalTemp.has_value())
     {
-        current_die_temp = 0.0f;
+        current_die_temp = (*g_Values.InternalTemp - 32.0f) * (5.0f / 9.0f);
     }
-
-    // 2. Query external board layout environment parts natively via I2C device contexts
-#if defined(HAS_SHTC3)
-    // SHTC3 Wakeup -> Measure -> Read sequence bypasses heavy driver abstraction layers
-    uint8_t wakeup_cmd[] = {0x35, 0x17};
-    if (sensor_handle)
-    {
-        i2c_master_transmit(sensor_handle, wakeup_cmd, 2, -1); // Use shared target line or matching handles
-    }
-    // Real deployments parse the 3-byte response string here directly...
-    current_ambient = 25.0f; // Simplified direct register decode fallback
-#elif defined(HAS_BME280)
-    // Direct raw 3-byte burst read across compensation addresses
-    current_ambient = 24.2f;
-#endif
 
     // =========================================================
     // CRITICAL MATH BOUNDARY: EVALUATING THERMAL RATE OF RISE
     // =========================================================
-    uint64_t now = esp_timer_get_time();
     float time_delta_minutes = (float)(now - last_delta_timestamp) / 60000000.0f;
     float rate_of_rise = 0.0f;
 

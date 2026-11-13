@@ -22,6 +22,7 @@
 //---------------------------------------------------------------------------
 
 #include "sensors.h"
+#include "systemhardwarehub.h"
 #include "values.h"
 
 #include <esp_cpu.h>
@@ -362,6 +363,8 @@ void SensorManager::begin()
         temperature_sensor_enable(s_temp_sensor);
     }
 #endif
+
+    SystemHardwareHub::Instance().Begin();
 
 #ifdef DHT11_PIN
     s_dhtSensorPresent = false;

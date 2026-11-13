@@ -209,6 +209,7 @@
 #include "socketserver.h"
 #include "soundanalyzer.h"
 #include "systemcontainer.h"
+#include "systemhardwarehub.h"
 #include "taskmgr.h"
 
 #if INCOMING_WIFI_ENABLED
@@ -688,6 +689,8 @@ void loop()
             ConsoleManager::Instance().FeedSerialByte((char)Serial.read());
         }
 
+        SystemHardwareHub::Instance().Tick();
+
         #if ENABLE_WIFI && !defined(ENABLE_WIFI_TEST_MODE)
             EVERY_N_MILLIS(20)
             {
@@ -771,6 +774,11 @@ void loop()
                 if (g_Values.AmbientHumidity.has_value())
                 {
                     strOutput += str_sprintf("Hum: %.1f%% ", g_Values.AmbientHumidity.value());
+                }
+                auto imu = SystemHardwareHub::Instance().GetInertial();
+                if (imu.valid)
+                {
+                    strOutput += str_sprintf("IMU: [%.2f, %.2f, %.2f] ", imu.ax, imu.ay, imu.az);
                 }
 
                 const auto& taskManager = g_ptrSystem->GetTaskManager();

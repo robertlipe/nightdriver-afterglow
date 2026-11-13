@@ -21,6 +21,13 @@ struct ThermalMetrics
     bool valid;
 };
 
+#if WAVESHARE_ESP32_S3_RGB_MATRIX || MATRIX_S3
+#define HAS_SYSTEM_HARDWARE_HUB 1
+#else
+#define HAS_SYSTEM_HARDWARE_HUB 0
+#endif
+
+#if HAS_SYSTEM_HARDWARE_HUB
 class SystemHardwareHub
 {
   public:
@@ -47,6 +54,7 @@ class SystemHardwareHub
 
     i2c_master_bus_handle_t bus_handle = nullptr;
     i2c_master_dev_handle_t sensor_handle = nullptr;
+    i2c_master_dev_handle_t climate_handle = nullptr;
 
     void ScanI2CBus();
     void PollInertial();
@@ -58,11 +66,45 @@ class SystemHardwareHub
     uint64_t last_fast_tick = 0;
     uint64_t last_slow_tick = 0;
 
+    enum class ClimateState
+    {
+        Idle,
+        Waking,
+        Measuring
+    };
+    ClimateState climate_state = ClimateState::Idle;
+    uint64_t climate_state_timestamp = 0;
+
     // Thermal tracking states for delta measurements
     uint64_t last_delta_timestamp = 0;
     float previous_die_temp = 0.0f;
 
     void ConfigureSensorRegisters();
-    void PollThermal();
+    void ProcessClimateState(uint64_t now);
+    void EvaluateThermalMetrics(uint64_t now, float current_ambient);
 };
+#else
+class SystemHardwareHub
+{
+  public:
+    static SystemHardwareHub &Instance()
+    {
+        static SystemHardwareHub instance;
+        return instance;
+    }
+
+    bool Begin() { return false; }
+    void Tick() {}
+
+    InertialMetrics GetInertial() const { return {}; }
+    ThermalMetrics GetThermal() const { return {}; }
+
+    i2c_master_bus_handle_t GetI2CBus() { return nullptr; }
+    i2c_master_dev_handle_t AddDevice(uint8_t, uint32_t = 400000) { return nullptr; }
+
+  private:
+    SystemHardwareHub() = default;
+    ~SystemHardwareHub() = default;
+};
+#endif
 
