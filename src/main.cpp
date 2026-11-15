@@ -741,8 +741,7 @@ void loop()
                 #endif
 
                 #if USE_HUB75
-                    strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%%%s, ",
-                                             0,
+                    strOutput += str_sprintf("Power: %d mW, Brite: %3.0lf%%%s, ",
                                              g_Values.MatrixPowerMilliwatts,
                                              (double)g_Values.Brite,
                                              g_Values.ThermalThrottle < 255 ? " [THROTTLED]" : "");

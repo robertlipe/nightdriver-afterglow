@@ -144,6 +144,8 @@ class DeviceConfig : public IJSONSerializable
     bool    applyGlobalColors = false;
     CRGB    secondColor = CRGB::Red;
     float   tempOffset = 0.0f;
+    bool    autoOrientation = true;
+    bool    tapDetection = true;
 
     #if ENABLE_WIFI
     uint32_t portalTimeoutSeconds = 0; // 0 for AUTO mode, otherwise fixed seconds
@@ -200,6 +202,8 @@ class DeviceConfig : public IJSONSerializable
     static constexpr const char * ApplyGlobalColorsTag = NAME_OF(applyGlobalColors);
     static constexpr const char * SecondColorTag = NAME_OF(secondColor);
     static constexpr const char * TempOffsetTag = NAME_OF(tempOffset);
+    static constexpr const char * AutoOrientationTag = NAME_OF(autoOrientation);
+    static constexpr const char * TapDetectionTag = NAME_OF(tapDetection);
     #if ENABLE_WIFI
     static constexpr const char * PortalTimeoutSecondsTag = NAME_OF(portalTimeoutSeconds);
     #endif
@@ -278,4 +282,10 @@ class DeviceConfig : public IJSONSerializable
 
     float GetTempOffset() const { return tempOffset; }
     void SetTempOffset(float newTempOffset);
+
+    bool GetAutoOrientation() const { return autoOrientation; }
+    void SetAutoOrientation(bool newAutoOrientation);
+
+    bool GetTapDetection() const { return tapDetection; }
+    void SetTapDetection(bool newTapDetection);
 };

@@ -121,6 +121,8 @@ bool DeviceConfig::SerializeToJSON(JsonObject& jsonObject, bool includeSensitive
     jsonDoc[ApplyGlobalColorsTag] = applyGlobalColors;
     jsonDoc[SecondColorTag] = secondColor;
     jsonDoc[TempOffsetTag] = tempOffset;
+    jsonDoc[AutoOrientationTag] = autoOrientation;
+    jsonDoc[TapDetectionTag] = tapDetection;
     #if ENABLE_WIFI
     jsonDoc[PortalTimeoutSecondsTag] = portalTimeoutSeconds;
     #endif
@@ -163,6 +165,8 @@ bool DeviceConfig::DeserializeFromJSON(const JsonObjectConst& jsonObject, bool s
     SetIfPresentIn(jsonObject, applyGlobalColors, ApplyGlobalColorsTag);
     SetIfPresentIn(jsonObject, secondColor, SecondColorTag);
     SetIfPresentIn(jsonObject, tempOffset, TempOffsetTag);
+    SetIfPresentIn(jsonObject, autoOrientation, AutoOrientationTag);
+    SetIfPresentIn(jsonObject, tapDetection, TapDetectionTag);
     #if ENABLE_WIFI
     bool portalTimeoutPresent = jsonObject[PortalTimeoutSecondsTag].is<uint32_t>();
     SetIfPresentIn(jsonObject, portalTimeoutSeconds, PortalTimeoutSecondsTag);
@@ -338,6 +342,20 @@ const std::vector<std::reference_wrapper<SettingSpec>>& DeviceConfig::GetSetting
             "Temperature offset",
             "Calibration offset in degrees Fahrenheit to apply to ambient temperature readings.",
             SettingSpec::SettingType::Float
+        );
+
+        settingSpecs.emplace_back(
+            AutoOrientationTag,
+            "Auto orientation",
+            "Automatically rotate display 180 degrees based on accelerometer gravity.",
+            SettingSpec::SettingType::Boolean
+        );
+
+        settingSpecs.emplace_back(
+            TapDetectionTag,
+            "Tap / knock detection",
+            "Advance to next effect when bezel or desk is tapped.",
+            SettingSpec::SettingType::Boolean
         );
 
 
@@ -607,4 +625,14 @@ void DeviceConfig::SetPortalTimeoutSeconds(uint32_t newPortalTimeoutSeconds)
 void DeviceConfig::SetTempOffset(float newTempOffset)
 {
     SetAndSave(tempOffset, newTempOffset);
+}
+
+void DeviceConfig::SetAutoOrientation(bool newAutoOrientation)
+{
+    SetAndSave(autoOrientation, newAutoOrientation);
+}
+
+void DeviceConfig::SetTapDetection(bool newTapDetection)
+{
+    SetAndSave(tapDetection, newTapDetection);
 }

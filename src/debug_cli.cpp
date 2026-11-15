@@ -979,7 +979,14 @@ static const command core_commands[] = {
      [](const cli_argv &argv) {
          if (argv.size() > 1)
          {
-             float offset = std::stof(std::string(argv[1]));
+             char *endptr = nullptr;
+             std::string argStr(argv[1]);
+             float offset = std::strtof(argStr.c_str(), &endptr);
+             if (endptr == argStr.c_str())
+             {
+                 cli_printf("Invalid temperature offset: %s\n", argStr.c_str());
+                 return;
+             }
              g_ptrSystem->GetDeviceConfig().SetTempOffset(offset);
              cli_printf("Ambient temperature offset set to %.1f °F\n", offset);
              auto rawOpt = SensorManager::GetRawAmbientTemp();

@@ -114,6 +114,13 @@ bool SystemHardwareHub::Begin()
 #endif
 
     ConfigureSensorRegisters();
+
+    if (g_ptrSystem)
+    {
+        auto_orientation_enabled = g_ptrSystem->GetDeviceConfig().GetAutoOrientation();
+        tap_detection_enabled = g_ptrSystem->GetDeviceConfig().GetTapDetection();
+    }
+
     return true;
 }
 
@@ -173,8 +180,8 @@ void SystemHardwareHub::ConfigureSensorRegisters()
     {
         debugI("QMI8658 WHO_AM_I = 0x%02X (expected 0x05)", who_am_i_val);
     }
-    // CTRL1 (0x02): auto-increment enabled (0x60)
-    uint8_t ctrl1[] = {0x02, 0x60};
+    // CTRL1 (0x02): auto-increment enabled (bit 6 = 1), little-endian (bit 5 = 0) -> 0x40
+    uint8_t ctrl1[] = {0x02, 0x40};
     i2c_master_transmit(sensor_handle, ctrl1, sizeof(ctrl1), 100);
     // CTRL2 (0x03): Accelerometer +/-4g (0x10), 128Hz ODR (0x05) -> 0x15
     uint8_t ctrl2[] = {0x03, 0x15};
@@ -299,9 +306,27 @@ void SystemHardwareHub::ApplyRotation(uint8_t rotation)
     }
 }
 
+void SystemHardwareHub::SetAutoOrientationEnabled(bool enable)
+{
+    auto_orientation_enabled = enable;
+    if (g_ptrSystem)
+    {
+        g_ptrSystem->GetDeviceConfig().SetAutoOrientation(enable);
+    }
+}
+
+void SystemHardwareHub::SetTapDetectionEnabled(bool enable)
+{
+    tap_detection_enabled = enable;
+    if (g_ptrSystem)
+    {
+        g_ptrSystem->GetDeviceConfig().SetTapDetection(enable);
+    }
+}
+
 void SystemHardwareHub::SetManualRotation(uint8_t rotation)
 {
-    auto_orientation_enabled = false;
+    SetAutoOrientationEnabled(false);
     current_rotation = rotation;
     orientation_stable_count = 0;
     ApplyRotation(current_rotation);

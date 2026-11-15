@@ -58,13 +58,13 @@ class SystemHardwareHub
 
     // Auto-Orientation and Display Rotation
     bool IsAutoOrientationEnabled() const { return auto_orientation_enabled; }
-    void SetAutoOrientationEnabled(bool enable) { auto_orientation_enabled = enable; }
+    void SetAutoOrientationEnabled(bool enable);
     uint8_t GetCurrentRotation() const { return current_rotation; }
     void SetManualRotation(uint8_t rotation);
 
     // Bezel Tap Detection
     bool IsTapDetectionEnabled() const { return tap_detection_enabled; }
-    void SetTapDetectionEnabled(bool enable) { tap_detection_enabled = enable; }
+    void SetTapDetectionEnabled(bool enable);
 
   private:
     SystemHardwareHub() = default;
