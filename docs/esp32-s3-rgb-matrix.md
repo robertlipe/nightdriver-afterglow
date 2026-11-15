@@ -137,16 +137,9 @@ build_flags = ${feature_espmpdma.build_flags}
               -DMATRIX_WIDTH=64
               -DMATRIX_HEIGHT=64
               -DUSE_I2S_AUDIO=1
-              -DI2S_MCLK_PIN=12
-              -DI2S_WS_PIN=38
-              -DI2S_BCLK_PIN=43
-              -DI2S_DOUT_PIN=21
-              -DINPUT_PIN=39
-              -DAUDIO_PA_PIN=11
-              -DI2C_SDA_PIN=47
-              -DI2C_SCL_PIN=48
-              -DENABLE_AUDIO=1
+              ...
 ```
+See `platformio.ini` for full entry.
 
 Flash upload command:
 ```sh
