@@ -6,10 +6,12 @@ This file contains critical context, constraints, and architectural information 
 
 **Safety & Operations**
 *   **DELETE Operations:** 🚨 **STOP and ask for permission** before ANY delete operations.
-    *   ✅ **EXCEPTION:** Single files that you *just* created in the current session are OK to delete.
-    *   ❌ **NEVER** delete multiple files, directories, system files, or project files without explicit user permission.
+    *   ✅ **EXCEPTIONS:**
+        *   Single files that you *just* created in the current session are OK to delete.
+        *   **Build cache & artifact hygiene:** Purging `.pio/build_cache` or `.pio/build/<env>` to recover from stale objects, duplicate symbols, or corrupted unity builds is permitted without prompting.
+    *   ❌ **NEVER** delete project source files, directories, or system files without explicit user permission.
 *   **File Modifications:**
-    *   ❌ **NEVER** modify or add any files under `.pio/`.
+    *   ❌ **NEVER** edit, patch, or commit library/build files under `.pio/` (modify `platformio.ini` or project sources instead).
     *   **Do not** gratuitously change existing comments. **Preserve original technical documentation**, including credits, Stefan Petrick notes, Aurora/Soulmate attributions, and "dirty hack" warnings.
     *   **Do not** reformat existing files unless explicitly asked. Code styles are inconsistent; match the *local* neighborhood of the code you are editing.
     *   **Do not** end lines with trailing whitespace.

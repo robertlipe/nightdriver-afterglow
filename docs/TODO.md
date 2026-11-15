@@ -1,7 +1,7 @@
 No no particular order.
 
 DONE Implement std::byteswap
-DONE Use Saturation arithmetic 
+DONE Use Saturation arithmetic
 
 
 Salvage doc, ideas code from ~/src/hex and revive hexagon effort.
@@ -18,7 +18,7 @@ Mine the AP work from /Users/robertlipe/src/tmp/src/wifi-apA
   upstream	https://github.com/PlummersSoftwareLLC/NightDriverStrip.git (fetch)
   upstream	https://github.com/PlummersSoftwareLLC/NightDriverStrip.git (push)
 
-Mind /Users/robertlipe/src/tmp/src/rpi
+Mine /Users/robertlipe/src/tmp/src/rpi
   40 branches. :-(
 
 Mine /Users/robertlipe/tmp/src/nightdriverstrip - see if there's anything
@@ -46,7 +46,7 @@ Low priority
 - [x] sensors.cpp Surgery: Refactor the merge-collision issue in sensors.cpp.
 - [ ] FFT Optimization: Evaluate replacing kosme/arduinoFFT with Espressif’s esp-dsp (LX7 PIE optimized).
 - [ ] Matrix Effects Modernization (ATMega Legacy / "ESP32-edness"):
-    - Review and optimize `*SM*` (SmartMatrix) patterns. Many were originally written for ATMega and lack ESP32 hardware advantages (e.g., single-point hardware floats).
+    - Review and optimize `*SM*` (SoulMate) patterns. Many were originally written for ATMega and lack ESP32 hardware advantages (e.g., single-point hardware floats).
     - Refactor heavy effects (`PatternLife`, `PatternSMStarDeep`, `PatternSMFire2021/2012`, `PatternSMNoise*`) where appropriate.
     - Evaluate `PatternSMStarDeep` for leveraging precomputed radial math from `gfxbase` (or `gfxmatrix`) to remove heavy per-frame trig calculations.
     - Standardize array flipping: use `std::swap` (or similar standard algorithms) instead of manual buffer copying in heavy effects like `PatternLife`.
