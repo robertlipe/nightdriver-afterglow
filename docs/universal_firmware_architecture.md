@@ -127,7 +127,7 @@ This reality is where our "more than three" comes into play. A C6 strip design a
 
 `FastLED.addLeds<CHIPSET, PIN, ORDER>(...)` takes the chipset, the data pin, *and* the color order as **template** arguments, so a runtime `g_hwConfig.led_pin` could not drive it. This was the blocker that stalled the first attempt.
 
-**Update (November 2026):** This obstacle is solved. FastLED 3.10 introduced the non-template **Channels API** (`FastLED.add(fl::ChannelConfig)`), which accepts runtime GPIO pins, runtime `EOrder` color order enums, and dynamic timing configs without template parameters. See [fastled_channels_runtime_architecture.md](file:///Users/robertlipe/src/nightdriver-afterglow/docs/fastled_channels_runtime_architecture.md) for the detailed design, API mechanics, and implementation roadmap to eliminate `-DLED_PIN0` and `-DCOLOR_ORDER` from global namespace.
+**Update (November 2026):** This obstacle is solved. FastLED 3.10 introduced the non-template **Channels API** (`FastLED.add(fl::ChannelConfig)`), which accepts runtime GPIO pins, runtime `EOrder` color order enums, and dynamic timing configs without template parameters. See [fastled_channels_runtime_architecture.md](fastled_channels_runtime_architecture.md) for the detailed design, API mechanics, and implementation roadmap to eliminate `-DLED_PIN0` and `-DCOLOR_ORDER` from global namespace.
 
 Scope matters here: the driver is invoked from exactly two places (`src/ws281xgfx.cpp`, plus one onboard-pixel case in `src/drawing.cpp`), while FastLED's *types and helpers* — `CRGB`, `CHSV`, `blur1d`, `lib8tion` — reach well over a hundred files. Using FastLED 3.10's native Channels API allows us to preserve all existing FastLED types while making the hardware driver completely dynamic.
 

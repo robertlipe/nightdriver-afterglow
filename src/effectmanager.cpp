@@ -299,8 +299,9 @@ bool EffectManager::AreEffectsEnabled() const
 
 size_t EffectManager::GetCurrentEffectIndex() const
 {
+    std::lock_guard<std::recursive_mutex> lock(_effectsMutex);
     int64_t requested = _requestedEffectIndex.load(std::memory_order_acquire);
-    if (requested >= 0 && static_cast<size_t>(requested) < EffectCount())
+    if (requested >= 0 && static_cast<size_t>(requested) < _vEffects.size())
         return static_cast<size_t>(requested);
     return _iCurrentEffect.load(std::memory_order_acquire);
 }
@@ -310,7 +311,7 @@ LEDStripEffect& EffectManager::GetCurrentEffect() const
     std::lock_guard<std::recursive_mutex> lock(_effectsMutex);
     if (_tempEffect)
         return *_tempEffect;
-    size_t idx = GetCurrentEffectIndex();
+    size_t idx = _iCurrentEffect.load(std::memory_order_acquire);
     if (idx < _vEffects.size())
         return *_vEffects[idx];
     return *_vEffects[0];
@@ -936,6 +937,7 @@ void EffectManager::MoveEffect(size_t from, size_t to)
         SaveCurrentEffectIndex();
     }
 
+    _requestedEffectIndex.store(-1, std::memory_order_release);
     SaveEffectManagerConfig();
 
     INFORM_EVENT_LISTENERS(_effectEventListeners, IEffectEventListener::OnEffectListDirty);
@@ -972,8 +974,14 @@ bool EffectManager::DeleteEffect(size_t index)
     if (_vEffects[index]->IsCoreEffect())
         return false;
 
+    // Keep at least one effect; GetCurrentEffect() assumes _vEffects is non-empty.
+    if (_vEffects.size() <= 1)
+        return false;
+
+    _requestedEffectIndex.store(-1, std::memory_order_release);
     DisableEffect(index, true);
 
+    bool currentEffectChanged = false;
     size_t current = _iCurrentEffect.load(std::memory_order_relaxed);
     if (index == current)
     {
@@ -990,6 +998,7 @@ bool EffectManager::DeleteEffect(size_t index)
         _iCurrentEffect.store(nextIndex, std::memory_order_relaxed);
         StartEffect();
         SaveCurrentEffectIndex();
+        currentEffectChanged = true;
     }
 
     _vEffects.erase(_vEffects.begin() + index);
@@ -1004,6 +1013,10 @@ bool EffectManager::DeleteEffect(size_t index)
 
     SaveEffectManagerConfig();
 
+    if (currentEffectChanged)
+    {
+        INFORM_EVENT_LISTENERS(_effectEventListeners, IEffectEventListener::OnCurrentEffectChanged, current);
+    }
     INFORM_EVENT_LISTENERS(_effectEventListeners, IEffectEventListener::OnEffectListDirty);
 
     return true;

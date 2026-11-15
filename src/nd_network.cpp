@@ -667,8 +667,20 @@ namespace nd_network
         nvs_handle_t nvsRWHandle;
         if (nvs_open("storage", NVS_READWRITE, &nvsRWHandle) != ESP_OK) return false;
 
-        bool success = (safe_nvs_set_str(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_ssid").c_str(), WiFi_ssid.c_str()) == ESP_OK) &&
-                       (safe_nvs_set_str(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_password").c_str(), WiFi_password.c_str()) == ESP_OK);
+        // Stage values and keys in internal RAM stack buffers. Flash writes reject buffers
+        // in PSRAM, and String buffers over 16 bytes can be routed there.
+        char ssidBuf[64];
+        char passwordBuf[64];
+        char ssidKeyBuf[32];
+        char passwordKeyBuf[32];
+
+        snprintf(ssidBuf, sizeof(ssidBuf), "%s", WiFi_ssid.c_str());
+        snprintf(passwordBuf, sizeof(passwordBuf), "%s", WiFi_password.c_str());
+        snprintf(ssidKeyBuf, sizeof(ssidKeyBuf), "%s", GetWiFiConfigKey(source, "WiFi_ssid").c_str());
+        snprintf(passwordKeyBuf, sizeof(passwordKeyBuf), "%s", GetWiFiConfigKey(source, "WiFi_password").c_str());
+
+        bool success = (safe_nvs_set_str(nvsRWHandle, ssidKeyBuf, ssidBuf) == ESP_OK) &&
+                       (safe_nvs_set_str(nvsRWHandle, passwordKeyBuf, passwordBuf) == ESP_OK);
 
         if (success)
         {
@@ -696,16 +708,21 @@ namespace nd_network
         nvs_handle_t nvsRWHandle;
         if (nvs_open("storage", NVS_READWRITE, &nvsRWHandle) != ESP_OK) return false;
 
+        char ssidKeyBuf[32];
+        char passwordKeyBuf[32];
+        snprintf(ssidKeyBuf, sizeof(ssidKeyBuf), "%s", GetWiFiConfigKey(source, "WiFi_ssid").c_str());
+        snprintf(passwordKeyBuf, sizeof(passwordKeyBuf), "%s", GetWiFiConfigKey(source, "WiFi_password").c_str());
+
         // Don't allow shortcut operation here. erase BOTH keys, even
         // if first one errors.
         bool success = true;
-        esp_err_t err = safe_nvs_erase_key(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_ssid").c_str());
+        esp_err_t err = safe_nvs_erase_key(nvsRWHandle, ssidKeyBuf);
         if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND)
         {
             success = false;
         }
 
-        err = safe_nvs_erase_key(nvsRWHandle, GetWiFiConfigKey(source, "WiFi_password").c_str());
+        err = safe_nvs_erase_key(nvsRWHandle, passwordKeyBuf);
         if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND)
         {
             success = false;

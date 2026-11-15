@@ -119,7 +119,7 @@ void WS281xGFX::AddLEDs(std::vector<std::shared_ptr<GFXBase>>& devices)
         );
 
         #if FASTLED_EXPERIMENTAL_ESP32_RGBW_ENABLED
-        // Optional RGBW profile configuration
+        FastLED[ch].setRgbw(RgbwInvalid());
         #endif
 
         FastLED.add(config);
@@ -150,13 +150,14 @@ With modern silicon like the ESP32-S3, ESP32-S31 (boasting 60 GPIOs), and ESP32-
 #### Hardware Peripheral Capabilities by Silicon Family
 1. **ESP32 Classic (LX6):**
    - 8 RMT TX channels $\rightarrow$ can natively drive up to 8 independent WS2812 channels via RMT without CPU bit-banging.
+   - I2S parallel engine for up to 16 channels.
 2. **ESP32-S3 (LX7):**
    - 4 RMT TX channels.
-   - **PARLIO (Parallel IO peripheral):** Dedicated hardware engine supporting up to 16 parallel data lines clocked synchronously from a single DMA controller. FastLED 3.10 includes a native PARLIO driver (`fl::Bus::FLEX_IO`), allowing up to 16 parallel strips on an S3 with near-zero CPU utilization.
-3. **ESP32-S31 & ESP32-P4:**
-   - 60+ GPIOs, multi-channel PARLIO, and high-speed DMA.
+   - **LCD_CAM peripheral:** High-speed parallel output clocked synchronously from DMA, used by FastLED 3.10's parallel S3 driver to drive up to 16 parallel strips with near-zero CPU overhead.
+3. **ESP32-C6, ESP32-H2, ESP32-P4:**
+   - **PARLIO (Parallel IO peripheral):** Dedicated hardware engine supporting up to 16 parallel data lines clocked synchronously from DMA. FastLED 3.10 includes a native PARLIO driver (`fl::Bus::FLEX_IO`) for P4, C6, and H2.
 4. **FastLED `ChannelManager` Arbitration:**
-   - FastLED's internal `ChannelManager` transparently assigns channels to the highest-priority available hardware engine (PARLIO $\rightarrow$ RMT $\rightarrow$ SPI $\rightarrow$ UART $\rightarrow$ BIT_BANG). As channel counts exceed RMT capacity, it falls back to parallel PARLIO or SPI automatically.
+   - FastLED's internal `ChannelManager` transparently assigns channels to the highest-priority available hardware engine (LCD_CAM / PARLIO $\rightarrow$ RMT $\rightarrow$ SPI $\rightarrow$ UART $\rightarrow$ BIT_BANG). As channel counts exceed RMT capacity, it falls back to parallel DMA or SPI automatically.
 
 #### Variable-Length Strips & Independent Topologies
 In real-world setups, multiple strips rarely have identical pixel counts:
@@ -196,9 +197,9 @@ std::vector<StripConfig> stripChannels;
 
 #### Settings Exposure (`SettingSpec`)
 Expose these settings via `SettingSpec` so the React Web UI (`site/`) and REST API can configure them dynamically:
-- `strip_pin_0` .. `strip_pin_7` (Integer GPIO)
-- `strip_color_order` (Enum dropdown: GRB, RGB, RBG, BRG, BGR, GBR)
-- `strip_num_channels` (Range 1..8)
+- `strip_pin_0` .. `strip_pin_15` (Integer GPIO)
+- `strip_color_order_0` .. `strip_color_order_15` (Enum dropdown: GRB, RGB, RBG, BRG, BGR, GBR)
+- `strip_num_channels` (Range 1..16)
 
 ### 3.3 Reconfiguration Strategy: Safe Reboot on Reconfigure
 Commercial LED controllers (e.g., Duoco, SP108E) require a reboot when physical wiring or color orders change. In NightDriver:
@@ -216,7 +217,7 @@ Commercial LED controllers (e.g., Duoco, SP108E) require a reboot when physical 
 ### 4.1 The Cache Payoff
 Once `LED_PIN0..7`, `NUM_CHANNELS`, and `COLOR_ORDER` are eliminated from `build_src_flags` in `platformio.ini`:
 
-1. **Shared Object Cache:** All 40+ strip environments sharing the same architecture (e.g., `esp32:esp32` or `esp32:esp32s3`) will generate **identical compiler command lines** for:
+1. **Shared Object Cache:** Strip environments sharing identical build flags and base archetypes (e.g. within `base_esp32_strip` or `base_esp32s3_strip`) will generate **identical compiler command lines** for common units:
    - `src/main.cpp.o`
    - `src/drawing.cpp.o`
    - `src/effects.cpp.o`
@@ -224,8 +225,8 @@ Once `LED_PIN0..7`, `NUM_CHANNELS`, and `COLOR_ORDER` are eliminated from `build
    - `src/soundanalyzer.cpp.o`
    - `src/systemhardwarehub.cpp.o`
 2. **First Build vs. Subsequent Builds:**
-   - Instead of recompiling the entire C++ codebase 40 times (once per board), `.pio/build_cache` compiles the source files **once** and links them across all 40 environments.
-   - Build matrix time drops from ~45 minutes to **under 5 minutes**.
+   - Instead of recompiling the entire C++ codebase for each board variant differing only by pin, `.pio/build_cache` shares object files across environments with matching compiler invocations.
+   - Build matrix time drops substantially across parallel board builds.
 
 ### 4.2 Hardware Archetypes
 Environments in `platformio.ini` simplify from dozens of bespoke pin permutations into standardized archetype bases:
@@ -241,11 +242,11 @@ Board-specific environments only need to specify their default factory GPIO pin 
 ## 5. Technical Risks & Mitigations
 
 ### 5.1 Flash Size & Driver Auto-Enrollment
-- **Observation:** In FastLED 3.10, the non-template `FastLED.add(ChannelConfig)` automatically calls `fl::enableAllDrivers()` to support all platform buses.
-- **Risk:** Linking all drivers (RMT, SPI, UART, BIT_BANG) can increase flash footprint by ~15–30 KB. On tight 4MB boards (e.g., `kitch`), every kilobyte counts.
+- **Observation:** In FastLED 3.10, the generic `FastLED.add(ChannelConfig)` automatically calls `fl::enableAllDrivers()` to support all platform buses at runtime.
+- **Risk:** Linking all drivers (RMT, SPI, UART, BIT_BANG) can increase flash footprint by ~15–30 KB. On tight 4MB boards (e.g., `kitch`), every kilobyte counts. Note that setting `cfg.options.mBus` selects which bus is used at runtime, but does not prevent the other driver objects from linking if `enableAllDrivers()` was called.
 - **Mitigation:**
   1. Suppress the runtime driver warning via `-DFASTLED_SUPPRESS_RUNTIME_DRIVER_WARNING`.
-  2. If flash budget requires it on 4MB targets, explicitly set `cfg.options.mBus = fl::Bus::RMT` or use `fl::TypedChannel<fl::Bus::RMT, fl::ClocklessChipset>::create(cfg)`, which pulls ONLY the RMT driver TU and lets `--gc-sections` discard unused drivers.
+  2. If flash budget requires it on tight 4MB targets, use the typed channel factory `fl::TypedChannel<fl::Bus::RMT, fl::ClocklessChipset>::create(cfg)`, which bypasses generic driver auto-enrollment, pulling ONLY the RMT driver TU and letting `--gc-sections` discard unused drivers.
 
 ### 5.2 FastLED Version Stability
 - **Observation:** NightDriver is currently pinned to FastLED `3.10.9`. The Channels API in 3.10.9 is fully stabilized (issues #2428, #2459, #2460 resolved).
