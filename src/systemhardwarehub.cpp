@@ -28,8 +28,14 @@
 // BOARD-SPECIFIC PROFILES & REGISTER CODES
 // =========================================================
 #if defined(BOARD_ADAFRUIT_MATRIX_S3)
-#define PIN_SDA GPIO_NUM_2
-#define PIN_SCL GPIO_NUM_3
+#ifndef I2C_SDA_PIN
+#define I2C_SDA_PIN 2
+#endif
+#ifndef I2C_SCL_PIN
+#define I2C_SCL_PIN 3
+#endif
+#define PIN_SDA ((gpio_num_t)I2C_SDA_PIN)
+#define PIN_SCL ((gpio_num_t)I2C_SCL_PIN)
 #define SENSOR_ADDR 0x19 // LIS3DH Accel
 #define REG_DATA_START (0x28 | 0x80)
 #define HAS_LIS3DH
