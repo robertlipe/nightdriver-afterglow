@@ -58,6 +58,7 @@
 #include "nd_panic.h"
 
 #include "soundanalyzer.h"
+#include "userfs.h"
 
 extern DRAM_ATTR std::mutex g_buffer_mutex;
 
@@ -170,6 +171,9 @@ namespace nd_network
     // We wrap all NVS write operations here to pause the audio driver temporarily.
 
     esp_err_t safe_nvs_set_str(nvs_handle_t handle, const char* key, const char* value) {
+        AssertValidFlashContext();
+        AssertValidFlashBuffer(key);
+        AssertValidFlashBuffer(value);
 #if ENABLE_AUDIO
         g_Analyzer.Pause();
 #endif
@@ -181,6 +185,8 @@ namespace nd_network
     }
 
     esp_err_t safe_nvs_erase_key(nvs_handle_t handle, const char* key) {
+        AssertValidFlashContext();
+        AssertValidFlashBuffer(key);
 #if ENABLE_AUDIO
         g_Analyzer.Pause();
 #endif
@@ -192,6 +198,7 @@ namespace nd_network
     }
 
     esp_err_t safe_nvs_commit(nvs_handle_t handle) {
+        AssertValidFlashContext();
 #if ENABLE_AUDIO
         g_Analyzer.Pause();
 #endif

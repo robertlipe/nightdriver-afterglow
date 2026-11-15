@@ -134,7 +134,13 @@ void EffectManager::StartEffect()
     // If there's a temporary effect override from the remote control active, we start that, else
     // we start the current regular effect
 
-    std::shared_ptr<LEDStripEffect> & effect = _tempEffect ? _tempEffect : _vEffects[_iCurrentEffect];
+    std::lock_guard<std::recursive_mutex> lock(_effectsMutex);
+
+    size_t idx = _iCurrentEffect.load(std::memory_order_relaxed);
+    if (idx >= _vEffects.size() && !_tempEffect)
+        return;
+
+    std::shared_ptr<LEDStripEffect> & effect = _tempEffect ? _tempEffect : _vEffects[idx];
 
     #if USE_HUB75 || USE_ESP_HUB75
         if (!_gfx.empty()) {
@@ -217,6 +223,7 @@ EffectManager::~EffectManager()
 
 void EffectManager::SetTempEffect(std::shared_ptr<LEDStripEffect> effect)
 {
+    std::lock_guard<std::recursive_mutex> lock(_effectsMutex);
     _tempEffect = effect;
 }
 
@@ -292,30 +299,66 @@ bool EffectManager::AreEffectsEnabled() const
 
 size_t EffectManager::GetCurrentEffectIndex() const
 {
-    return _iCurrentEffect;
+    int64_t requested = _requestedEffectIndex.load(std::memory_order_acquire);
+    if (requested >= 0 && static_cast<size_t>(requested) < EffectCount())
+        return static_cast<size_t>(requested);
+    return _iCurrentEffect.load(std::memory_order_acquire);
 }
 
 LEDStripEffect& EffectManager::GetCurrentEffect() const
 {
-    return *(_tempEffect ? _tempEffect : _vEffects[_iCurrentEffect]);
+    std::lock_guard<std::recursive_mutex> lock(_effectsMutex);
+    if (_tempEffect)
+        return *_tempEffect;
+    size_t idx = GetCurrentEffectIndex();
+    if (idx < _vEffects.size())
+        return *_vEffects[idx];
+    return *_vEffects[0];
 }
 
 const String & EffectManager::GetCurrentEffectName() const
 {
+    std::lock_guard<std::recursive_mutex> lock(_effectsMutex);
     if (_tempEffect)
         return _tempEffect->FriendlyName();
 
-    return _vEffects[_iCurrentEffect]->FriendlyName();
+    size_t idx = GetCurrentEffectIndex();
+    if (idx < _vEffects.size())
+        return _vEffects[idx]->FriendlyName();
+
+    static const String empty = "";
+    return empty;
 }
 
 void EffectManager::SetCurrentEffectIndex(size_t i)
 {
-    if (i >= _vEffects.size())
+    if (i >= EffectCount())
     {
-        debugW("Invalid index for SetCurrentEffectIndex");
+        debugW("Invalid index for SetCurrentEffectIndex: %zu", i);
         return;
     }
-    _iCurrentEffect = i;
+
+    _requestedEffectIndex.store(static_cast<int64_t>(i), std::memory_order_release);
+}
+
+void EffectManager::ProcessPendingEffectChange()
+{
+    int64_t requested = _requestedEffectIndex.exchange(-1, std::memory_order_acq_rel);
+    if (requested >= 0)
+    {
+        ApplyEffectChange(static_cast<size_t>(requested));
+    }
+}
+
+void EffectManager::ApplyEffectChange(size_t i)
+{
+    std::lock_guard<std::recursive_mutex> lock(_effectsMutex);
+    if (i >= _vEffects.size())
+    {
+        debugW("Invalid index for ApplyEffectChange: %zu", i);
+        return;
+    }
+    _iCurrentEffect.store(i, std::memory_order_release);
     _effectStartTime = millis();
 
     StartEffect();
@@ -673,10 +716,13 @@ void EffectManager::construct(bool clearTempEffect)
         //   increasing _iCurrentEffect. We therefore need to set it to the previous effect, to
         //   make sure that the first effect after the temporary one is the one we want (either the
         //   then current one when the chip was powered off, or the one at index 0).
-        if (_iCurrentEffect == 0)
-            _iCurrentEffect = EffectCount();
-
-        _iCurrentEffect--;
+        size_t count = EffectCount();
+        if (count > 0)
+        {
+            size_t current = _iCurrentEffect.load(std::memory_order_relaxed);
+            size_t prev = (current == 0) ? (count - 1) : (current - 1);
+            _iCurrentEffect.store(prev, std::memory_order_relaxed);
+        }
     }
 }
 
@@ -754,12 +800,15 @@ bool EffectManager::DeserializeFromJSON(const JsonObjectConst& jsonObject)
     SetInterval(jsonObject["ivl"].is<uint>() ? jsonObject["ivl"] : DEFAULT_EFFECT_INTERVAL, true);
 
     // Try to read the effectindex from its own file. If that fails, "cei" may contain the current effect index instead
-    if (!ReadCurrentEffectIndex(_iCurrentEffect) && jsonObject["cei"].is<size_t>())
-        _iCurrentEffect = jsonObject["cei"];
+    size_t readIndex = 0;
+    if (ReadCurrentEffectIndex(readIndex))
+        _iCurrentEffect.store(readIndex, std::memory_order_relaxed);
+    else if (jsonObject["cei"].is<size_t>())
+        _iCurrentEffect.store(jsonObject["cei"].as<size_t>(), std::memory_order_relaxed);
 
     // Make sure that if we read an index, it's sane
-    if (_iCurrentEffect >= EffectCount())
-        _iCurrentEffect = EffectCount() - 1;
+    if (_iCurrentEffect.load(std::memory_order_relaxed) >= EffectCount() && EffectCount() > 0)
+        _iCurrentEffect.store(EffectCount() - 1, std::memory_order_relaxed);
 
     construct(true);
 
@@ -853,6 +902,7 @@ void EffectManager::DisableEffect(size_t i, bool skipSave)
 
 void EffectManager::MoveEffect(size_t from, size_t to)
 {
+    std::lock_guard<std::recursive_mutex> lock(_effectsMutex);
     if (from >= _vEffects.size() || to >= _vEffects.size())
     {
         debugW("Invalid index for MoveEffect");
@@ -866,19 +916,23 @@ void EffectManager::MoveEffect(size_t from, size_t to)
     else // from > to
         std::rotate(_vEffects.rend() - from - 1, _vEffects.rend() - from, _vEffects.rend() - to);
 
-    if (from == _iCurrentEffect)
+    size_t current = _iCurrentEffect.load(std::memory_order_relaxed);
+    if (from == current)
     {
-        _iCurrentEffect = to;
+        current = to;
+        _iCurrentEffect.store(current, std::memory_order_relaxed);
         SaveCurrentEffectIndex();
     }
-    else if (from < _iCurrentEffect && to >= _iCurrentEffect)
+    else if (from < current && to >= current)
     {
-        _iCurrentEffect--;
+        current--;
+        _iCurrentEffect.store(current, std::memory_order_relaxed);
         SaveCurrentEffectIndex();
     }
-    else if (from > _iCurrentEffect && to <= _iCurrentEffect)
+    else if (from > current && to <= current)
     {
-        _iCurrentEffect++;
+        current++;
+        _iCurrentEffect.store(current, std::memory_order_relaxed);
         SaveCurrentEffectIndex();
     }
 
@@ -891,6 +945,7 @@ void EffectManager::MoveEffect(size_t from, size_t to)
 //   is undefined but potentially messy.
 bool EffectManager::AppendEffect(std::shared_ptr<LEDStripEffect>& effect)
 {
+    std::lock_guard<std::recursive_mutex> lock(_effectsMutex);
     if (!effect->Init(_gfx))
         return false;
 
@@ -907,6 +962,7 @@ bool EffectManager::AppendEffect(std::shared_ptr<LEDStripEffect>& effect)
 // Deletes an effect from the effect list. Note that core effects cannot be deleted.
 bool EffectManager::DeleteEffect(size_t index)
 {
+    std::lock_guard<std::recursive_mutex> lock(_effectsMutex);
     if (index >= _vEffects.size())
     {
         debugW("Invalid index for DeleteEffect");
@@ -918,14 +974,31 @@ bool EffectManager::DeleteEffect(size_t index)
 
     DisableEffect(index, true);
 
-    if (index == _iCurrentEffect)
-        NextEffect();
+    size_t current = _iCurrentEffect.load(std::memory_order_relaxed);
+    if (index == current)
+    {
+        auto enabled = AreEffectsEnabled();
+        size_t count = EffectCount();
+        size_t nextIndex = current;
+        if (count > 1)
+        {
+            do
+            {
+                nextIndex = (nextIndex + 1) % count;
+            } while (enabled && false == _bPlayAll && false == IsEffectEnabled(nextIndex));
+        }
+        _iCurrentEffect.store(nextIndex, std::memory_order_relaxed);
+        StartEffect();
+        SaveCurrentEffectIndex();
+    }
 
     _vEffects.erase(_vEffects.begin() + index);
 
-    if (index <= _iCurrentEffect)
+    current = _iCurrentEffect.load(std::memory_order_relaxed);
+    if (index <= current && current > 0)
     {
-        _iCurrentEffect--;
+        current--;
+        _iCurrentEffect.store(current, std::memory_order_relaxed);
         SaveCurrentEffectIndex();
     }
 
@@ -960,18 +1033,22 @@ void EffectManager::CheckEffectTimerExpired()
 void EffectManager::NextEffect(bool skipSave)
 {
     auto enabled = AreEffectsEnabled();
+    size_t count = EffectCount();
+    if (count == 0)
+        return;
 
+    int64_t pending = _requestedEffectIndex.load(std::memory_order_acquire);
+    size_t baseIndex = (pending >= 0 && static_cast<size_t>(pending) < count)
+                           ? static_cast<size_t>(pending)
+                           : _iCurrentEffect.load(std::memory_order_acquire);
+
+    size_t nextIndex = baseIndex;
     do
     {
-        _iCurrentEffect++;
-        _iCurrentEffect %= EffectCount();
-        _effectStartTime = millis();
-    } while (enabled && false == _bPlayAll && false == IsEffectEnabled(_iCurrentEffect));
+        nextIndex = (nextIndex + 1) % count;
+    } while (enabled && false == _bPlayAll && false == IsEffectEnabled(nextIndex));
 
-    StartEffect();
-    SaveCurrentEffectIndex();
-
-    INFORM_EVENT_LISTENERS(_effectEventListeners, IEffectEventListener::OnCurrentEffectChanged, _iCurrentEffect);
+    SetCurrentEffectIndex(nextIndex);
 }
 
 // Go back to the previous effect and abort the current one.
@@ -979,20 +1056,24 @@ void EffectManager::NextEffect(bool skipSave)
 void EffectManager::PreviousEffect()
 {
     auto enabled = AreEffectsEnabled();
+    size_t count = EffectCount();
+    if (count == 0)
+        return;
 
+    int64_t pending = _requestedEffectIndex.load(std::memory_order_acquire);
+    size_t baseIndex = (pending >= 0 && static_cast<size_t>(pending) < count)
+                           ? static_cast<size_t>(pending)
+                           : _iCurrentEffect.load(std::memory_order_acquire);
+
+    size_t prevIndex = baseIndex;
     do
     {
-        if (_iCurrentEffect == 0)
-            _iCurrentEffect = EffectCount();
+        if (prevIndex == 0)
+            prevIndex = count;
+        prevIndex--;
+    } while (enabled && false == _bPlayAll && false == IsEffectEnabled(prevIndex));
 
-        _iCurrentEffect--;
-        _effectStartTime = millis();
-    } while (enabled && false == _bPlayAll && false == IsEffectEnabled(_iCurrentEffect));
-
-    StartEffect();
-    SaveCurrentEffectIndex();
-
-    INFORM_EVENT_LISTENERS(_effectEventListeners, IEffectEventListener::OnCurrentEffectChanged, _iCurrentEffect);
+    SetCurrentEffectIndex(prevIndex);
 }
 
 // EffectManager::Update
@@ -1004,12 +1085,23 @@ void EffectManager::Update()
     if ((_gfx[0])->GetLEDCount() == 0)
         return;
 
+    // Process any external transition request on this safe frame boundary
+    ProcessPendingEffectChange();
+
     CheckEffectTimerExpired();
 
+    // If timer expired and requested next effect, process it before drawing
+    ProcessPendingEffectChange();
+
+    std::lock_guard<std::recursive_mutex> lock(_effectsMutex);
     if (_tempEffect)
         _tempEffect->Draw();
     else
-        _vEffects[_iCurrentEffect]->Draw();
+    {
+        size_t idx = _iCurrentEffect.load(std::memory_order_relaxed);
+        if (idx < _vEffects.size())
+            _vEffects[idx]->Draw();
+    }
 
     ApplyFadeLogic();
 }
