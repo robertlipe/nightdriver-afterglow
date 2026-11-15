@@ -53,8 +53,73 @@ inline void AssertValidFlashBuffer(const void* buf, const std::source_location& 
     }
 }
 
+class UserFile : public fs::File {
+public:
+    using fs::File::File;
+    UserFile() : fs::File() {}
+    UserFile(fs::File f) : fs::File(std::move(f)) {}
+
+    // ---- write operations ----
+    size_t write(uint8_t c) override {
+        AssertValidFlashContext();
+        return fs::File::write(c);
+    }
+
+    size_t write(const uint8_t *buf, size_t size) override {
+        AssertValidFlashContext();
+        AssertValidFlashBuffer(buf);
+        return fs::File::write(buf, size);
+    }
+
+    // ---- read operations ----
+    int read() override {
+        AssertValidFlashContext();
+        return fs::File::read();
+    }
+
+    size_t read(uint8_t *buf, size_t size) {
+        AssertValidFlashContext();
+        AssertValidFlashBuffer(buf);
+        return fs::File::read(buf, size);
+    }
+
+    size_t readBytes(char *buffer, size_t length) {
+        AssertValidFlashContext();
+        AssertValidFlashBuffer(buffer);
+        return fs::File::readBytes(buffer, length);
+    }
+
+    String readString() {
+        AssertValidFlashContext();
+        return fs::File::readString();
+    }
+
+    // ---- lifecycle / control ----
+    void flush() override {
+        AssertValidFlashContext();
+        fs::File::flush();
+    }
+
+    void close() {
+        AssertValidFlashContext();
+        fs::File::close();
+    }
+
+    bool seek(uint32_t pos, SeekMode mode) {
+        AssertValidFlashContext();
+        return fs::File::seek(pos, mode);
+    }
+
+    bool seek(uint32_t pos) {
+        AssertValidFlashContext();
+        return fs::File::seek(pos);
+    }
+};
+
 class UserFilesystem {
 public:
+    using File = UserFile;
+
     // Concrete FS accessor
     auto& fs() {
 #if USE_LITTLEFS
@@ -79,23 +144,23 @@ public:
     }
 
     // ---- open() ----
-    fs::File open(const char* path, const std::source_location& loc = std::source_location::current()) {
+    UserFile open(const char* path, const std::source_location& loc = std::source_location::current()) {
         AssertValidFlashContext(loc);
-        return fs().open(path);
+        return UserFile(fs().open(path));
     }
-    fs::File open(const String& path, const std::source_location& loc = std::source_location::current()) {
+    UserFile open(const String& path, const std::source_location& loc = std::source_location::current()) {
         AssertValidFlashContext(loc);
-        return fs().open(path);
-    }
-
-    fs::File open(const char* path, const char* mode, const std::source_location& loc = std::source_location::current()) {
-        AssertValidFlashContext(loc);
-        return fs().open(path, mode);
+        return UserFile(fs().open(path));
     }
 
-    fs::File open(const String& path, const char* mode, const std::source_location& loc = std::source_location::current()) {
+    UserFile open(const char* path, const char* mode, const std::source_location& loc = std::source_location::current()) {
         AssertValidFlashContext(loc);
-        return fs().open(path, mode);
+        return UserFile(fs().open(path, mode));
+    }
+
+    UserFile open(const String& path, const char* mode, const std::source_location& loc = std::source_location::current()) {
+        AssertValidFlashContext(loc);
+        return UserFile(fs().open(path, mode));
     }
 
     // ---- file ops ----

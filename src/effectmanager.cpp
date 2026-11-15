@@ -445,7 +445,7 @@ void EffectManager::SaveCurrentEffectIndex()
 // Reads the current effect index from its own file. Returns true if the index was successfully read.
 bool EffectManager::ReadCurrentEffectIndex(size_t& index)
 {
-    File file = UserFS.open(CURRENT_EFFECT_CONFIG_FILE);
+    auto file = UserFS.open(CURRENT_EFFECT_CONFIG_FILE);
     bool readIndex = false;
 
     if (file)
@@ -557,7 +557,7 @@ void WriteCurrentEffectIndexFile()
     g_Analyzer.Pause();
 #endif
 
-    File file = UserFS.open(CURRENT_EFFECT_CONFIG_FILE, FILE_WRITE);
+    auto file = UserFS.open(CURRENT_EFFECT_CONFIG_FILE, FILE_WRITE);
 
     if (!file)
     {

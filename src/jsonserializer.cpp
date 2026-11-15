@@ -170,7 +170,7 @@ bool LoadJSONFile(const String & fileName, JsonDocument& jsonDoc)
 {
     bool jsonReadSuccessful = false;
 
-    File file = UserFS.open(fileName);
+    auto file = UserFS.open(fileName);
 
     if (file)
     {
@@ -214,7 +214,7 @@ bool SaveToJSONFile(const String & fileName, IJSONSerializable& object)
 #if ENABLE_AUDIO
     g_Analyzer.Pause();
 #endif
-    File file = UserFS.open(fileName, FILE_WRITE);
+    auto file = UserFS.open(fileName, FILE_WRITE);
 
     if (!file)
     {
