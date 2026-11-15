@@ -19,7 +19,6 @@
 #include "taskmgr.h"
 #include "values.h"
 
-#include <esp_heap_caps.h>
 #include <esp_task_wdt.h>
 
 namespace
@@ -195,36 +194,11 @@ void NightDriverTaskManager::EffectTaskEntry(void *pVoid)
     function(*pEffect);
 }
 
-BaseType_t NightDriverTaskManager::CreateTask(TaskFunction_t pvTaskCode,
-                                             const char * pcName,
-                                             configSTACK_DEPTH_TYPE usStackDepth,
-                                             void * pvParameters,
-                                             UBaseType_t uxPriority,
-                                             TaskHandle_t * pvCreatedTask,
-                                             BaseType_t xCoreID,
-                                             bool preferPSRAM)
-{
-#if CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM
-    if (preferPSRAM && psramFound())
-    {
-        BaseType_t ret = xTaskCreatePinnedToCoreWithCaps(pvTaskCode, pcName, usStackDepth, pvParameters,
-                                                         uxPriority, pvCreatedTask, xCoreID,
-                                                         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (ret == pdPASS)
-            return ret;
-
-        debugW("Failed to allocate stack for task '%s' in PSRAM, falling back to internal RAM", pcName);
-    }
-#endif
-
-    return xTaskCreatePinnedToCore(pvTaskCode, pcName, usStackDepth, pvParameters, uxPriority, pvCreatedTask, xCoreID);
-}
-
 void NightDriverTaskManager::StartScreenThread()
 {
     #if USE_SCREEN
         Serial.print( str_sprintf(">> Launching Screen Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-        CreateTask(ScreenUpdateLoopEntry, "Screen Loop", SCREEN_STACK_SIZE, nullptr, SCREEN_PRIORITY, &_taskScreen, SCREEN_CORE, true);
+        xTaskCreatePinnedToCore(ScreenUpdateLoopEntry, "Screen Loop", SCREEN_STACK_SIZE, nullptr, SCREEN_PRIORITY, &_taskScreen, SCREEN_CORE);
         CheckHeap();
     #endif
 }
@@ -233,7 +207,7 @@ void NightDriverTaskManager::StartSerialThread()
 {
     #if ENABLE_AUDIOSERIAL
         Serial.print( str_sprintf(">> Launching Serial Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-        CreateTask(AudioSerialTaskEntry, "Audio Serial Loop", DEFAULT_STACK_SIZE, nullptr, AUDIOSERIAL_PRIORITY, &_taskSerial, AUDIOSERIAL_CORE, false);
+        xTaskCreatePinnedToCore(AudioSerialTaskEntry, "Audio Serial Loop", DEFAULT_STACK_SIZE, nullptr, AUDIOSERIAL_PRIORITY, &_taskSerial, AUDIOSERIAL_CORE);
         CheckHeap();
     #endif
 }
@@ -242,7 +216,7 @@ void NightDriverTaskManager::StartColorDataThread()
 {
     #if COLORDATA_SERVER_ENABLED
         Serial.print( str_sprintf(">> Launching ColorData Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-        CreateTask(ColorDataTaskEntry, "ColorData Loop", 4096, nullptr, COLORDATA_PRIORITY, &_taskColorData, COLORDATA_CORE, true);
+        xTaskCreatePinnedToCore(ColorDataTaskEntry, "ColorData Loop", 4096, nullptr, COLORDATA_PRIORITY, &_taskColorData, COLORDATA_CORE);
         CheckHeap();
     #endif
 }
@@ -250,7 +224,7 @@ void NightDriverTaskManager::StartColorDataThread()
 void NightDriverTaskManager::StartDrawThread()
 {
     Serial.print( str_sprintf(">> Launching Drawing Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-    CreateTask(DrawLoopTaskEntry, "Draw Loop", DRAWING_STACK_SIZE, nullptr, DRAWING_PRIORITY, &_taskDraw, DRAWING_CORE, false);
+    xTaskCreatePinnedToCore(DrawLoopTaskEntry, "Draw Loop", DRAWING_STACK_SIZE, nullptr, DRAWING_PRIORITY, &_taskDraw, DRAWING_CORE);
     CheckHeap();
 }
 
@@ -258,7 +232,7 @@ void NightDriverTaskManager::StartAudioThread()
 {
     #if ENABLE_AUDIO
         Serial.print( str_sprintf(">> Launching Audio Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-        CreateTask(AudioSamplerTaskEntry, "Audio Sampler Loop", AUDIO_STACK_SIZE, nullptr, AUDIO_PRIORITY, &_taskAudio, AUDIO_CORE, false);
+        xTaskCreatePinnedToCore(AudioSamplerTaskEntry, "Audio Sampler Loop", AUDIO_STACK_SIZE, nullptr, AUDIO_PRIORITY, &_taskAudio, AUDIO_CORE);
         CheckHeap();
     #endif
 }
@@ -267,7 +241,7 @@ void NightDriverTaskManager::StartNetworkThread()
 {
     #if ENABLE_WIFI
         Serial.print( str_sprintf(">> Launching Network Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-        CreateTask(NetworkHandlingLoopEntry, "NetworkHandlingLoop", NET_STACK_SIZE, nullptr, NET_PRIORITY, &_taskNetwork, NET_CORE, true);
+        xTaskCreatePinnedToCore(NetworkHandlingLoopEntry, "NetworkHandlingLoop", NET_STACK_SIZE, nullptr, NET_PRIORITY, &_taskNetwork, NET_CORE);
         CheckHeap();
     #endif
 }
@@ -276,7 +250,7 @@ void NightDriverTaskManager::StartDebugThread()
 {
     #if ENABLE_WIFI
         Serial.print( str_sprintf(">> Launching Debug Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-        CreateTask(DebugLoopTaskEntry, "Debug Loop", DEBUG_STACK_SIZE, nullptr, DEBUG_PRIORITY, &_taskDebug, DEBUG_CORE, true);
+        xTaskCreatePinnedToCore(DebugLoopTaskEntry, "Debug Loop", DEBUG_STACK_SIZE, nullptr, DEBUG_PRIORITY, &_taskDebug, DEBUG_CORE);
         CheckHeap();
     #endif
 }
@@ -285,7 +259,7 @@ void NightDriverTaskManager::StartSocketThread()
 {
     #if INCOMING_WIFI_ENABLED
         Serial.print( str_sprintf(">> Launching Socket Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-        CreateTask(SocketServerTaskEntry, "Socket Server Loop", SOCKET_STACK_SIZE, nullptr, SOCKET_PRIORITY, &_taskSocket, SOCKET_CORE, true);
+        xTaskCreatePinnedToCore(SocketServerTaskEntry, "Socket Server Loop", SOCKET_STACK_SIZE, nullptr, SOCKET_PRIORITY, &_taskSocket, SOCKET_CORE);
         CheckHeap();
     #endif
 }
@@ -294,7 +268,7 @@ void NightDriverTaskManager::StartRemoteThread()
 {
     #if ENABLE_REMOTE
         Serial.print( str_sprintf(">> Launching Remote Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-        CreateTask(RemoteLoopEntry, "IR Remote Loop", REMOTE_STACK_SIZE, nullptr, REMOTE_PRIORITY, &_taskRemote, REMOTE_CORE, true);
+        xTaskCreatePinnedToCore(RemoteLoopEntry, "IR Remote Loop", REMOTE_STACK_SIZE, nullptr, REMOTE_PRIORITY, &_taskRemote, REMOTE_CORE);
         CheckHeap();
     #endif
 }
@@ -302,7 +276,7 @@ void NightDriverTaskManager::StartRemoteThread()
 void NightDriverTaskManager::StartJSONWriterThread()
 {
     Serial.print( str_sprintf(">> Launching JSON Writer Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
-    CreateTask(JSONWriterTaskEntry, "JSON Writer Loop", JSON_STACK_SIZE, nullptr, JSONWRITER_PRIORITY, &_taskJSONWriter, JSONWRITER_CORE, true);
+    xTaskCreatePinnedToCore(JSONWriterTaskEntry, "JSON Writer Loop", JSON_STACK_SIZE, nullptr, JSONWRITER_PRIORITY, &_taskJSONWriter, JSONWRITER_CORE);
     CheckHeap();
 }
 
@@ -362,7 +336,7 @@ TaskHandle_t NightDriverTaskManager::StartEffectThread(EffectTaskFunction functi
 
     Serial.print( str_sprintf(">> Launching %s Effect Thread.  Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", name, (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize()) );
 
-    if (CreateTask(EffectTaskEntry, name, DEFAULT_STACK_SIZE, pTaskParams.get(), priority, &effectTask, core, true) == pdPASS) {
+    if (xTaskCreatePinnedToCore(EffectTaskEntry, name, DEFAULT_STACK_SIZE, pTaskParams.get(), priority, &effectTask, core) == pdPASS) {
         _vEffectTasks.push_back(effectTask);
         // Ownership transferred successfully to the thread
         pTaskParams.release();

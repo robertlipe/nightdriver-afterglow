@@ -207,15 +207,6 @@ public:
 
     ~NightDriverTaskManager();
 
-    static BaseType_t CreateTask(TaskFunction_t pvTaskCode,
-                                 const char * pcName,
-                                 configSTACK_DEPTH_TYPE usStackDepth,
-                                 void * pvParameters,
-                                 UBaseType_t uxPriority,
-                                 TaskHandle_t * pvCreatedTask,
-                                 BaseType_t xCoreID,
-                                 bool preferPSRAM = true);
-
     void StartScreenThread();
     void StartSerialThread();
     void StartColorDataThread();
