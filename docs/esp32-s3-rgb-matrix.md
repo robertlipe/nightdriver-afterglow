@@ -167,7 +167,7 @@ All onboard I2C devices are arbitrated cooperatively by the non-blocking `System
 
 ## 7. Motion Interactions & Thermal Self-Preservation
 
-* **Auto-Orientation:** Automatically inverts the display 180° when the board is turned upside-down ($a_x < -4.0\,\text{m/s}^2$ vs $> +4.0\,\text{m/s}^2$ with 200 ms hysteresis). Supported natively across both `ESPMPDMAGFX` (hardware DMA rotation) and `ESPHUB75GFX` (ESPHome driver rotation).
+* **Auto-Orientation:** Automatically inverts the display 180° when the board is turned upside-down ($a_x < -4.0\,\text{m/s}^2$ vs $> +4.0\,\text{m/s}^2$ with 200 ms hysteresis). Supported natively across both `ESPMPDMAGFX` (hardware DMA rotation) and `ESPHUB75GFX`. In `ESPHUB75GFX`, 180° rotation is implemented via `std::reverse_copy` directly across the double-buffered frame in PSRAM in `PostProcessFrame`, avoiding single-pixel coordinate mapping overhead.
 * **Bezel Knock / Tap Detection:** Computes 3D acceleration jerk magnitude $|\Delta \vec{a}|$ across consecutive 50 Hz IMU samples. Mechanical impulse spikes ($|\Delta \vec{a}| > 18.0\,\text{m/s}^2$) advance to the next effect, debounced across 600 ms.
 * **Tilt-Reactive Sand:** `PatternSMSand` reads horizontal tilt ($a_y$) from `SystemHardwareHub`, automatically inverting tilt coordinate when the display is rotated 180°. Biases sand avalanche probability and drifts the sand emitter towards the elevated edge.
 * **Unified Thermal Self-Preservation:** Dual-tier tripwires protect high-density LEDs and driver chips from thermal destruction:
