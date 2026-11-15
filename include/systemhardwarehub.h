@@ -6,6 +6,7 @@
 #include <ctime>
 #include <driver/i2c_master.h>
 #include <mutex>
+#include <optional>
 
 struct InertialMetrics
 {
@@ -108,7 +109,7 @@ class SystemHardwareHub
 
     void ConfigureSensorRegisters();
     void ProcessClimateState(uint64_t now);
-    void EvaluateThermalMetrics(uint64_t now, float current_ambient);
+    void EvaluateThermalMetrics(uint64_t now, std::optional<float> current_ambient);
 };
 #else
 class SystemHardwareHub

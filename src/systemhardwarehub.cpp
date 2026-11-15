@@ -352,7 +352,7 @@ void SystemHardwareHub::ProcessClimateState(uint64_t now)
         // Measurement takes typ 10.8ms, max 12.1ms; read back after >= 15 ms
         if (now - climate_state_timestamp >= 15000)
         {
-            float current_ambient = 0.0f;
+            std::optional<float> current_ambient = std::nullopt;
             uint8_t buf[6] = {0};
             if (i2c_master_receive(climate_handle, buf, sizeof(buf), 50) == ESP_OK)
             {
@@ -412,9 +412,13 @@ void SystemHardwareHub::ProcessClimateState(uint64_t now)
 #endif
 }
 
-void SystemHardwareHub::EvaluateThermalMetrics(uint64_t, float current_ambient)
+void SystemHardwareHub::EvaluateThermalMetrics(uint64_t, std::optional<float> current_ambient)
 {
-    float rawAmbientF = (current_ambient * 1.8f) + 32.0f;
+    std::optional<float> rawAmbientF = std::nullopt;
+    if (current_ambient.has_value())
+    {
+        rawAmbientF = (*current_ambient * 1.8f) + 32.0f;
+    }
     SensorManager::EvaluateThermal(rawAmbientF, g_Values.InternalTemp);
 
     float current_die_temp = 0.0f;
@@ -429,7 +433,10 @@ void SystemHardwareHub::EvaluateThermalMetrics(uint64_t, float current_ambient)
 
     // Update shared cache blocks
     std::lock_guard<std::mutex> lock(cache_mutex);
-    cached_thermal.ambient_temp = current_ambient;
+    if (current_ambient.has_value())
+    {
+        cached_thermal.ambient_temp = *current_ambient;
+    }
     cached_thermal.die_temp = current_die_temp;
     cached_thermal.die_rate_of_rise = rate_of_rise;
     cached_thermal.thermal_emergency = (g_Values.ThermalThrottle < 255);
@@ -524,10 +531,10 @@ bool SystemHardwareHub::WriteRTC(const struct tm &timeinfo)
     tx_buf[6] = DecToBcd(timeinfo.tm_mon + 1) & 0x1F;
     tx_buf[7] = DecToBcd((timeinfo.tm_year >= 100) ? (timeinfo.tm_year - 100) : timeinfo.tm_year);
 
-    if (i2c_master_transmit(rtc_handle, tx_buf, sizeof(tx_buf), 50) != ESP_OK)
+    bool write_ok = (i2c_master_transmit(rtc_handle, tx_buf, sizeof(tx_buf), 50) == ESP_OK);
+    if (!write_ok)
     {
         debugW("RTC: failed to write time registers");
-        return false;
     }
 
     // 3. Clear STOP bit (restart clock and reset divider chain)
@@ -537,6 +544,9 @@ bool SystemHardwareHub::WriteRTC(const struct tm &timeinfo)
         debugW("RTC: failed to clear STOP bit");
         return false;
     }
+
+    if (!write_ok)
+        return false;
 
     debugI("RTC: updated PCF85063 time to %04d-%02d-%02d %02d:%02d:%02d UTC",
            timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
