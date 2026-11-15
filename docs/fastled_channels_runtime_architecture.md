@@ -154,8 +154,8 @@ With modern silicon like the ESP32-S3, ESP32-S31 (boasting 60 GPIOs), and ESP32-
 2. **ESP32-S3 (LX7):**
    - 4 RMT TX channels.
    - **LCD_CAM peripheral:** High-speed parallel output clocked synchronously from DMA, used by FastLED 3.10's parallel S3 driver to drive up to 16 parallel strips with near-zero CPU overhead.
-3. **ESP32-C6, ESP32-H2, ESP32-P4:**
-   - **PARLIO (Parallel IO peripheral):** Dedicated hardware engine supporting up to 16 parallel data lines clocked synchronously from DMA. FastLED 3.10 includes a native PARLIO driver (`fl::Bus::FLEX_IO`) for P4, C6, and H2.
+3. **ESP32-S31, ESP32-C6, ESP32-H2, ESP32-P4:**
+   - **PARLIO (Parallel IO peripheral):** Dedicated hardware engine supporting up to 16 parallel data lines clocked synchronously from DMA. S31 and P4 feature high GPIO counts and fast DMA, while FastLED 3.10 includes native PARLIO support (`fl::Bus::FLEX_IO`) for P4, C6, and H2.
 4. **FastLED `ChannelManager` Arbitration:**
    - FastLED's internal `ChannelManager` transparently assigns channels to the highest-priority available hardware engine (LCD_CAM / PARLIO $\rightarrow$ RMT $\rightarrow$ SPI $\rightarrow$ UART $\rightarrow$ BIT_BANG). As channel counts exceed RMT capacity, it falls back to parallel DMA or SPI automatically.
 
