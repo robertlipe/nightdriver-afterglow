@@ -29,6 +29,8 @@
 #include "globals.h"
 
 #if USE_ESP_HUB75
+#include <algorithm>
+#include <vector>
 
 #include "esphub75gfx.h"
 #include "nd_panic.h"
@@ -36,6 +38,7 @@
 
 std::unique_ptr<Hub75Driver> ESPHUB75GFX::driver;
 std::unique_ptr<CRGB[]> ESPHUB75GFX::drawBuffer;
+bool ESPHUB75GFX::isDoubleBuffered = false;
 
 void ESPHUB75GFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devices)
 {
@@ -44,7 +47,13 @@ void ESPHUB75GFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devi
     config.panel_width = MATRIX_WIDTH;
     config.panel_height = MATRIX_HEIGHT;
     config.scan_pattern = Hub75ScanPattern::SCAN_1_16;
-    config.double_buffer = true;
+    // On 64x64 matrices, single-buffering reclaims ~35-45KB of internal DMA SRAM.
+    #if (MATRIX_HEIGHT >= 64)
+        config.double_buffer = false;
+    #else
+        config.double_buffer = true;
+    #endif
+    isDoubleBuffered = config.double_buffer;
     config.shift_driver = Hub75ShiftDriver::GENERIC;
 
 #if WAVESHARE_ESP32_S3_RGB_MATRIX
@@ -129,6 +138,11 @@ void ESPHUB75GFX::SetBrightness(uint8_t amount)
         driver->set_brightness(amount);
 }
 
+void ESPHUB75GFX::setRotation(uint8_t r)
+{
+    Adafruit_GFX::setRotation(r);
+}
+
 void ESPHUB75GFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsDrawn)
 {
     HUB75GFX::PostProcessFrame(localPixelsDrawn, wifiPixelsDrawn);
@@ -136,15 +150,25 @@ void ESPHUB75GFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixel
     if ((localPixelsDrawn + wifiPixelsDrawn) == 0)
         return;
 
-    // Stream our CRGB buffer directly into the active HUB75 drawing buffer
-    driver->draw_pixels(0, 0, _width, _height, (const uint8_t*)leds, Hub75PixelFormat::RGB888, Hub75ColorOrder::RGB, false);
+    if (getRotation() == 2)
+    {
+        static std::vector<CRGB> flipped(MATRIX_WIDTH * MATRIX_HEIGHT);
+        std::reverse_copy(leds, leds + (_width * _height), flipped.data());
+        driver->draw_pixels(0, 0, _width, _height, (const uint8_t*)flipped.data(), Hub75PixelFormat::RGB888, Hub75ColorOrder::RGB, false);
+    }
+    else
+    {
+        // Stream our CRGB buffer directly into the active HUB75 drawing buffer
+        driver->draw_pixels(0, 0, _width, _height, (const uint8_t*)leds, Hub75PixelFormat::RGB888, Hub75ColorOrder::RGB, false);
+    }
 
-    // Swap buffers to display the rendered frame atomically
-    driver->flip_buffer();
+    // Swap buffers to display the rendered frame atomically if double-buffered
+    if (isDoubleBuffered)
+    {
+        driver->flip_buffer();
+    }
 
     FastLED.countFPS();
 }
-
-
 
 #endif

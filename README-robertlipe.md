@@ -102,11 +102,23 @@ This file documents the custom reliability, diagnostic, and performance improvem
 - **Feature**: Added the `tinyled-demo` environment to support the Waveshare ESP32-S3-Matrix (the cracker-sized 8x8 WS2812 board). It is completely decoupled from HUB75 matrix dependencies (relying strictly on FastLED and `NUM_LEDS=64`) for high frame rate, low overhead, 1D strip demonstrations.
 - **RMT driver_ng Update**: Replaced deprecated/duplicate `rmt_driver_install` calls with `rmt_rx_start` inside `src/remotecontrol.cpp` to satisfy ESP-IDF 5's rewritten RMT driver constraints.
 - ** IDF5 Audio Update**: Correct feedback on audio gain and spectrum responsiveness in ESP-IDF port.
+- **Waveshare ESP32-S3-RGB-Matrix Full Hardware Bring-up (`SystemHardwareHub`)**:
+  - **ES7210 Audio ADC**: Standalone driver operating in 16-bit stereo Philips I2S over shared I2C. Calibrated audio DSP and AGC pipeline (30 dB PGA gain, 1:1 software scaling, 40k noise floor gate, uncapped AGC) for punchy, responsive music visualization.
+  - **SHTC3 Climate**: Non-blocking asynchronous 3-state polling (Idle -> Waking -> Measuring -> Idle) that automatically sleeps the sensor between reads to prevent self-heating.
+  - **QMI8658 6-Axis IMU & Motion**: Burst-read at 50 Hz. Implements automatic 180° display inversion (hardware DMA & ESPHome driver levels), mechanical bezel knock/tap impulse detection ($|\Delta \vec{a}| > 18\,\text{m/s}^2$) for effect switching, and physical tilt coupling.
+  - **Tilt-Reactive Sand Simulation (`PatternSMSand`)**:
+    - **Physical Gravity Coupling**: Cellular sand physics reads the lateral gravity vector ($a_y$) directly from the IMU.
+    - **Orientation-Aware Transformation**: Sand dynamically inverts gravity vectors when the display is rotated 180°, ensuring sand always cascades toward real-world down.
+    - **Directional Avalanche & Slope Bias**: Grains tumbling off peaks are biased in the direction of the tilt slope, and horizontal plateaus actively avalanche when tilted past $|a_y| > 0.20g$.
+    - **Dynamic Emitter Drift**: The top sand emitter shifts toward the elevated edge when tilted, generating natural cascades that roll down the slope across the matrix.
+  - **PCF85063 RTC**: Offline real-time clock recovery on cold boot and atomic NTP time commit upon network sync.
+  - **Unified Thermal Self-Preservation**: Dual-tier tripwires protecting high-density LEDs and driver silicon against catastrophic overheating (Warning at 125°F ambient / 175°F die or 8°F/min surge throttles brightness to 10%; Critical at 140°F ambient / 195°F die or 25°F/min emergency surge blacks out output until cooled). Includes persistent non-volatile temperature calibration offset (`tempoffset`).
+  - **Interactive CLI Diagnostics**: Runtime control via `rotate [0|180|270|auto]`, `tap [on|off]`, `thermal`, and `tempoffset [<degF>]`.
 
 ### 2. The Great LittleFS Migration (`include/userfs.h`)
 - **Issue**: SPIFFS is officially deprecated in ESP-IDF 5 and notoriously slow/fragile on large partitions.
-- **Fix**: Completely ripped and replaced SPIFFS with LittleFS across the entire codebase. 
-- **Abstraction Layer**: Introduced the `UserFilesystem` (`UserFS`) wrapper. This seamlessly manages `LittleFS` vs `SPIFFS` dependencies at compile-time (preventing LDF bloat). 
+- **Fix**: Completely ripped and replaced SPIFFS with LittleFS across the entire codebase.
+- **Abstraction Layer**: Introduced the `UserFilesystem` (`UserFS`) wrapper. This seamlessly manages `LittleFS` vs `SPIFFS` dependencies at compile-time (preventing LDF bloat).
 - **OTA Caveat**: While `UserFS` will intelligently reformat old SPIFFS partitions on boot (`formatOnFail = true`), **changing the partition table via OTA is a guaranteed brick**. If a device's partition boundaries change between versions, you will be climbing a ladder with a USB cable. Proceed with caution. If there is data on the device you wish to preserve (effect settings) you should use nightdriverclient.py's backup and restore options to do so BEFORE flashging this to the devic
 ### 3. Strict Typing & API Deprecation Fixes
 - **Modern C++ Reality Check**: Now targets C++26. jThe codebase was already targeting C++20 (or `2a`), but jumping off GCC 8 means we are now using a compiler where C++26 is actually standardized and supported natively, rather than just being an experimental guess at future language features. This unlocks stability and clarity in library features (std::fmt, std::to_array) or language features like `constexpr if` and `class template array deduction`.

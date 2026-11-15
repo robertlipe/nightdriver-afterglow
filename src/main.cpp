@@ -149,11 +149,6 @@
 //
 //---------------------------------------------------------------------------
 
-
-
-#define FASTLED_ALL_PINS_HARDWARE_SPI
-#define FASTLED_ESP32_SPI_BUS HSPI
-
 #include "globals.h"
 
 #include <algorithm>
@@ -214,6 +209,7 @@
 #include "socketserver.h"
 #include "soundanalyzer.h"
 #include "systemcontainer.h"
+#include "systemhardwarehub.h"
 #include "taskmgr.h"
 
 #if INCOMING_WIFI_ENABLED
@@ -693,6 +689,8 @@ void loop()
             ConsoleManager::Instance().FeedSerialByte((char)Serial.read());
         }
 
+        SystemHardwareHub::Instance().Tick();
+
         #if ENABLE_WIFI && !defined(ENABLE_WIFI_TEST_MODE)
             EVERY_N_MILLIS(20)
             {
@@ -732,19 +730,21 @@ void loop()
                     strOutput += str_sprintf("WiFi: %s, MAC: %s, IP: %s ", nd_network::WLtoString(nd_network::GetWiFiStatus()), nd_network::GetMacAddress(":").c_str(), nd_network::GetWiFiLocalIP().c_str());
                 #endif
 
-                #if USE_HUB75
-                    strOutput += str_sprintf("Power: %d mW, Brite: %3.0lf%%, ", g_Values.MatrixPowerMilliwatts, g_Values.MatrixScaledBrightness / 2.55);
-                #endif
-
                 strOutput += str_sprintf("Mem: %zu, LargestBlk: %zu, PSRAM Free: %zu/%zu, ", (size_t)ESP.getFreeHeap(), (size_t)ESP.getMaxAllocHeap(), (size_t)ESP.getFreePsram(), (size_t)ESP.getPsramSize());
                 strOutput += str_sprintf("LED FPS: %lu ", (unsigned long)g_Values.FPS);
 
                 #if USE_WS281X
-                    strOutput += str_sprintf("LED Bright: %3.0lf%%, LED Watts: %lu, ", g_Values.Brite, (unsigned long)g_Values.Watts);
+                    strOutput += str_sprintf("LED Bright: %3.0lf%%%s, LED Watts: %lu, ",
+                                             (double)g_Values.Brite,
+                                             g_Values.ThermalThrottle < 255 ? " [THROTTLED]" : "",
+                                             (unsigned long)g_Values.Watts);
                 #endif
 
                 #if USE_HUB75
-                    strOutput += str_sprintf("Refresh: %d Hz, Power: %d mW, Brite: %3.0lf%%, ", 0, g_Values.MatrixPowerMilliwatts, g_Values.MatrixScaledBrightness / 2.55);
+                    strOutput += str_sprintf("Power: %d mW, Brite: %3.0lf%%%s, ",
+                                             g_Values.MatrixPowerMilliwatts,
+                                             (double)g_Values.Brite,
+                                             g_Values.ThermalThrottle < 255 ? " [THROTTLED]" : "");
                 #endif
 
                 #if ENABLE_AUDIO
@@ -755,10 +755,10 @@ void loop()
                     strOutput += str_sprintf("Serial FPS: %d, ", g_Analyzer.SerialFPS());
                 #endif
 
-		debugI("%s", strOutput.c_str());
+                debugI("%s", strOutput.c_str());
 
-		if (ESP.getFreeHeap() < 15000)
-		    debugW("Danger: Memory perilously low (< 15K). Expect bad things to happen!");
+                if (ESP.getFreeHeap() < 15000)
+                    debugW("Danger: Memory perilously low (< 15K). Expect bad things to happen!");
 
                 #if INCOMING_WIFI_ENABLED
                     auto& bufferManager = g_ptrSystem->GetBufferManagers()[0];
@@ -776,6 +776,11 @@ void loop()
                 if (g_Values.AmbientHumidity.has_value())
                 {
                     strOutput += str_sprintf("Hum: %.1f%% ", g_Values.AmbientHumidity.value());
+                }
+                auto imu = SystemHardwareHub::Instance().GetInertial();
+                if (imu.valid)
+                {
+                    strOutput += str_sprintf("IMU: [%.2f, %.2f, %.2f] ", imu.ax, imu.ay, imu.az);
                 }
 
                 const auto& taskManager = g_ptrSystem->GetTaskManager();
