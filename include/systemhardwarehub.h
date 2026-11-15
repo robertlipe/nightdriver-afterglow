@@ -86,6 +86,7 @@ class SystemHardwareHub
     uint64_t last_fast_tick = 0;
     uint64_t last_slow_tick = 0;
 
+    bool config_loaded = false;
     bool auto_orientation_enabled = true;
     uint8_t current_rotation = 0; // 0 = normal (0 deg), 2 = inverted (180 deg)
     int orientation_stable_count = 0;

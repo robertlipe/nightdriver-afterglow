@@ -115,10 +115,11 @@ bool SystemHardwareHub::Begin()
 
     ConfigureSensorRegisters();
 
-    if (g_ptrSystem)
+    if (g_ptrSystem && g_ptrSystem->HasDeviceConfig())
     {
         auto_orientation_enabled = g_ptrSystem->GetDeviceConfig().GetAutoOrientation();
         tap_detection_enabled = g_ptrSystem->GetDeviceConfig().GetTapDetection();
+        config_loaded = true;
     }
 
     return true;
@@ -194,6 +195,13 @@ void SystemHardwareHub::ConfigureSensorRegisters()
 
 void SystemHardwareHub::Tick()
 {
+    if (!config_loaded && g_ptrSystem && g_ptrSystem->HasDeviceConfig())
+    {
+        auto_orientation_enabled = g_ptrSystem->GetDeviceConfig().GetAutoOrientation();
+        tap_detection_enabled = g_ptrSystem->GetDeviceConfig().GetTapDetection();
+        config_loaded = true;
+    }
+
     uint64_t now = esp_timer_get_time();
 
     // Fast loop: IMU Gravity operations at ~50Hz (20ms)
@@ -309,7 +317,7 @@ void SystemHardwareHub::ApplyRotation(uint8_t rotation)
 void SystemHardwareHub::SetAutoOrientationEnabled(bool enable)
 {
     auto_orientation_enabled = enable;
-    if (g_ptrSystem)
+    if (g_ptrSystem && g_ptrSystem->HasDeviceConfig())
     {
         g_ptrSystem->GetDeviceConfig().SetAutoOrientation(enable);
     }
@@ -318,7 +326,7 @@ void SystemHardwareHub::SetAutoOrientationEnabled(bool enable)
 void SystemHardwareHub::SetTapDetectionEnabled(bool enable)
 {
     tap_detection_enabled = enable;
-    if (g_ptrSystem)
+    if (g_ptrSystem && g_ptrSystem->HasDeviceConfig())
     {
         g_ptrSystem->GetDeviceConfig().SetTapDetection(enable);
     }
