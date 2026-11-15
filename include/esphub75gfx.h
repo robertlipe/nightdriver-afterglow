@@ -41,6 +41,7 @@ class ESPHUB75GFX : public HUB75GFX
 protected:
     static std::unique_ptr<Hub75Driver> driver;
     static std::unique_ptr<CRGB[]> drawBuffer;
+    static bool isDoubleBuffered;
 
 public:
     ESPHUB75GFX(size_t w, size_t h) : HUB75GFX(w, h)
