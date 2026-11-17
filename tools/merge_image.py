@@ -125,12 +125,12 @@ def merge_bin(source, target, env):
         flash_mode = "dout"
 
     # Run esptool to merge images into a single binary
-    esptool_path = "esptool.py"
+    esptool_path = "esptool"
     try:
         platform = env.PioPlatform()
         package_dir = platform.get_package_dir("tool-esptoolpy")
         if package_dir:
-            candidate = os.path.join(package_dir, "esptool.py")
+            candidate = os.path.join(package_dir, "esptool")
             if os.path.exists(candidate):
                 esptool_path = candidate
             else:
@@ -147,13 +147,15 @@ def merge_bin(source, target, env):
                 f'"{esptool_path}"',
                 "--chip",
                 board_config.get("build.mcu", "esp32"),
-                "merge_bin",
-                "--flash_size",
+                "merge-bin",
+                "--flash-size",
                 board_config.get("upload.flash_size", "4MB"),
-                "--flash_mode",
+                "--flash-mode",
                 flash_mode,
-                "--flash_freq",
+                "--flash-freq",
                 flash_freq,
+                "--format",
+                "hex",
                 "-o",
                 f'"{merged_image}"',
             ]

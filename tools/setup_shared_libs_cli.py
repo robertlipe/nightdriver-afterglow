@@ -80,7 +80,10 @@ class SimplePIOConfig:
                     self.sections[current_section] = {}
                     continue
                 if current_section:
-                    if "=" in line:
+                    # Indented lines are continuations of the previous option,
+                    # even when they contain '=' (e.g. "Name = <url>" library
+                    # specs or "-DFOO=1" build flags).
+                    if "=" in line and not line.startswith((" ", "\t")):
                         name, val = line.split("=", 1)
                         name = name.strip()
                         self.sections[current_section][name] = val.strip()
@@ -239,6 +242,21 @@ def exact_pin(spec):
     return match.group(1) if match else None
 
 
+def spec_library_name(spec):
+    """Derive the folder name PlatformIO installs a dependency into.
+
+    Registry specs look like "owner/Name @ version". For external (git/URL)
+    deps the folder name normally comes from the package manifest, which we
+    cannot know in advance, so those must use PIO's custom-name syntax
+    "Name = <url>" to pin it; that also keeps the spaces-to-underscores rename
+    below deterministic so ${shared_libs.*} symlink paths stay valid.
+    """
+    tokens = spec.split("=", 1)
+    if len(tokens) == 2 and "/" not in tokens[0]:
+        return tokens[0].strip()
+    return spec.split('/')[-1].split('@')[0].replace('.git', '').strip()
+
+
 # Simple lock mechanism to prevent race conditions when invoked concurrently by PIO
 def acquire_lock(lock_path, timeout=300):
     start = time.time()
@@ -265,7 +283,7 @@ lock_fd = acquire_lock(lock_path)
 
 try:
     for lib in shared_libs:
-        expected_name = lib.split('/')[-1].split('@')[0].replace('.git', '').strip()
+        expected_name = spec_library_name(lib)
         clean_name = expected_name.replace(' ', '_')
 
         lib_path = os.path.join(TARGET_DIR, clean_name)
