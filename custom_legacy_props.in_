@@ -125,16 +125,6 @@ board           = tinypico
 monitor_speed   = 115200
 upload_speed    = 1500000
 
-[dev_wrover]
-extends         = base
-board           = esp-wrover-kit
-monitor_speed   = 115200
-upload_speed    = 1500000
-lib_deps        = ${base.lib_deps}
-                  ${base.network_deps}
-                  ${base.network_deps}
-                  adafruit/Adafruit ILI9341 @ ^1.5.10
-
 [dev_lilygo_tdisplay_s3]
 extends         = dev_esp32_s3
 board           = esp32-s3-devkitc-1
