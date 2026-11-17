@@ -16,51 +16,66 @@
 #include "systemcontainer.h"
 #include "values.h"
 
-#if MATRIX_S3
-#define BOARD_ADAFRUIT_MATRIX_S3 1
-#elif WAVESHARE_ESP32_S3_RGB_MATRIX
-#define BOARD_WAVESHARE_S3 1
-#endif
-
-// static const char *TAG = "HW_HUB";
-
 // =========================================================
 // BOARD-SPECIFIC PROFILES & REGISTER CODES
 // =========================================================
-#if defined(BOARD_ADAFRUIT_MATRIX_S3)
-#ifndef I2C_SDA_PIN
-#define I2C_SDA_PIN 2
+#if defined(MATRIX_S3)
+    #ifndef I2C_SDA_PIN
+    #define I2C_SDA_PIN 2
+    #endif
+    #ifndef I2C_SCL_PIN
+    #define I2C_SCL_PIN 3
+    #endif
+    #define HAS_LIS3DH
+    // Assuming your BME280 is added as a sidecar sensor on this board layout
+    #define HAS_BME280
+    #define CLIMATE_ADDR 0x76
+#elif defined(WAVESHARE_ESP32_S3_RGB_MATRIX)
+    // Waveshare ESP32-S3-RGB-Matrix. The I2C bus is shared by the ES7210,
+    // ES8311, QMI8658, SHTC3, and PCF85063. GPIO 47/48 are the board's
+    // I2C_SDA/I2C_SCL nets, not the memory-interface pins (those are 33-37).
+    #ifndef I2C_SDA_PIN
+    #define I2C_SDA_PIN 47
+    #endif
+    #ifndef I2C_SCL_PIN
+    #define I2C_SCL_PIN 48
+    #endif
+    #define HAS_QMI8658
+    #define HAS_SHTC3 // Waveshare's environment chip selection
+    #define CLIMATE_ADDR 0x70
+    #define HAS_PCF85063
+    #define RTC_ADDR 0x51
+#elif defined (CONTROLLER_TYPE_WAVESHARE_MATRIX_S3)
+    // This is the tinyled controller with 64 WS2812s, not the large HUB75 one
+    #ifndef I2C_SDA_PIN
+        #define I2C_SDA_PIN 11
+    #endif
+    #ifndef I2C_SCL_PIN
+        #define I2C_SCL_PIN 12
+    #endif
+    #define HAS_QMI8658
 #endif
-#ifndef I2C_SCL_PIN
-#define I2C_SCL_PIN 3
+
+// --- Sensor Silicon Register Maps & Defaults ---
+#if defined(HAS_QMI8658)
+    #ifndef SENSOR_ADDR
+        #define SENSOR_ADDR 0x6B // SA0 high (0x6A if SA0 low)
+    #endif
+    #define REG_DATA_START 0x35 // Ax_L start of 6-byte accel output
+#elif defined(HAS_LIS3DH)
+    #ifndef SENSOR_ADDR
+        #define SENSOR_ADDR 0x19
+    #endif
+    #define REG_DATA_START (0x28 | 0x80) // OUT_X_L with auto-increment
 #endif
-#define PIN_SDA ((gpio_num_t)I2C_SDA_PIN)
-#define PIN_SCL ((gpio_num_t)I2C_SCL_PIN)
-#define SENSOR_ADDR 0x19 // LIS3DH Accel
-#define REG_DATA_START (0x28 | 0x80)
-#define HAS_LIS3DH
-// Assuming your BME280 is added as a sidecar sensor on this board layout
-#define HAS_BME280
-#define CLIMATE_ADDR 0x76
-#elif defined(BOARD_WAVESHARE_S3)
-// Waveshare ESP32-S3-RGB-Matrix. The I2C bus is shared by the ES7210,
-// ES8311, QMI8658, SHTC3, and PCF85063. GPIO 47/48 are the board's
-// I2C_SDA/I2C_SCL nets, not the memory-interface pins (those are 33-37).
-#ifndef I2C_SDA_PIN
-#define I2C_SDA_PIN 47
+
+
+// --- Convenience shortcuts, independent of hardware reality. ---
+#if defined(I2C_SDA_PIN)
+    #define PIN_SDA ((gpio_num_t)I2C_SDA_PIN)
 #endif
-#ifndef I2C_SCL_PIN
-#define I2C_SCL_PIN 48
-#endif
-#define PIN_SDA ((gpio_num_t)I2C_SDA_PIN)
-#define PIN_SCL ((gpio_num_t)I2C_SCL_PIN)
-#define SENSOR_ADDR 0x6B // QMI8658 Accel (SA0 pulled high on Waveshare board)
-#define REG_DATA_START 0x35
-#define HAS_QMI8658
-#define HAS_SHTC3 // Waveshare's environment chip selection
-#define CLIMATE_ADDR 0x70
-#define HAS_PCF85063
-#define RTC_ADDR 0x51
+#if defined(I2C_SCL_PIN)
+    #define PIN_SCL ((gpio_num_t)I2C_SCL_PIN)
 #endif
 
 SystemHardwareHub &SystemHardwareHub::Instance()
