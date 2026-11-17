@@ -42,6 +42,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 class GFXBase;
@@ -112,7 +113,10 @@ class  EffectManager : public IJSONSerializable
 {
     std::vector<std::shared_ptr<LEDStripEffect>> _vEffects;
 
-    size_t _iCurrentEffect = 0;
+    std::atomic<size_t> _iCurrentEffect{0};
+    std::atomic<int64_t> _requestedEffectIndex{-1};
+    mutable std::recursive_mutex _effectsMutex;
+
     uint _effectStartTime;
     uint _effectInterval = 0;
     bool _bPlayAll;
@@ -125,6 +129,8 @@ class  EffectManager : public IJSONSerializable
     std::vector<std::reference_wrapper<IFrameEventListener>> _frameEventListeners;
     std::vector<std::reference_wrapper<IEffectEventListener>> _effectEventListeners;
 
+    void ApplyEffectChange(size_t i);
+    void ProcessPendingEffectChange();
     void construct(bool clearTempEffect);
 
     // Implementation is in effects.cpp
@@ -135,6 +141,7 @@ class  EffectManager : public IJSONSerializable
 
     void ClearEffects()
     {
+        std::lock_guard<std::recursive_mutex> lock(_effectsMutex);
         _vEffects.clear();
     }
 

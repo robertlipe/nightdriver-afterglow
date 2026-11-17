@@ -107,6 +107,13 @@ void ESPMPDMAGFX::SetBrightness(uint8_t amount)
         driver->setBrightness8(amount);
 }
 
+void ESPMPDMAGFX::setRotation(uint8_t r)
+{
+    Adafruit_GFX::setRotation(r);
+    if (driver)
+        driver->setRotation(r);
+}
+
 void ESPMPDMAGFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsDrawn)
 {
     HUB75GFX::PostProcessFrame(localPixelsDrawn, wifiPixelsDrawn);

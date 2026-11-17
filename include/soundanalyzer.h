@@ -46,6 +46,10 @@
 #include <driver/i2s_std.h>
 #include <esp_adc/adc_continuous.h>
 
+#if USE_ES7210_AUDIO
+#include "es7210.h"
+#endif
+
 #ifndef SPECTRUM_BAND_SCALE_MEL
 #define SPECTRUM_BAND_SCALE_MEL 1
 #endif
@@ -73,23 +77,25 @@ struct AudioInputParams
     float compressGamma;          // Exponent for compression on normalized v (e.g., 1/3=cuberoot, 1/6=sqrt(cuberoot))
     float quietEnvFloorGate;      // Gate entire frame if envFloor (noiseMean*envFloorFromNoise) < this (0 disables)
     float liveAttackPerSec;       // Max rise per second for live peaks (frame-rate independent attack limit)
+    float energyMaxEnvCap;        // Maximum auto-gain envelope (0 = uncapped)
 };
 
 // Mesmerizer (default) tuning
 inline constexpr AudioInputParams kParamsMesmerizer
 {
-    4.0f,      // windowPowerCorrection
-    0.02f,     // energyNoiseAdapt
-    0.98f,     // energyNoiseDecay
-    0.99f,     // energyEnvDecay
-    0.000001f, // energyMinEnv
-    1.0f,      // bandCompHigh
-    3.0f,      // envFloorFromNoise (cap auto-gain at ~1/4 of pure-noise)
-    0.0f,      // frameSNRGate (require ~3:1 SNR to show frame)
-    1.0f,      // postScale (Mesmerizer default)
-    (1.0/3.0), // compressGamma (cube root)
-    1500000,   // quietEnvFloorGate (cutoff gates all ssound when below this level)
-    1000.0f    // liveAttackPerSec (very fast attack)
+    .windowPowerCorrection = 4.0f,
+    .energyNoiseAdapt      = 0.02f,
+    .energyNoiseDecay      = 0.98f,
+    .energyEnvDecay        = 0.99f,
+    .energyMinEnv          = 0.000001f,
+    .bandCompHigh          = 1.0f,
+    .envFloorFromNoise     = 3.0f,
+    .frameSNRGate          = 0.0f,
+    .postScale             = 1.0f,
+    .compressGamma         = (1.0f / 3.0f),
+    .quietEnvFloorGate     = 1500000.0f,
+    .liveAttackPerSec      = 1000.0f,
+    .energyMaxEnvCap       = 0.0f
 };
 
 // PC Remote uses Mesmerizer defaults
@@ -98,50 +104,74 @@ inline constexpr AudioInputParams kParamsPCRemote = kParamsMesmerizer;
 // M5 variants use a higher postScale by default
 inline constexpr AudioInputParams kParamsM5
 {
-    4.0f,      // windowPowerCorrection
-    0.02f,     // energyNoiseAdapt
-    0.98f,     // energyNoiseDecay
-    0.95f,     // energyEnvDecay (faster decay for quicker adaptation)
-    0.01f,     // energyMinEnv (higher floor for faster startup)
-    1.5f,      // bandCompHigh (boost upper bands for M5)
-    3.0f,      // envFloorFromNoise
-    0.0f,      // frameSNRGate
-    1.0f,      // postScale
-    (1.0/8.0), // compressGamma (cube root)
-    1000000,   // quietEnvFloorGate (cutoff gates all ssound when below this level)
-    1000.0f    // liveAttackPerSec
+    .windowPowerCorrection = 4.0f,
+    .energyNoiseAdapt      = 0.02f,
+    .energyNoiseDecay      = 0.98f,
+    .energyEnvDecay        = 0.95f,
+    .energyMinEnv          = 0.01f,
+    .bandCompHigh          = 1.5f,
+    .envFloorFromNoise     = 3.0f,
+    .frameSNRGate          = 0.0f,
+    .postScale             = 1.0f,
+    .compressGamma         = (1.0f / 8.0f),
+    .quietEnvFloorGate     = 1000000.0f,
+    .liveAttackPerSec      = 1000.0f,
+    .energyMaxEnvCap       = 0.0f
 };
+
 inline constexpr AudioInputParams kParamsM5Plus2
 {
-    4.0f,      // windowPowerCorrection
-    0.02f,     // energyNoiseAdapt
-    0.98f,     // energyNoiseDecay
-    0.95f,     // energyEnvDecay (faster decay for quicker adaptation)
-    0.01f,     // energyMinEnv (higher floor for faster startup)
-    1.0f,      // bandCompHigh (no attenuation for high bands)
-    3.0f,      // envFloorFromNoise
-    0.0f,      // frameSNRGate
-    1.0f,      // postScale
-    (1.0/3.0), // compressGamma (cube root)
-    1500000,   // quietEnvFloorGate (cutoff gates all ssound when below this level)
-    1000.0f    // liveAttackPerSec
+    .windowPowerCorrection = 4.0f,
+    .energyNoiseAdapt      = 0.02f,
+    .energyNoiseDecay      = 0.98f,
+    .energyEnvDecay        = 0.95f,
+    .energyMinEnv          = 0.01f,
+    .bandCompHigh          = 1.0f,
+    .envFloorFromNoise     = 3.0f,
+    .frameSNRGate          = 0.0f,
+    .postScale             = 1.0f,
+    .compressGamma         = (1.0f / 3.0f),
+    .quietEnvFloorGate     = 1500000.0f,
+    .liveAttackPerSec      = 1000.0f,
+    .energyMaxEnvCap       = 0.0f
 };
 
 // I2S External microphones (INMP441, etc.) use higher postScale and less aggressive gating
 inline constexpr AudioInputParams kParamsI2SExternal
 {
-    4.0f,           // windowPowerCorrection (increased from 4.0f for more gain)
-    0.02f,          // energyNoiseAdapt (slower noise adaptation)
-    0.98f,          // energyNoiseDecay (slower noise floor decay)
-    0.95f,          // energyEnvDecay (slower envelope decay)
-    0.01f,          // energyMinEnv (higher floor to prevent over-normalization with quiet I2S mics)
-    1.0f,           // bandCompHigh (no attenuation for high bands)
-    3.0f,           // envFloorFromNoise
-    0.0f,           // frameSNRGate (disable SNR gating for external mics)
-    1.5f,           // postScale (much higher gain for external I2S mics - was 4.0f)
-    (1.0/3.0),      // compressGamma (cube root)
-    1500000,        // quietEnvFloorGate (cutoff gates all ssound when below this level)
-    1000.0f         // liveAttackPerSec
+    .windowPowerCorrection = 4.0f,
+    .energyNoiseAdapt      = 0.02f,
+    .energyNoiseDecay      = 0.98f,
+    .energyEnvDecay        = 0.95f,
+    .energyMinEnv          = 0.01f,
+    .bandCompHigh          = 1.0f,
+    .envFloorFromNoise     = 3.0f,
+    .frameSNRGate          = 0.0f,
+    .postScale             = 1.5f,
+    .compressGamma         = (1.0f / 3.0f),
+    .quietEnvFloorGate     = 1500000.0f,
+    .liveAttackPerSec      = 1000.0f,
+    .energyMaxEnvCap       = 0.0f
+};
+
+// Waveshare ES7210 microphones. 16-bit stereo input configured via shared I2C.
+// frameSNRGate and energyMaxEnvCap are disabled (0.0f) to allow natural AGC
+// scaling without chattering on quiet room noise or flatline clipping on speech.
+inline constexpr AudioInputParams kParamsES7210
+{
+    .windowPowerCorrection = 4.0f,
+    .energyNoiseAdapt      = 0.02f,
+    .energyNoiseDecay      = 0.98f,
+    .energyEnvDecay        = 0.95f,
+    .energyMinEnv          = 0.01f,
+    .bandCompHigh          = 1.0f,
+    .envFloorFromNoise     = 3.0f,
+    .frameSNRGate          = 0.0f,
+    .postScale             = 1.5f,
+    .compressGamma         = (1.0f / 3.0f),
+    .quietEnvFloorGate     = 40000.0f,
+    .liveAttackPerSec      = 1000.0f,
+    .energyMaxEnvCap       = 0.0f
 };
 
 // AudioInputParams instances for different microphone types - used directly as template parameters
@@ -568,6 +598,13 @@ class SoundAnalyzerBase : public ISoundAnalyzer
     i2s_chan_handle_t _rx_handle = nullptr;
     adc_continuous_handle_t _adc_handle = nullptr;
 
+#if USE_ES7210_AUDIO
+    // The ES7210 emits interleaved 16-bit stereo samples. Keep the read buffer
+    // here rather than on the 4 KB audio task stack.
+    ES7210 _es7210;
+    std::array<int16_t, MAX_SAMPLES * 2> _i2sSampleBuffer{};
+#endif
+
     ArduinoFFT<float> _FFT;
     std::mutex _pauseMutex;
     int _pauseCount = 0;
@@ -629,6 +666,8 @@ class SoundAnalyzer : public SoundAnalyzerBase
     using ProjectSoundAnalyzer = SoundAnalyzer<kParamsM5Plus2>;
     #elif USE_M5
     using ProjectSoundAnalyzer = SoundAnalyzer<kParamsM5>;
+    #elif USE_ES7210_AUDIO
+    using ProjectSoundAnalyzer = SoundAnalyzer<kParamsES7210>;
     #elif USE_I2S_AUDIO
     using ProjectSoundAnalyzer = SoundAnalyzer<kParamsI2SExternal>;
     #else

@@ -42,6 +42,7 @@
 #include "ledbuffer.h"
 #include "ntptimeclient.h"
 #include "systemcontainer.h"
+#include "systemhardwarehub.h"
 #include "values.h"
 
 #if ENABLE_NTP
@@ -126,6 +127,8 @@ void NTPTimeClient::ProcessPendingSyncNotification()
                        time_str);
             }
         }
+
+        SystemHardwareHub::Instance().SyncRTCTimeFromSystem();
     }
 }
 
