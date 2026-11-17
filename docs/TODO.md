@@ -3,29 +3,41 @@ No no particular order.
 DONE Implement std::byteswap
 DONE Use Saturation arithmetic
 
-
 Salvage doc, ideas code from ~/src/hex and revive hexagon effort.
-  * Split gfx for hex QRS addressing into gfxhex.h
+  * DONE Split gfx for hex QRS addressing into gfxhex.h
   * Distill HTML demos to C++.
-  * Weirdly, I think my games matrix effects are here. :-/
+  * DONE Weirdly, I think my games matrix effects are here. :-/
   * Create a Q-Bert isometric cube effect for Hex grids.
+    (see docs/qbert.md)
 
-Mine the AP work from /Users/robertlipe/src/tmp/src/wifi-apA
-   On branch wifi-ap
- git remote -v:
-  origin	https://github.com/robertlipe/NightDriverStrip.git (fetch)
-  origin	https://github.com/robertlipe/NightDriverStrip.git (push)
-  upstream	https://github.com/PlummersSoftwareLLC/NightDriverStrip.git (fetch)
-  upstream	https://github.com/PlummersSoftwareLLC/NightDriverStrip.git (push)
+DONE Mine the AP work from /Users/robertlipe/src/tmp/src/wifi-ap
+  - WiFi AP robustness & captive portal fully incorporated into afterglow
+    (see docs/Wifi_Configuration_AP_design.md).
+  - Runtime partition dumper and directory listing absorbed into debug_cli.cpp (`partitions`, `ls`).
+  - Remaining files are build logs and Dec 2025 AI handover notes. Ready to delete.
 
-Mine /Users/robertlipe/src/tmp/src/rpi
-  40 branches. :-(
+DONE Mine /Users/robertlipe/src/tmp/src/rpi
+  Audited all 40 branches against afterglow/main. All code upstreamed or superseded.
+  - Salvaged `include/effects/matrix/PatternCyclicCA.h` (Greenberg-Hastings & Cyclic CA).
+    TODO: Modernize, optimize with modern tools, and evaluate for matrix displays.
+  - LightCrafter-16: 16-channel, 80A board.
+    SALVAGED from .worktrees/ld16:
+    * `docs/16ch_led_strip_driver.pdf` (hardware schematic!)
+    * `docs/lightcrafter16.md` (complete hardware notes, IO0/46 mux gotcha on GPIO 3, U6 transceiver debug LED, APA102 analysis)
+    * `custom_ld16.in_` (pin mappings for LED0-15, W5500 SPI Ethernet, IR, Voltage/Current ADC)
+    TODO: Integrate 16-channel `ws281xgfx.cpp` expansion (`LEDS_AS_MATRIX` & channels 8-15) when hardware is tested.
 
 Mine /Users/robertlipe/tmp/src/nightdriverstrip - see if there's anything
   there remaining to be salvaged. Potentially delete.
 
-Mine each of /Users/robertlipe/src/nightdriverstrip/.worktrees
-  (Probably each one a project...) for ideas, code worth salvaging.
+DONE Mine each of /Users/robertlipe/src/nightdriverstrip/.worktrees
+  - `ld16`: HARVESTED! Salvaged schematic, custom_ld16.in_, lightcrafter16.md, and 16-channel patch.
+  - `arduino3-exp`: Arduino 3.0 / objcopy / FreeRTOS changes superseded and in afterglow.
+  - `channels`: Stale commit 6763b775 (merged) with deleted 3D assets.
+  - `m5tab-staging`: Magic static getPolarMap, SIOF fixes, and salvage scripts all in afterglow.
+  - `refactor-headers`: PR #823/#825 IRAM/DRAM attributes and clean headers already merged.
+  - `remotedebug-pr`: Stale merge conflict from replace-remotedebug, superseded.
+  All worktrees in .worktrees/ are safely cleared for pruning.
 
 Mine /Users/robertlipe/src/tinyled -  harvest 'tinyled' work.
   ➜  tinyled git:(tinyled) ✗ git branch --list | wc -l
@@ -39,8 +51,11 @@ Mine /Users/robertlipe/tmp/src/ndstrip-test
 
 Finally: Run  locate gfxbase.cpp - find yet OTHER trees to salvage
 
-Low priority
-  /Users/robertlipe/src/tmp/src/build - see if anything is worth salvaging.
+DONE /Users/robertlipe/src/tmp/src/build
+  - Dec/Jan Ninja/CMake build system refactor experiment.
+  - Succeeded in generating demo build.ninja via log extraction, but proved to be
+    an unmaintainable dead end.
+  - Superseded by cleaning up platformio.ini targets (12 active envs, 2-min CI). Ready to delete.
 - [x] Trig Performance Optimization (HexRipple/General): Investigated replacing `std::cos` and `std::sin` with FastLED `cos8`/`sin8` table lookups for performance. Found that modern ESP32 targets (like ESP32-S3) have hardware FPUs that execute trig functions extremely fast (~121 clocks). The minimal speedup from 8-bit table lookups is not worth the loss in precision. Closed as a false positive. Do not implement custom sin/cos.
 - [ ] FastLED Tech Debt: Refactor the 'bottom half' of FastLED to address reinterpret_cast warnings/errors.
 - [x] sensors.cpp Surgery: Refactor the merge-collision issue in sensors.cpp.

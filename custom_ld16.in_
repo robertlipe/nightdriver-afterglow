@@ -1,0 +1,71 @@
+; --- LED Array (Lightcrafter16 / SE16) ---
+-DLED_PIN0=47
+-DLED_PIN1=21
+-DLED_PIN2=14
+-DLED_PIN3=9
+-DLED_PIN4=8
+-DLED_PIN5=16
+-DLED_PIN6=15
+-DLED_PIN7=7
+-DLED_PIN8=1  ; Note: Low pin number, but logically LED #8
+-DLED_PIN9=2
+-DLED_PIN10=42
+-DLED_PIN11=41
+-DLED_PIN12=40
+-DLED_PIN13=39
+-DLED_PIN14=38
+-DLED_PIN15=48 ; Note: High pin number, logically LED #15
+
+; --- Sensors & Input ---
+-DIR_REMOTE_PIN=4      ; IRDA_RX
+-DVOLTAGE_SENSE_PIN=5  ; ADC1_CH4
+-DCURRENT_SENSE_PIN=6  ; ADC1_CH5
+
+; --- Ethernet (WIZ580 / W5500) ---
+-DWIZ_RESET_PIN=3      ; Controls W5500 Reset AND the IO0/46 Mux
+-DWIZ_CS_PIN=10        ; Chip Select
+-DWIZ_MOSI_PIN=11      ; SPI MOSI
+-DWIZ_CLK_PIN=12       ; SPI SCK
+-DWIZ_MISO_PIN=13      ; SPI MISO
+
+; --- Comms & USB ---
+-DUSB_D_MINUS=19       ; Native USB D-
+-DUSB_D_PLUS=20        ; Native USB D+
+-DUART1_TX_PIN=17      ; Extra UART TX
+-DUART1_RX_PIN=18      ; Extra UART RX
+-DDEBUG_TX_PIN=43      ; U0TXD (Hardware Serial0 - Boot Log)
+-DDEBUG_RX_PIN=44      ; U0RXD (Hardware Serial0 - Boot Log)
+
+#include <SPI.h>
+#include <Ethernet.h>
+
+void setup() {
+    // 1. Hardware Reset: Wakes W5500 AND connects LED0/LED15 (IO0/46) via the Mux
+    pinMode(WIZ_RESET_PIN, OUTPUT);
+    digitalWrite(WIZ_RESET_PIN, LOW); // Reset/Disconnect
+    delay(10);
+    digitalWrite(WIZ_RESET_PIN, HIGH); // Active/Connect Mux
+    delay(100);
+
+    // 2. Initialize SPI with specific pins
+    // The W5500 library uses the default "SPI" object, so we must config that object
+    SPI.begin(WIZ_CLK_PIN, WIZ_MISO_PIN, WIZ_MOSI_PIN, WIZ_CS_PIN);
+
+    // 3. Initialize Ethernet (W5500)
+    Ethernet.init(WIZ_CS_PIN); 
+    
+    // ... continue with Ethernet.begin(mac) ...
+}
+
+#ifdef BOARD_HAS_W5500_MUX
+    // The "Kickstart" for Lightcrafter16
+    pinMode(WIZ_RESET_PIN, OUTPUT);
+    digitalWrite(WIZ_RESET_PIN, LOW);
+    delay(10);
+    digitalWrite(WIZ_RESET_PIN, HIGH);
+    delay(100);
+    // ... SPI.begin ...
+#endif
+
+// DANGER:
+// The LEDs on LED0 and LED15 will simply not work until you pull WIZ_RESET_PIN HIGH. If you ever find yourself scratching your head wondering why the first and last LEDs are dark while the middle ones work, check that pin first!
