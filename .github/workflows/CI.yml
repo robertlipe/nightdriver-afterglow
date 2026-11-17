@@ -76,7 +76,7 @@ jobs:
     - name: Seed Core Packages
       if: steps.pio-cache.outputs.cache-hit != 'true'
       # Fetch ESP32 and ESP32-S3 packages
-      run: pio pkg install -e mesmerizer -e demo_amoled -e platecover
+      run: pio pkg install -e mesmerizer -e tinyled-demo
 
     outputs:
       envs: ${{ steps.envs.outputs.envs }}
