@@ -27,8 +27,11 @@ DONE Mine /Users/robertlipe/src/tmp/src/rpi
     * `custom_ld16.in_` (pin mappings for LED0-15, W5500 SPI Ethernet, IR, Voltage/Current ADC)
     TODO: Integrate 16-channel `ws281xgfx.cpp` expansion (`LEDS_AS_MATRIX` & channels 8-15) when hardware is tested.
 
-Mine /Users/robertlipe/tmp/src/nightdriverstrip - see if there's anything
-  there remaining to be salvaged. Potentially delete.
+DONE Mine /Users/robertlipe/tmp/src/nightdriverstrip
+  - Audited against afterglow/main. Head commit 6c7a7f8d is an ancestor of afterglow.
+  - mpdma.md thoughts fully implemented via src/espmpdmagfx.cpp and docs/HUB75-modernization.md.
+  - array_utils removal and std::array cleanups are already in afterglow.
+  - Ready to delete.
 
 DONE Mine each of /Users/robertlipe/src/nightdriverstrip/.worktrees
   - `ld16`: HARVESTED! Salvaged schematic, custom_ld16.in_, lightcrafter16.md, and 16-channel patch.
@@ -43,11 +46,15 @@ Mine /Users/robertlipe/src/tinyled -  harvest 'tinyled' work.
   ➜  tinyled git:(tinyled) ✗ git branch --list | wc -l
       41
 
-Mine  /Users/robertlipe/tmp/ld-virgin/NightDriverStrip
-  11 branches (looks like low value)
+DONE Mine /Users/robertlipe/tmp/ld-virgin/NightDriverStrip
+  - Audited against afterglow/main. Stale 2023 head (commit 71af2306).
+  - Untracked files were mock 2022 RapidAPI sports JSON and an empty PatternRABaseball stub.
+  - Zero value, ready to delete.
 
-Mine /Users/robertlipe/tmp/src/ndstrip-test
-  2 branches (looks like low value)
+DONE Mine /Users/robertlipe/tmp/src/ndstrip-test
+  - Audited against afterglow/main. Stale early 2024 clone (v1.1.1 tag).
+  - Diff was minor IR remote logging tweaks that were superseded long ago.
+  - Zero value, ready to delete.
 
 Finally: Run  locate gfxbase.cpp - find yet OTHER trees to salvage
 
