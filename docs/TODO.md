@@ -8,6 +8,7 @@
 * [ ] **LightCrafter-16 Bring-up**: When 80A hardware is on the bench, apply [docs/ws281xgfx_16channels.patch](ws281xgfx_16channels.patch), enable `custom_ld16.in_`, and verify GPIO 3 / `WIZ_RESET_PIN` bootstrap behavior across all 16 channels.
 * [x] **Waveshare ESP32-S3-RGB-Matrix** (`ws_s3_hub75-64x64`): Complete esp-hub75 bring-up once the RMA board arrives.
 * [x] **Memory type check**: Verified `dev_ws_s3_hub75` memory type (`opi_opi`) against schematic (ESP32-S3-WROOM-2-N32R16V has 32MB Octal Flash & 16MB Octal PSRAM). Updated comments in `platformio.ini`.
+* [x] **Hardware Ethernet Support** LightCrafter16, some GledOPTO, and several waveshare boards have hardware ethernet. Streaming data (both direction), our console telnet server, REST, and web interface over copper seems like reasonable things to support.
 
 ## 3. Effects Modernization & Engine Optimization
 * [x] **PatternCyclicCA (Scrubbed)**: Retired from active roadmap. Boundary absorption on low-res matrices collapses spiral rotors into diagonal wipes; code preserved in git history.
