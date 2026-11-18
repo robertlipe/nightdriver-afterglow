@@ -223,6 +223,17 @@ namespace nd_network
 #endif
         }
 
+        bool reconnect() {
+#if ENABLE_AUDIO
+            g_Analyzer.Pause();
+#endif
+            bool result = WiFi.reconnect();
+#if ENABLE_AUDIO
+            g_Analyzer.Resume();
+#endif
+            return result;
+        }
+
         void disconnect(bool wifioff = false, bool eraseap = false) {
 #if ENABLE_AUDIO
             g_Analyzer.Pause();
@@ -309,12 +320,51 @@ namespace nd_network
     }
 
     static std::atomic<bool> g_isConnecting = false;
+    static unsigned long s_connectAttemptStart = 0;
     static String g_lastConnectedSsid;
     static String g_lastConnectedPassword;
     std::atomic<bool> g_resetWifiTimeout = false;
 
+    static void EnsureWiFiEventsRegistered()
+    {
+        static bool registered = false;
+        if (registered) return;
+        registered = true;
+
+        WiFi.onEvent([](arduino_event_id_t event, arduino_event_info_t info) {
+            switch (event)
+            {
+                case ARDUINO_EVENT_WIFI_READY:
+                    l_bWifiDriverReady = true;
+                    debugI("WiFi driver ready.");
+                    break;
+                case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+                    debugI("WiFi connected to AP.");
+                    break;
+                case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+                    g_isConnecting = false;
+                    debugI("WiFi got IP: %s", IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str());
+                    break;
+                case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+                {
+                    uint8_t reason = info.wifi_sta_disconnected.reason;
+                    const char *reasonStr = WiFi.disconnectReasonName((wifi_err_reason_t)reason);
+                    debugW("WiFi disconnected, reason: %u (%s)", reason, reasonStr ? reasonStr : "UNKNOWN");
+                    break;
+                }
+                case ARDUINO_EVENT_WIFI_STA_STOP:
+                    g_isConnecting = false;
+                    break;
+                default:
+                    break;
+            }
+        });
+    }
+
     WiFiConnectResult LoadAndConnectToWiFiWithPriority()
     {
+        EnsureWiFiEventsRegistered();
+
         if (WiFi.isConnected())
         {
             g_isConnecting = false;
@@ -352,17 +402,21 @@ namespace nd_network
         bool newCredentials = (current_ssid != g_lastConnectedSsid || current_password != g_lastConnectedPassword);
         if (!g_isConnecting || newCredentials)
         {
-            debugI("Starting a new WiFi connection process.");
             if (newCredentials)
             {
-                debugI("Credentials have changed. Old: '%s', New: '%s'", g_lastConnectedSsid.c_str(), current_ssid.c_str());
+                debugI("Starting a new WiFi connection process.");
+                if (g_lastConnectedSsid.length() > 0)
+                {
+                    debugI("Credentials have changed. Old: '%s', New: '%s'", g_lastConnectedSsid.c_str(), current_ssid.c_str());
+                }
+                g_lastConnectedSsid = current_ssid;
+                g_lastConnectedPassword = current_password;
+                g_resetWifiTimeout = true;
             }
-
-            g_lastConnectedSsid = current_ssid;
-            g_lastConnectedPassword = current_password;
-
-            extern std::atomic<bool> g_resetWifiTimeout;
-            g_resetWifiTimeout = true;
+            else
+            {
+                debugI("Retrying WiFi connection process.");
+            }
 
             const String &hostname = g_ptrSystem->GetDeviceConfig().GetHostname();
             if (hostname.length() > 0)
@@ -374,7 +428,18 @@ namespace nd_network
             if (SetWiFiMode(WiFiMode::STA))
             {
                 debugW("Attempting to connect to SSID: \"%s\"", current_ssid.c_str());
-                SafeWiFi::begin(current_ssid.c_str(), current_password.c_str());
+                bool connectStarted = false;
+                if (!newCredentials)
+                {
+                    connectStarted = SafeWiFi::reconnect();
+                }
+                if (!connectStarted)
+                {
+                    SafeWiFi::disconnect(false, false);
+                    delay(50);
+                    SafeWiFi::begin(current_ssid.c_str(), current_password.c_str());
+                }
+                s_connectAttemptStart = millis();
                 g_isConnecting = true;
             }
             else
@@ -385,7 +450,19 @@ namespace nd_network
         }
         else
         {
-            debugW("Not yet connected to WiFi, waiting for background process to complete...");
+            constexpr unsigned long CONNECT_TIMEOUT_MS = 6000;
+            if (millis() - s_connectAttemptStart >= CONNECT_TIMEOUT_MS)
+            {
+                debugW("WiFi connection attempt timed out after %lu ms, resetting state to retry...",
+                       millis() - s_connectAttemptStart);
+                SafeWiFi::disconnect(false, false);
+                delay(50);
+                g_isConnecting = false;
+            }
+            else
+            {
+                debugW("Not yet connected to WiFi, waiting for background process to complete...");
+            }
         }
 
         return WiFiConnectResult::Disconnected;
@@ -414,11 +491,24 @@ namespace nd_network
                 break;
         }
 
+        if (WiFi.getMode() == frameworkMode) {
+            if (frameworkMode == WIFI_STA || frameworkMode == WIFI_AP_STA) {
+                WiFi.setAutoReconnect(false);
+                WiFi.setSleep(false);
+                WiFi.setTxPower(WIFI_POWER_17dBm);
+            }
+            return true;
+        }
+
         debugI("Attempting to set WiFi mode to %s", modeStr);
 
-        SafeWiFi::disconnect(false, false);
-        SafeWiFi::softAPdisconnect(false); // Explicitly disconnect from any existing AP
-        delay(200);
+        if (WiFi.getMode() != WIFI_OFF) {
+            SafeWiFi::disconnect(false, false);
+            SafeWiFi::softAPdisconnect(false);
+            delay(100);
+        }
+
+        WiFi.persistent(false);
 
         bool success = SafeWiFi::mode(frameworkMode);
         if (!success) {
@@ -437,7 +527,14 @@ namespace nd_network
             return false;
         }
         debugI("Successfully set WiFi mode to %s", modeStr);
-        delay(1000); // delay after mode set for stabilization
+
+        if (frameworkMode == WIFI_STA || frameworkMode == WIFI_AP_STA) {
+            WiFi.setAutoReconnect(false);
+            WiFi.setSleep(false);
+            WiFi.setTxPower(WIFI_POWER_17dBm);
+        }
+
+        delay(100);
         return true;
     }
 
@@ -491,19 +588,8 @@ namespace nd_network
     // that were saved from an earlier call if no/nullptr arguments are passed.
     WiFiConnectResult ConnectToWiFi(const String *ssid, const String *password)
     {
-        static bool bInitialized = false;
-        if (!bInitialized)
-        {
-            WiFi.onEvent([](arduino_event_id_t event, arduino_event_info_t info) {
-                if (event == ARDUINO_EVENT_WIFI_READY)
-                    l_bWifiDriverReady = true;
-                else if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED)
-                    debugW("WiFi Disconnected. Reason: %d", info.wifi_sta_disconnected.reason);
-            });
-            WiFi.mode(WIFI_STA);
-            WiFi.setSleep(false);
-            bInitialized = true;
-        }
+        EnsureWiFiEventsRegistered();
+        SetWiFiMode(WiFiMode::STA);
 
         static bool bPreviousConnection = false;
         static bool bReportedDisconnected = false;
@@ -789,6 +875,10 @@ namespace nd_network
             EVERY_N_SECONDS(1)
             {
                 auto res = LoadAndConnectToWiFiWithPriority();
+                if (g_resetWifiTimeout.exchange(false))
+                {
+                    lastConnected = millis();
+                }
                 if (res == WiFiConnectResult::Connected)
                 {
                     lastConnected = millis();

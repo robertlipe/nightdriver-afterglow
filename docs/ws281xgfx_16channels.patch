@@ -1,0 +1,146 @@
+diff --git a/src/ws281xgfx.cpp b/src/ws281xgfx.cpp
+index 0aa1a3ff..86a6e4a4 100644
+--- a/src/ws281xgfx.cpp
++++ b/src/ws281xgfx.cpp
+@@ -36,19 +36,33 @@
+ #include "values.h"
+ #include "ws281xgfx.h"
+ 
++#if defined(CONFIG_IDF_TARGET_ESP32S3) && defined(FAST_I2S_S3)
++#include "platforms/esp/32/clockless_i2s_esp32s3.h"
++#define WS2812B_CHIPSET fl::ClocklessController_I2S_Esp32_WS2812
++#define WS2812_CHIPSET  fl::ClocklessController_I2S_Esp32_WS2812
++#else
++#define WS2812B_CHIPSET WS2812B
++#define WS2812_CHIPSET  WS2812
++#endif
++
+ void WS281xGFX::AddLEDs(std::vector<std::shared_ptr<GFXBase>>& devices)
+ {
+     // Macro to add LEDs to a channel
+ 
+-    #if FASTLED_EXPERIMENTAL_ESP32_RGBW_ENABLED
++    #if LEDS_AS_MATRIX
++        #define ADD_CHANNEL(channel) \
++            debugI("Adding %zu LEDs to pin %d from channel %d (Matrix Offset %zu) on FastLED.", (size_t)MATRIX_WIDTH, LED_PIN ## channel, channel, (size_t)(channel * MATRIX_WIDTH)); \
++            FastLED.addLeds<WS2812B_CHIPSET, LED_PIN ## channel, COLOR_ORDER>(devices[0]->leds + (channel * MATRIX_WIDTH), MATRIX_WIDTH); \
++            pinMode(LED_PIN ## channel, OUTPUT)
++    #elif FASTLED_EXPERIMENTAL_ESP32_RGBW_ENABLED
+         #define ADD_CHANNEL(channel) \
+             debugI("Adding %zu LEDs to pin %d from channel %d on FastLED.", devices[channel]->GetLEDCount(), LED_PIN ## channel, channel); \
+-            FastLED.addLeds<WS2812, LED_PIN ## channel, COLOR_ORDER>(devices[channel]->leds, devices[channel]->GetLEDCount()).setRgbw(Rgbw(kRGBWDefaultColorTemp, FASTLED_EXPERIMENTAL_ESP32_RGBW_MODE )); \
++            FastLED.addLeds<WS2812_CHIPSET, LED_PIN ## channel, COLOR_ORDER>(devices[channel]->leds, devices[channel]->GetLEDCount()).setRgbw(Rgbw(kRGBWDefaultColorTemp, FASTLED_EXPERIMENTAL_ESP32_RGBW_MODE )); \
+             pinMode(LED_PIN ## channel, OUTPUT)
+     #else
+         #define ADD_CHANNEL(channel) \
+             debugI("Adding %zu LEDs to pin %d from channel %d on FastLED.", devices[channel]->GetLEDCount(), LED_PIN ## channel, channel); \
+-            FastLED.addLeds<WS2812B, LED_PIN ## channel, COLOR_ORDER>(devices[channel]->leds, devices[channel]->GetLEDCount()); \
++            FastLED.addLeds<WS2812B_CHIPSET, LED_PIN ## channel, COLOR_ORDER>(devices[channel]->leds, devices[channel]->GetLEDCount()); \
+             pinMode(LED_PIN ## channel, OUTPUT)
+     #endif
+ 
+@@ -89,6 +103,38 @@ void WS281xGFX::AddLEDs(std::vector<std::shared_ptr<GFXBase>>& devices)
+         ADD_CHANNEL(7);
+     #endif
+ 
++    #if NUM_CHANNELS >= 9 && LED_PIN8 >= 0
++        ADD_CHANNEL(8);
++    #endif
++
++    #if NUM_CHANNELS >= 10 && LED_PIN9 >= 0
++        ADD_CHANNEL(9);
++    #endif
++
++    #if NUM_CHANNELS >= 11 && LED_PIN10 >= 0
++        ADD_CHANNEL(10);
++    #endif
++
++    #if NUM_CHANNELS >= 12 && LED_PIN11 >= 0
++        ADD_CHANNEL(11);
++    #endif
++
++    #if NUM_CHANNELS >= 13 && LED_PIN12 >= 0
++        ADD_CHANNEL(12);
++    #endif
++
++    #if NUM_CHANNELS >= 14 && LED_PIN13 >= 0
++        ADD_CHANNEL(13);
++    #endif
++
++    #if NUM_CHANNELS >= 15 && LED_PIN14 >= 0
++        ADD_CHANNEL(14);
++    #endif
++
++    #if NUM_CHANNELS >= 16 && LED_PIN15 >= 0
++        ADD_CHANNEL(15);
++    #endif
++
+     #ifdef POWER_LIMIT_MW
+         set_max_power_in_milliwatts(POWER_LIMIT_MW);                // Set brightness limit
+     #endif
+@@ -110,17 +156,21 @@ WS281xGFX::~WS281xGFX()
+ 
+ void WS281xGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devices)
+ {
+-    // We don't support more than 8 parallel channels
+-    #if NUM_CHANNELS > 8
+-        #error The maximum value of NUM_CHANNELS (number of parallel channels) is 8
++    // We don't support more than 16 parallel channels
++    #if NUM_CHANNELS > 16
++        #error The maximum value of NUM_CHANNELS (number of parallel channels) is 16
+     #endif
+ 
++#if LEDS_AS_MATRIX
++    debugW("Allocating single WS281xGFX for %d channels as matrix", NUM_CHANNELS);
++    devices.push_back(make_shared_psram<WS281xGFX>(MATRIX_WIDTH, MATRIX_HEIGHT));
++#else
+     for (int i = 0; i < NUM_CHANNELS; i++)
+     {
+         debugW("Allocating WS281xGFX for channel %d", i);
+         devices.push_back(make_shared_psram<WS281xGFX>(MATRIX_WIDTH, MATRIX_HEIGHT));
+     }
+-
++#endif
+     AddLEDs(devices);
+ }
+ 
+@@ -153,8 +203,13 @@ void WS281xGFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsD
+ 
+     for (int i = 0; i < NUM_CHANNELS; i++)
+     {
++#if LEDS_AS_MATRIX
++        // In matrix mode, each FastLED controller already points to its segment of the single buffer
++        fadeLightBy(FastLED[i].leds(), FastLED[i].size(), 255 - g_ptrSystem->GetDeviceConfig().GetBrightness());
++#else
+         FastLED[i].setLeds(effectManager.g(i)->leds, pixelsDrawn);
+         fadeLightBy(FastLED[i].leds(), FastLED[i].size(), 255 - g_ptrSystem->GetDeviceConfig().GetBrightness());
++#endif
+     }
+     FastLED.show(g_Values.Fader); //Shows the pixels
+ 
+@@ -164,7 +219,12 @@ void WS281xGFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsD
+     #else
+         g_Values.Brite = 100.0 * g_ptrSystem->GetDeviceConfig().GetBrightness() / 255;
+     #endif
++
++#if LEDS_AS_MATRIX
++    g_Values.Watts = calculate_unscaled_power_mW(effectManager.g()->leds, pixelsDrawn > 0 ? pixelsDrawn : MATRIX_WIDTH * MATRIX_HEIGHT) / 1000;
++#else
+     g_Values.Watts = calculate_unscaled_power_mW(effectManager.g()->leds, pixelsDrawn) / 1000; // 1000 for mw->W
++#endif
+ }
+ 
+ #if HEXAGON
+@@ -175,9 +235,9 @@ HexagonGFX::HexagonGFX(size_t numLeds) : WS281xGFX(numLeds, 1)
+ 
+ void HexagonGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devices)
+ {
+-    // We don't support more than 8 parallel channels
+-    #if NUM_CHANNELS > 8
+-        #error The maximum value of NUM_CHANNELS (number of parallel channels) is 8
++    // We don't support more than 16 parallel channels
++    #if NUM_CHANNELS > 16
++        #error The maximum value of NUM_CHANNELS (number of parallel channels) is 16
+     #endif
+ 
+     for (int i = 0; i < NUM_CHANNELS; i++)

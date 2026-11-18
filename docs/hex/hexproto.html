@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<!--
+================================================================================
+Hex LED Sandbox / 271-Pixel Hex Matrix Emulator
+NightDriver Afterglow - Hexagon Development Lab
+================================================================================
+
+PURPOSE:
+Rapid visual prototyping playground for 271-pixel flat-top hexagonal LED grids
+(Center pixel + 9 concentric rings = 10 pixels per outer edge).
+
+WHY THIS EXISTS:
+Flashing embedded C++ over slow serial/SLIP connections just to tweak a color
+ramp, change an oscillation frequency, or test radial wave math takes minutes per
+cycle. This lightweight browser sandbox lets you scribble math in JavaScript and
+hit Cmd+R to immediately inspect 60fps animations on the exact physical geometry
+before writing a single line of C++.
+
+GEOMETRY & MATH:
+- Grid radius: 9 rings (0 to 9; total 10 pixels from center to edge). Total LEDs = 271.
+- Flat-top orientation:
+    x = HEX_SIZE * (3/2 * q)
+    y = HEX_SIZE * (sqrt(3)/2 * q + sqrt(3) * r)
+- Distance from center:
+    d = max(|q|, |r|, |s|) where s = -q - r
+================================================================================
+-->
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>271px Hex LED Sandbox</title>
+    <style>
+        body {
+            background-color: #111;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+        }
+        h2 {
+            margin: 0 0 5px 0;
+            font-size: 1.3rem;
+            color: #eee;
+        }
+        p {
+            margin: 0 0 15px 0;
+            color: #888;
+            font-size: 0.85rem;
+        }
+        canvas {
+            background-color: #050505;
+            border-radius: 50%;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8), 0 0 2px rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <h2>271px Hexagon Matrix Sandbox</h2>
+    <p>Flat-top QRS Axial Geometry &bull; 10 Rings &bull; Hit Cmd+R to reload code</p>
+    <canvas id="hexCanvas" width="600" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById('hexCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const GRID_RADIUS = 9; // 0 to 9 rings = 10 pixels from center to edge. Total = 271 px.
+        const HEX_SIZE = 14;   // Visual spacing radius of each LED in canvas units
+        const CENTER_X = canvas.width / 2;
+        const CENTER_Y = canvas.height / 2;
+
+        let pixels = [];
+
+        // Generate the 271 coordinates using axial (q, r, s) constraints
+        for (let q = -GRID_RADIUS; q <= GRID_RADIUS; q++) {
+            let r1 = Math.max(-GRID_RADIUS, -q - GRID_RADIUS);
+            let r2 = Math.min(GRID_RADIUS, -q + GRID_RADIUS);
+            for (let r = r1; r <= r2; r++) {
+                let s = -q - r;
+
+                // Flat-topped hex layout projection to 2D screen coordinates
+                let x = HEX_SIZE * (1.5 * q);
+                let y = HEX_SIZE * (Math.sqrt(3) / 2 * q + Math.sqrt(3) * r);
+
+                pixels.push({ q, r, s, x, y });
+            }
+        }
+
+        // Animation loop
+        const startTime = Date.now();
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const t = (Date.now() - startTime) / 1000.0; // Elapsed time in seconds
+
+            pixels.forEach(p => {
+                // ==============================================================
+                // EFFECT PROTOTYPING AREA:
+                // Test your math formulas here!
+                // ==============================================================
+
+                // Hexagonal axial distance from center
+                const dist = Math.max(Math.abs(p.q), Math.abs(p.r), Math.abs(p.s));
+
+                // Angle from center
+                const angle = Math.atan2(p.y, p.x);
+
+                // Sample interference pattern: radial ripple + 3-lobed rotational harmonic
+                const v = Math.sin(dist * 0.8 - t * 4.0) + Math.cos(angle * 3.0 + t * 2.0);
+
+                // Map value to RGB (simulating bright WS2812 zones)
+                const r = Math.floor(127 + 128 * Math.sin(v * Math.PI));
+                const g = Math.floor(127 + 128 * Math.sin(v * Math.PI + (2 * Math.PI / 3)));
+                const b = Math.floor(127 + 128 * Math.sin(v * Math.PI + (4 * Math.PI / 3)));
+
+                // Draw the physical LED circle
+                ctx.beginPath();
+                ctx.arc(CENTER_X + p.x, CENTER_Y + p.y, HEX_SIZE * 0.42, 0, 2 * Math.PI);
+                ctx.fillStyle = `rgb(${r},${g},${b})`;
+                ctx.fill();
+            });
+
+            requestAnimationFrame(draw);
+        }
+
+        draw();
+    </script>
+</body>
+</html>
