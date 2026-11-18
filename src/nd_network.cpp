@@ -411,14 +411,12 @@ namespace nd_network
                 }
                 g_lastConnectedSsid = current_ssid;
                 g_lastConnectedPassword = current_password;
+                g_resetWifiTimeout = true;
             }
             else
             {
                 debugI("Retrying WiFi connection process.");
             }
-
-            extern std::atomic<bool> g_resetWifiTimeout;
-            g_resetWifiTimeout = true;
 
             const String &hostname = g_ptrSystem->GetDeviceConfig().GetHostname();
             if (hostname.length() > 0)
