@@ -875,6 +875,10 @@ namespace nd_network
             EVERY_N_SECONDS(1)
             {
                 auto res = LoadAndConnectToWiFiWithPriority();
+                if (g_resetWifiTimeout.exchange(false))
+                {
+                    lastConnected = millis();
+                }
                 if (res == WiFiConnectResult::Connected)
                 {
                     lastConnected = millis();
