@@ -31,6 +31,8 @@
 //
 //---------------------------------------------------------------------------
 
+#pragma once
+
 #ifndef PatternCyclicCA_H
 #define PatternCyclicCA_H
 
