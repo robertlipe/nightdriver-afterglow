@@ -409,9 +409,6 @@ namespace nd_network
                 {
                     debugI("Credentials have changed. Old: '%s', New: '%s'", g_lastConnectedSsid.c_str(), current_ssid.c_str());
                 }
-                g_lastConnectedSsid = current_ssid;
-                g_lastConnectedPassword = current_password;
-                g_resetWifiTimeout = true;
             }
             else
             {
@@ -427,6 +424,13 @@ namespace nd_network
 
             if (SetWiFiMode(WiFiMode::STA))
             {
+                if (newCredentials)
+                {
+                    g_lastConnectedSsid = current_ssid;
+                    g_lastConnectedPassword = current_password;
+                    g_resetWifiTimeout = true;
+                }
+
                 debugW("Attempting to connect to SSID: \"%s\"", current_ssid.c_str());
                 bool connectStarted = false;
                 if (!newCredentials)
