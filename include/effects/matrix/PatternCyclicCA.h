@@ -28,6 +28,11 @@
 //   This file combines the header and implementation for simpler
 //   integration into projects following this pattern.
 //
+// NOTE / EXPERIMENTAL STATUS:
+//   This effect is currently uninstantiated in effectfactories and not built
+//   into any active firmware images. Preserved in-tree as reference code
+//   exploring Greenberg-Hastings / Cyclic CA spiral dynamics on low-resolution
+//   matrices.
 //
 //---------------------------------------------------------------------------
 

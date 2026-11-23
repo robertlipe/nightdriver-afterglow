@@ -36,36 +36,37 @@
 -DDEBUG_TX_PIN=43      ; U0TXD (Hardware Serial0 - Boot Log)
 -DDEBUG_RX_PIN=44      ; U0RXD (Hardware Serial0 - Boot Log)
 
-#include <SPI.h>
-#include <Ethernet.h>
-
-void setup() {
-    // 1. Hardware Reset: Wakes W5500 AND connects LED0/LED15 (IO0/46) via the Mux
-    pinMode(WIZ_RESET_PIN, OUTPUT);
-    digitalWrite(WIZ_RESET_PIN, LOW); // Reset/Disconnect
-    delay(10);
-    digitalWrite(WIZ_RESET_PIN, HIGH); // Active/Connect Mux
-    delay(100);
-
-    // 2. Initialize SPI with specific pins
-    // The W5500 library uses the default "SPI" object, so we must config that object
-    SPI.begin(WIZ_CLK_PIN, WIZ_MISO_PIN, WIZ_MOSI_PIN, WIZ_CS_PIN);
-
-    // 3. Initialize Ethernet (W5500)
-    Ethernet.init(WIZ_CS_PIN); 
-    
-    // ... continue with Ethernet.begin(mac) ...
-}
-
-#ifdef BOARD_HAS_W5500_MUX
-    // The "Kickstart" for Lightcrafter16
-    pinMode(WIZ_RESET_PIN, OUTPUT);
-    digitalWrite(WIZ_RESET_PIN, LOW);
-    delay(10);
-    digitalWrite(WIZ_RESET_PIN, HIGH);
-    delay(100);
-    // ... SPI.begin ...
-#endif
-
-// DANGER:
-// The LEDs on LED0 and LED15 will simply not work until you pull WIZ_RESET_PIN HIGH. If you ever find yourself scratching your head wondering why the first and last LEDs are dark while the middle ones work, check that pin first!
+; --- Example C++ Initialization (reference only) ---
+; #include <SPI.h>
+; #include <Ethernet.h>
+; 
+; void setup() {
+;     // 1. Hardware Reset: Wakes W5500 AND connects LED0/LED15 (IO0/46) via the Mux
+;     pinMode(WIZ_RESET_PIN, OUTPUT);
+;     digitalWrite(WIZ_RESET_PIN, LOW); // Reset/Disconnect
+;     delay(10);
+;     digitalWrite(WIZ_RESET_PIN, HIGH); // Active/Connect Mux
+;     delay(100);
+; 
+;     // 2. Initialize SPI with specific pins
+;     // The W5500 library uses the default "SPI" object, so we must config that object
+;     SPI.begin(WIZ_CLK_PIN, WIZ_MISO_PIN, WIZ_MOSI_PIN, WIZ_CS_PIN);
+; 
+;     // 3. Initialize Ethernet (W5500)
+;     Ethernet.init(WIZ_CS_PIN); 
+;     
+;     // ... continue with Ethernet.begin(mac) ...
+; }
+; 
+; #ifdef BOARD_HAS_W5500_MUX
+;     // The "Kickstart" for Lightcrafter16
+;     pinMode(WIZ_RESET_PIN, OUTPUT);
+;     digitalWrite(WIZ_RESET_PIN, LOW);
+;     delay(10);
+;     digitalWrite(WIZ_RESET_PIN, HIGH);
+;     delay(100);
+;     // ... SPI.begin ...
+; #endif
+; 
+; DANGER:
+; The LEDs on LED0 and LED15 will simply not work until you pull WIZ_RESET_PIN HIGH. If you ever find yourself scratching your head wondering why the first and last LEDs are dark while the middle ones work, check that pin first!
