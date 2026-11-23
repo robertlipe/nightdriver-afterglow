@@ -31,11 +31,14 @@
 #include <cctype>
 #include <charconv>
 #include <cstring>
+#include <driver/gpio.h>
 #include <esp_heap_caps.h>
+#include <esp_intr_alloc.h>
 #include <esp_log.h>
 #include <esp_partition.h>
 #include <esp_system.h>
 #include <esp_timer.h>
+#include <esp_vfs.h>
 #if ENABLE_WIFI
 #include <WiFi.h>
 #endif
@@ -675,7 +678,8 @@ static void DoStatusLog(const cli_argv& argv)
     }
 }
 
-static void DoHeap(const cli_argv &)
+template <typename F>
+static void StreamToCli(F &&fn)
 {
     char *buf = nullptr;
     size_t size = 0;
@@ -684,13 +688,7 @@ static void DoHeap(const cli_argv &)
     {
         FILE *old_stdout = stdout;
         stdout = f;
-        heap_caps_print_heap_info(MALLOC_CAP_DEFAULT);
-#if USE_PSRAM
-        if (psramFound())
-        {
-            heap_caps_print_heap_info(MALLOC_CAP_SPIRAM);
-        }
-#endif
+        fn(f);
         fclose(f);
         stdout = old_stdout;
 
@@ -698,18 +696,97 @@ static void DoHeap(const cli_argv &)
         {
             cli_printf("%s", buf);
             free(buf);
+            return;
         }
     }
+    // Fallback directly to stdout if open_memstream fails
+    fn(stdout);
+}
+
+static void DoHeap(const cli_argv & = {})
+{
+    StreamToCli([](FILE *) {
+        heap_caps_print_heap_info(MALLOC_CAP_DEFAULT);
+#if USE_PSRAM
+        if (psramFound())
+        {
+            heap_caps_print_heap_info(MALLOC_CAP_SPIRAM);
+        }
+#endif
+    });
+}
+
+static void DoGpio(const cli_argv &argv)
+{
+    uint64_t mask = SOC_GPIO_VALID_GPIO_MASK;
+    if (argv.size() > 1)
+    {
+        int pin = -1;
+        auto [ptr, ec] = std::from_chars(argv[1].data(), argv[1].data() + argv[1].size(), pin);
+        if (ec != std::errc() || pin < 0 || !GPIO_IS_VALID_GPIO(pin))
+        {
+            cli_printf("Invalid GPIO pin: '%.*s'\n", (int)argv[1].size(), argv[1].data());
+            return;
+        }
+        mask = (1ULL << pin);
+    }
+
+    StreamToCli([mask](FILE *f) {
+        gpio_dump_io_configuration(f, mask);
+    });
+}
+
+static void DoDump(const cli_argv &argv)
+{
+    if (argv.size() < 2)
+    {
+        cli_printf("Usage: dump [fds|gpio [pin]|heap|intr|tasks|timers]\n");
+        return;
+    }
+
+    std::string_view sub = argv[1];
+    if (StringCompareInsensitive(sub, "gpio"))
+    {
+        cli_argv gpio_argv(argv.begin() + 1, argv.end());
+        DoGpio(gpio_argv);
+    }
+    else if (StringCompareInsensitive(sub, "heap"))
+    {
+        DoHeap();
+    }
+    else if (StringCompareInsensitive(sub, "intr") || StringCompareInsensitive(sub, "interrupts"))
+    {
+        StreamToCli([](FILE *f) {
+            esp_intr_dump(f);
+        });
+    }
+    else if (StringCompareInsensitive(sub, "timers"))
+    {
+        StreamToCli([](FILE *f) {
+            esp_timer_dump(f);
+        });
+    }
+    else if (StringCompareInsensitive(sub, "fds") || StringCompareInsensitive(sub, "vfs"))
+    {
+        StreamToCli([](FILE *f) {
+            fprintf(f, "--- Open File Descriptors ---\n");
+            esp_vfs_dump_fds(f);
+            fprintf(f, "\n--- Registered VFS Mounts ---\n");
+            esp_vfs_dump_registered_paths(f);
+        });
+    }
+#if configUSE_TRACE_FACILITY && configUSE_STATS_FORMATTING_FUNCTIONS
+    else if (StringCompareInsensitive(sub, "tasks"))
+    {
+        char buf[1024];
+        vTaskList(buf);
+        cli_printf("\nName          State      Prio  Stack  Num Core\n%s", buf);
+    }
+#endif
     else
     {
-        // Fallback to our clean summary if open_memstream fails
-        multi_heap_info_t info;
-        heap_caps_get_info(&info, MALLOC_CAP_DEFAULT);
-        cli_printf("Heap Summary (MALLOC_CAP_DEFAULT):\n");
-        cli_printf("  Free space       : %zu bytes (largest block: %zu bytes)\n", info.total_free_bytes, info.largest_free_block);
-        cli_printf("  Allocated space  : %zu bytes\n", info.total_allocated_bytes);
-        cli_printf("  Min ever free    : %zu bytes\n", info.minimum_free_bytes);
-        cli_printf("  Blocks           : %zu allocated, %zu free (%zu total)\n", info.allocated_blocks, info.free_blocks, info.total_blocks);
+        cli_printf("Unknown dump target: '%.*s'\n", (int)sub.size(), sub.data());
+        cli_printf("Usage: dump [fds|gpio [pin]|heap|intr|tasks|timers]\n");
     }
 }
 
@@ -786,7 +863,9 @@ static const command core_commands[] = {
         }
      }},
     {"dmesg", "Display the circular log buffer", "dmesg:", DoDmesg},
+    {"dump", "[fds|gpio|heap|intr|tasks|timers] Dump diagnostic state", nullptr, DoDump},
     {"effect", "[next|prev|name|index] Show/change current effect", "Effects.", DoEffectCommand}, // Function pointer
+    {"gpio", "[pin] Display GPIO configuration and muxing", "GPIO configuration:", DoGpio},
     {"heap", "Display heap memory info", "Heap usage:", DoHeap},
     {"help", "Display command line options", "Displaying system help",
      PrintHelp}, // Function pointer logic requires PrintHelp signature match. It does.

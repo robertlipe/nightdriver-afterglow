@@ -26,9 +26,11 @@
 * [ ] **Data Structures**: Migrate raw C arrays to `std::array` across effects and math classes for bounds safety and range support.
 * [ ] **Memory Operations**: Audit manual `memset`/`memcpy` in network/display buffers; migrate to `std::fill`, `std::copy`, or value initialization.
 * [ ] **Ownership / Allocations**: Review raw `new` and `auto p = ...` in network/socket code for migration to `std::make_unique`.
+* [x] **Debugger enhancements**: Add `gpio` and `dump` commands in `debug_cli` using `StreamToCli` to expose `gpio_dump_io_configuration()`, `esp_intr_dump()`, `esp_timer_dump()`, and `esp_vfs_dump_fds()`.
 
 ## 5. PlatformIO & Build Hygiene
 * [x] Modularize `platformio.ini` using `custom_*.ini` includes to compose hardware + capability flags.
 * [x] Prune redundant environments and reduce cold-build times.
 * [x] **Triage abandoned boards**: `m5stackdemo` and `ledstrip_feather_wrover` are already safely parked in `custom_legacy_props.in_` outside the active build matrix.
 * [x] **Triage stale remote branches**: Pruned 5 obsolete/merged branches from GitHub (`waveshare-hub75`, `feat-tinyled-qmi8658-hub`, `robertlipe-patch-1`, `fix/ci-windows-and-fastled-pin`, `jules-fix-windows-ci-parallel-*`). Retained `origin/node` and `origin/arduino4`.
+* [ ] **Self Identification**: Since we preserved the SHA256(?) hash to the build and in d7f119e3d2ed320323bbec71fe53ce6ee2af0298, panic_tool can dig throgh the archives of build images to find the (symbolized, with debug symbols) firmware.elf by firmware version, it's helpful to know what version we're actually executing (we don't even REALLY know which of the two system images we're running), we should call esp_app_get_elf_sha256_str (?) (or as appropriate) so we can ask the firmware what version is currently running.  That's probably announced in PrintOutputHeader(), but maybe debug_cli.cpp gets a new entry in core_commands that adds a way to return the hash of the currently running image. Actually, maybe we just let it ride along in PrintHelp(). DoPartitions() or maybe DoUptime(), but that seems a bit week. Needs more thought. I suddenly miss SCCS and what(1) strings in the binary. OK, whew! That moment passed. See if there's anything useful in $(esptool image_info ./.pio/build/tinyled-hex/firmware.bin) or related interrogations that make sense to ride along in this sidecar.
