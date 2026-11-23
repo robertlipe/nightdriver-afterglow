@@ -154,8 +154,6 @@ def merge_bin(source, target, env):
                 flash_mode,
                 "--flash-freq",
                 flash_freq,
-                "--format",
-                "hex",
                 "-o",
                 f'"{merged_image}"',
             ]
