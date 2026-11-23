@@ -161,6 +161,37 @@ import time
 # `python tools/setup_shared_libs_cli.py --force` re-downloads everything, which
 # is handy after switching platforms or when a tree is suspect.
 FORCE_REINSTALL = "--force" in sys.argv[1:]
+VERBOSE = "-v" in sys.argv[1:] or "--verbose" in sys.argv[1:]
+
+
+def format_pio_error(stdout, stderr):
+    """Extract a concise, readable error message from PlatformIO's output."""
+    combined = (stderr.strip() or stdout.strip())
+    lines = [line.strip() for line in combined.splitlines() if line.strip()]
+    if not lines:
+        return "Unknown error (no output from PlatformIO)"
+
+    # Look for the last exception line or 'Error:' line
+    error_line = None
+    for line in reversed(lines):
+        # Ignore PlatformIO troubleshooting banner lines
+        if line.startswith("=") or "http" in line or line.startswith("*") or "Further steps:" in line:
+            continue
+        if any(line.startswith(prefix) for prefix in [
+            "Error:", "PackageException:", "AttributeError:", "ValueError:",
+            "TypeError:", "KeyError:", "FileNotFoundError:", "Exception:",
+            "ResolverError:"
+        ]) or (": " in line and line.split(":")[0].endswith("Error")):
+            error_line = line
+            break
+
+    if not error_line:
+        error_line = lines[-1]
+
+    msg = [error_line]
+    if "PlatformPlatform" in combined:
+        msg.append("Hint: A platform in ~/.platformio/platforms may be corrupted or have an invalid directory name.")
+    return "\n    ".join(msg)
 
 
 def read_resolved_version(lib_path):
@@ -323,11 +354,30 @@ try:
             try:
                 # Use PlatformIO's package manager to install it
                 cmd = pio_bin if isinstance(pio_bin, list) else [pio_bin]
-                subprocess.run(cmd + [
-                    "pkg", "install",
-                    "--library", lib,
-                    "--storage-dir", TARGET_DIR
-                ], check=True, stdout=subprocess.DEVNULL) # Let stderr pass through for error visibility
+                proc = subprocess.run(
+                    cmd + [
+                        "pkg", "install",
+                        "--library", lib,
+                        "--storage-dir", TARGET_DIR
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+
+                if proc.returncode != 0:
+                    formatted = format_pio_error(proc.stdout, proc.stderr)
+                    print(f"[Shared-Libs] Error: failed to install dependency {lib}:\n    {formatted}", file=sys.stderr)
+                    if VERBOSE:
+                        if proc.stdout.strip():
+                            print(f"\n[PlatformIO stdout]:\n{proc.stdout}", file=sys.stderr)
+                        if proc.stderr.strip():
+                            print(f"\n[PlatformIO stderr]:\n{proc.stderr}", file=sys.stderr)
+                    else:
+                        print("    (Pass --verbose to see full PlatformIO output)", file=sys.stderr)
+                    safe_rmtree(lib_path)
+                    safe_rmtree(expected_path)
+                    sys.exit(1)
 
                 # Rename if expected_path != lib_path (spaces to underscores)
                 if expected_path != lib_path and os.path.exists(expected_path):
