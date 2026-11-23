@@ -24,13 +24,18 @@ This file contains critical context, constraints, and architectural information 
     *   **Architecture Note:** `Panic()` logs the message together with the file/line/function of the caller, records it in the RTC flight recorder for post-mortem, and reboots. The older `throw std::runtime_error(...)` path was retired: the exception machinery (unwind tables, `.eh_frame`, `.gcc_except_table`, typeinfo, `__cxa_*`) cost ~130KB of flash, and nothing in the image ever unwinds a stack.
     *   **Terminal Safety Net:** `std::set_terminate(TerminateHandler)` is still installed for the paths that do not go through `Panic()` (a violated `noexcept`, a bad `std::function` target, ...).
     *   **AI Agent Rule:** 🛑 Do NOT flag `Panic()` paths as "missing error path tests" or "missing test coverage." Do not attempt to write unit tests for these terminal states. It is a false positive; this is the intended terminal recovery path.
-*   **Data Types:** ESP32 has hardware floating point but emulates double. **Prefer `float`** data types and function calls over `double`.
-*   **Memory:**
+*   **Data Types & Math:** ESP32 and ESP32-S3 feature hardware single-precision floating point (FPU). **Prefer `float`** data types and math calls (`std::sinf`, `std::cosf`) over `double`. **Do not down-convert floating-point trigonometry to 8-bit lookup tables (`sin8`, `cos8`);** hardware `std::sinf`/`std::cosf` executes in ~121 clocks, so lossy integer lookups degrade visual fidelity for negligible gain on modern ESP32 targets.
+*   **Memory & Allocations:**
     *   ESP32 Targets vary between 320K and 16MB (PSRAM) of RAM.
     *   `src/main.cpp` sets `heap_caps_malloc_extmem_enable(16);`. This means any dynamic allocation (`new`, `malloc`, `std::make_unique`) over 16 bytes will automatically route to PSRAM first, seamlessly falling back to Internal SRAM if PSRAM is full.
     *   Prefer embedding large arrays as member variables inside `Effect` classes. Since `Effect` objects are dynamically allocated and large, they will automatically land in PSRAM, saving you the overhead of managing a second heap pointer.
     *   Avoid large stack allocations.
-*   **Concurrency:** Multiple tasks run on potentially multiple cores. The design generally assumes only one task clearly owns each data. There are very few `std::lock_guard` or `std::mutex` locks needed.
+    *   **`JsonDocument` capacity:** When reusing a persistent `JsonDocument` member across repeated network fetches or parses, call `doc.clear()` before `deserializeJson()` to reset its internal structure while retaining allocated capacity, preventing heap fragmentation.
+    *   **Display text APIs:** In `Screen` and text measurement functions, provide `const char*` overloads alongside `const String&` so string literals and C-strings don't construct temporary heap-allocated Arduino `String` objects on every frame.
+*   **Concurrency & FreeRTOS Tasks:**
+    *   Multiple tasks run on potentially multiple cores. The design generally assumes only one task clearly owns each data. There are very few `std::lock_guard` or `std::mutex` locks needed.
+    *   **Task destruction scoping:** Inside FreeRTOS task entry lambdas, wrap local variables (e.g. smart pointers, buffers) in an explicit block scope `{}` so their destructors run cleanly *before* clearing task progress flags (e.g., `_isFetching = false`) or calling `vTaskDelete(NULL)`.
+    *   **Worker cancellation:** Background worker tasks launched by effects must not capture `this` unsafely. The effect destructor must signal cancellation and wait for in-flight tasks to exit before completing object teardown.
 *   **Best Practices:** Use C++26 best practices, like returning `std::optional`, relying upon RVO and NVRO, not using in/out parameters. Prefer constant, smart data structures and containers and `<algorithm>` over manually coded loops.
 *   **Style:**
     *   Code mostly follows Microsoft C++ style guide. Match format to neighboring code in the same file or sibling files.
@@ -44,7 +49,9 @@ This file contains critical context, constraints, and architectural information 
 *   **Enums:** Prefer `enum class` to bare `enum`.
 *   **Explicit Naming:** For structure members, typedefs, enum members, return types, etc., use explicitly named values.
 
-**Logging:** Use macros `debugV`, `debugE`, `debugI`, `debugW`, `debugF`, `debugT`, `debugD`. These accept variadic C++ `std::printf` format strings and should be used sparingly.
+**Logging:**
+*   Use macros `debugV`, `debugE`, `debugI`, `debugW`, `debugF`, `debugT`, `debugD`. These accept variadic C++ `std::printf` format strings and should be used sparingly.
+*   **Critical section safety:** Never call logging macros inside critical sections where interrupts are disabled (`noInterrupts()` or inside an ISR/RAII interrupt guard). Buffer the status or error context inside the critical section and defer logging until interrupts are re-enabled.
 
 **Render Path & Performance Notes**
 *   **Where perf lives:** Most runtime cost is inside effect `Draw()` loops, not `EffectManager::Update()` or `drawing.cpp`.
@@ -114,7 +121,8 @@ Accessible via Serial (115200). core logic in `src/debug_cli.cpp`. Supports fuzz
 *   **Guards:** Guard network-specific code with `#if ENABLE_WIFI`.
 
 ### Adding New Effects
-*   **Treat existing files in `effects/matrix/` as read-only, with one exception:** a surgical, minimal fix to a genuine bug is allowed; do not restructure, restyle, or "modernize" them, and do not touch unrelated lines in the same file.
+*   **Foundation graphics stability:** New effects should take full advantage of our extensive pixel-bashing primitives in `GFXBase` and `GFXHex`. Avoid modifying foundational graphics classes to suit a single effect without careful consideration of how that change might impact scores of other effects.
+*   **Existing effects stability:** Fixing genuine bugs, eliminating unsafe globals, preventing bounds overwrites, or optimizing hot loops is encouraged. However, preserve recognizable community algorithms (Stefan Petrick, Aurora, Soulmate) and their original math/artistic character; avoid cosmetic churn or restyling working effects solely for stylistic conformity.
 *   Implement new effects directly in their header files (e.g., `include/effects/matrix/PatternNewEffect.h`). **Implement NO corresponding `.cpp` file.**
 *   Generously use color utilities from `FastLED.h` and math functions from `lib8tion.h`.
 
@@ -145,9 +153,17 @@ To maintain build stability across Av2 and Av3, adhere to these strict rules:
 
 ---
 
-## Building & Tools
-*   **Audit Tools**: Run `python3 tools/audit_globals_order.py` and `python3 tools/audit_include_rules.py`.
-*   **List Available Targets**: `python3 tools/show_envs.py`.
-*   **Build All**: `python tools/build_all.py`.
+## Building & Utility Tools
+
+The `tools/` directory contains diagnostic, auditing, and maintenance utilities. These are **optional, on-demand tools** to assist your work when needed—not a mandatory per-turn checklist:
+
+*   **Include & Style Audits (`tools/audit_globals_order.py`, `tools/audit_include_rules.py`):** Checks `#include` alphabetization and `globals.h` precedence. PlatformIO's pre-build scripts automatically run these before compilation; you only need to run them standalone when actively modifying header blocks or investigating an audit failure.
+*   **Target Selection & Verification Map:** Rather than building all targets locally, verify against the specific subsystem touched:
+    *   `demo`: Fastest 1D strip build (WS2812B rainbow on Pin 5). Best for sanity-checking core framework changes, no-net (`ENABLE_WIFI=0`) compatibility, and basic build health. Does not compile matrix or hex effects.
+    *   `mesmerizer` (or `ws_s3_hub75-64x64` for S3): Primary 2D HUB75 matrix targets. Exercises `effects/matrix/` and `hub75gfx.cpp`.
+    *   `tinyled-hex` or `yulc-hex`: Exercises `effects/hex/` and `gfxhex.cpp`.
+    *   Full matrix (all 20+ targets across LX6, LX7, and RISC-V): Let GitHub Actions CI do the heavy lifting; avoid running local full-matrix batch builds unless specifically verifying release branches.
+*   **Target Discovery (`tools/show_envs.py`):** Lists all defined board environments for reference if you are unsure which environment to target.
+*   **Batch Verification (`tools/build_all.py`):** Iterates through all targets. Very slow; prefer targeting the specific environment you are working on (e.g., `pio run -e demo`, `-e mesmerizer`, `-e tinyled-demo`).
 *   **Build Cache Hygiene (`.pio/build_cache`):** When major library versions change, unity build bundles change, or headers were previously missing, `.pio/build_cache` can serve stale object files containing stub/weak symbols that clash with new implementations (e.g. `multiple definition of fl::net::wifi::...`). If duplicate symbol linker errors occur across FastLED or framework unity objects, purge the cache with `rm -rf .pio/build_cache`.
 *   **🚨 Reading the size report:** PlatformIO's `Flash:` percentage **excludes the `.eh_frame` section**, even though `.eh_frame` is allocated and sits inside a `LOAD` segment, so it really *is* written into `firmware.bin`. On kitch that hid ~130KB: the report said "95.4%" while the actual app image was 102.9% of `app0`. Decide whether a board fits by comparing `firmware.bin`'s size against the app partition in `config/partitions_custom-*.csv`, never by the percentage. `tools/merge_image.py` now enforces this on every build and fails it if the app image does not fit.
