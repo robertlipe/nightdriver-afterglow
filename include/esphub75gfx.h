@@ -41,6 +41,7 @@ class ESPHUB75GFX : public HUB75GFX
 protected:
     static std::unique_ptr<Hub75Driver> driver;
     static std::unique_ptr<CRGB[]> drawBuffer;
+    static bool isDoubleBuffered;
 
 public:
     ESPHUB75GFX(size_t w, size_t h) : HUB75GFX(w, h)
@@ -65,6 +66,8 @@ public:
     static void InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devices);
 
     void SetBrightness(uint8_t amount) override;
+
+    void setRotation(uint8_t r) override;
 
     void PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsDrawn) override;
 };

@@ -26,11 +26,29 @@
 //    If not, see <https://www.gnu.org/licenses/>.
 //
 
+#include <optional>
+
+enum class ThermalState
+{
+    Normal,
+    Warning,
+    Critical
+};
+
 class SensorManager
 {
 public:
     static void begin();
     static void Update();
+
+    // Evaluates un-calibrated sensor temperatures against thermal limits and rate of climb.
+    static void EvaluateThermal(std::optional<float> rawAmbientTempF, std::optional<float> rawDieTempF);
+
+    static ThermalState GetThermalState();
+    static const char* GetThermalStateName();
+    static float GetAmbientRiseRate();
+    static float GetDieRiseRate();
+    static std::optional<float> GetRawAmbientTemp();
 
 private:
 #ifdef DHT11_PIN

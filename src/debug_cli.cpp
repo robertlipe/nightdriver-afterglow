@@ -31,11 +31,14 @@
 #include <cctype>
 #include <charconv>
 #include <cstring>
+#include <driver/gpio.h>
 #include <esp_heap_caps.h>
+#include <esp_intr_alloc.h>
 #include <esp_log.h>
 #include <esp_partition.h>
 #include <esp_system.h>
 #include <esp_timer.h>
+#include <esp_vfs.h>
 #if ENABLE_WIFI
 #include <WiFi.h>
 #endif
@@ -51,10 +54,13 @@
 #include "debug_cli.h"
 #include "deviceconfig.h"
 #include "effectmanager.h"
+#include "gfxbase.h"
 #include "ledstripeffect.h"
 #include "nd_network.h"
+#include "sensors.h"
 #include "soundanalyzer.h"
 #include "systemcontainer.h"
+#include "systemhardwarehub.h"
 #include "userfs.h"
 #include "values.h"
 
@@ -672,34 +678,40 @@ static void DoStatusLog(const cli_argv& argv)
     }
 }
 
-static void DoHeap(const cli_argv &)
+template <typename F>
+static void StreamToCli(F &&fn)
 {
     char *buf = nullptr;
     size_t size = 0;
     FILE *f = open_memstream(&buf, &size);
-    if (f)
+    if (!f)
     {
-        FILE *old_stdout = stdout;
-        stdout = f;
-        heap_caps_print_heap_info(MALLOC_CAP_DEFAULT);
-#if USE_PSRAM
-        if (psramFound())
-        {
-            heap_caps_print_heap_info(MALLOC_CAP_SPIRAM);
-        }
-#endif
-        fclose(f);
-        stdout = old_stdout;
-
-        if (buf)
-        {
-            cli_printf("%s", buf);
-            free(buf);
-        }
+        // Fallback directly to stdout if open_memstream fails
+        fn(stdout);
+        return;
     }
-    else
+
+    FILE *old_stdout = stdout;
+    stdout = f;
+    fn(f);
+    fclose(f);
+    stdout = old_stdout;
+
+    if (buf)
     {
-        // Fallback to our clean summary if open_memstream fails
+        cli_printf("%s", buf);
+        free(buf);
+    }
+}
+
+static void DoHeap(const cli_argv & = {})
+{
+    char *buf = nullptr;
+    size_t size = 0;
+    FILE *f = open_memstream(&buf, &size);
+    if (!f)
+    {
+        // Low-memory stack-buffered summary if heap is too exhausted for memstream
         multi_heap_info_t info;
         heap_caps_get_info(&info, MALLOC_CAP_DEFAULT);
         cli_printf("Heap Summary (MALLOC_CAP_DEFAULT):\n");
@@ -707,6 +719,110 @@ static void DoHeap(const cli_argv &)
         cli_printf("  Allocated space  : %zu bytes\n", info.total_allocated_bytes);
         cli_printf("  Min ever free    : %zu bytes\n", info.minimum_free_bytes);
         cli_printf("  Blocks           : %zu allocated, %zu free (%zu total)\n", info.allocated_blocks, info.free_blocks, info.total_blocks);
+#if USE_PSRAM
+        if (psramFound())
+        {
+            heap_caps_get_info(&info, MALLOC_CAP_SPIRAM);
+            cli_printf("PSRAM Summary (MALLOC_CAP_SPIRAM):\n");
+            cli_printf("  Free space       : %zu bytes (largest block: %zu bytes)\n", info.total_free_bytes, info.largest_free_block);
+            cli_printf("  Allocated space  : %zu bytes\n", info.total_allocated_bytes);
+        }
+#endif
+        return;
+    }
+
+    FILE *old_stdout = stdout;
+    stdout = f;
+    fprintf(stdout, "--- Default Heap (Internal SRAM) ---\n");
+    heap_caps_print_heap_info(MALLOC_CAP_DEFAULT);
+#if USE_PSRAM
+    if (psramFound())
+    {
+        fprintf(stdout, "\n--- PSRAM (External SPIRAM) ---\n");
+        heap_caps_print_heap_info(MALLOC_CAP_SPIRAM);
+    }
+#endif
+    fclose(f);
+    stdout = old_stdout;
+
+    if (buf)
+    {
+        cli_printf("%s", buf);
+        free(buf);
+    }
+}
+
+static void DoGpio(const cli_argv &argv)
+{
+    uint64_t mask = SOC_GPIO_VALID_GPIO_MASK;
+    if (argv.size() > 1)
+    {
+        int pin = -1;
+        auto [ptr, ec] = std::from_chars(argv[1].data(), argv[1].data() + argv[1].size(), pin);
+        if (ec != std::errc() || pin < 0 || !GPIO_IS_VALID_GPIO(pin))
+        {
+            cli_printf("Invalid GPIO pin: '%.*s'\n", (int)argv[1].size(), argv[1].data());
+            return;
+        }
+        mask = (1ULL << pin);
+    }
+
+    StreamToCli([mask](FILE *f) {
+        gpio_dump_io_configuration(f, mask);
+    });
+}
+
+static void DoDump(const cli_argv &argv)
+{
+    if (argv.size() < 2)
+    {
+        cli_printf("Usage: dump [fds|gpio [pin]|heap|intr|tasks|timers]\n");
+        return;
+    }
+
+    std::string_view sub = argv[1];
+    if (StringCompareInsensitive(sub, "gpio"))
+    {
+        cli_argv gpio_argv(argv.begin() + 1, argv.end());
+        DoGpio(gpio_argv);
+    }
+    else if (StringCompareInsensitive(sub, "heap"))
+    {
+        DoHeap();
+    }
+    else if (StringCompareInsensitive(sub, "intr") || StringCompareInsensitive(sub, "interrupts"))
+    {
+        StreamToCli([](FILE *f) {
+            esp_intr_dump(f);
+        });
+    }
+    else if (StringCompareInsensitive(sub, "timers"))
+    {
+        StreamToCli([](FILE *f) {
+            esp_timer_dump(f);
+        });
+    }
+    else if (StringCompareInsensitive(sub, "fds") || StringCompareInsensitive(sub, "vfs"))
+    {
+        StreamToCli([](FILE *f) {
+            fprintf(f, "--- Open File Descriptors ---\n");
+            esp_vfs_dump_fds(f);
+            fprintf(f, "\n--- Registered VFS Mounts ---\n");
+            esp_vfs_dump_registered_paths(f);
+        });
+    }
+#if configUSE_TRACE_FACILITY && configUSE_STATS_FORMATTING_FUNCTIONS
+    else if (StringCompareInsensitive(sub, "tasks"))
+    {
+        char buf[1024];
+        vTaskList(buf);
+        cli_printf("\nName          State      Prio  Stack  Num Core\n%s", buf);
+    }
+#endif
+    else
+    {
+        cli_printf("Unknown dump target: '%.*s'\n", (int)sub.size(), sub.data());
+        cli_printf("Usage: dump [fds|gpio [pin]|heap|intr|tasks|timers]\n");
     }
 }
 
@@ -783,7 +899,9 @@ static const command core_commands[] = {
         }
      }},
     {"dmesg", "Display the circular log buffer", "dmesg:", DoDmesg},
+    {"dump", "[fds|gpio|heap|intr|tasks|timers] Dump diagnostic state", nullptr, DoDump},
     {"effect", "[next|prev|name|index] Show/change current effect", "Effects.", DoEffectCommand}, // Function pointer
+    {"gpio", "[pin] Display GPIO configuration and muxing", "GPIO configuration:", DoGpio},
     {"heap", "Display heap memory info", "Heap usage:", DoHeap},
     {"help", "Display command line options", "Displaying system help",
      PrintHelp}, // Function pointer logic requires PrintHelp signature match. It does.
@@ -825,6 +943,78 @@ static const command core_commands[] = {
     {"ls", "Show filesytem directory", "NAME", DoDirectoryListing},                    // Function pointer
     {"partitions", "Display partition table", "Partition Table:", DoPartitions},
     {"reboot", "Reboot system", "Rebooting. Please stand by...", [](const cli_argv &) { esp_restart(); }},
+#if USE_MATRIX
+    {"rotate", "[0|90|180|270] | [auto [on|off]] Get or set display orientation", "Orientation:",
+     [](const cli_argv &argv) {
+#if HAS_SYSTEM_HARDWARE_HUB
+         if (argv.size() > 1)
+         {
+             std::string_view arg = argv[1];
+             if (arg == "auto")
+             {
+                 bool enable = true;
+                 if (argv.size() > 2)
+                 {
+                     std::string_view sub = argv[2];
+                     if (sub == "off" || sub == "0")
+                         enable = false;
+                 }
+                 SystemHardwareHub::Instance().SetAutoOrientationEnabled(enable);
+                 cli_printf("Auto-orientation %s.\n", enable ? "enabled" : "disabled");
+             }
+             else if (arg == "0" || arg == "normal")
+             {
+                 SystemHardwareHub::Instance().SetManualRotation(0);
+                 cli_printf("Display rotation set to normal (0 deg, auto-orientation paused).\n");
+             }
+             else if (arg == "90")
+             {
+                 SystemHardwareHub::Instance().SetManualRotation(1);
+                 cli_printf("Display rotation set to 90 deg (auto-orientation paused).\n");
+             }
+             else if (arg == "180" || arg == "inverted")
+             {
+                 SystemHardwareHub::Instance().SetManualRotation(2);
+                 cli_printf("Display rotation set to inverted (180 deg, auto-orientation paused).\n");
+             }
+             else if (arg == "270")
+             {
+                 SystemHardwareHub::Instance().SetManualRotation(3);
+                 cli_printf("Display rotation set to 270 deg (auto-orientation paused).\n");
+             }
+             else
+             {
+                 cli_printf("Usage: rotate [0|90|180|270] | [auto [on|off]]\n");
+             }
+         }
+         else
+         {
+             uint8_t rot = SystemHardwareHub::Instance().GetCurrentRotation();
+             int deg = (rot == 1) ? 90 : (rot == 2) ? 180 : (rot == 3) ? 270 : 0;
+             bool is_auto = SystemHardwareHub::Instance().IsAutoOrientationEnabled();
+             cli_printf("Rotation: %d deg, Auto-orientation: %s\n",
+                        deg, is_auto ? "enabled" : "disabled");
+         }
+#else
+         if (g_ptrSystem && g_ptrSystem->HasDevices() && argv.size() > 1)
+         {
+             std::string_view arg = argv[1];
+             uint8_t rot = 0;
+             if (arg == "90" || arg == "1") rot = 1;
+             else if (arg == "180" || arg == "2") rot = 2;
+             else if (arg == "270" || arg == "3") rot = 3;
+             for (auto &dev : g_ptrSystem->GetDevices())
+                 dev->setRotation(rot);
+             int deg = (rot == 1) ? 90 : (rot == 2) ? 180 : (rot == 3) ? 270 : 0;
+             cli_printf("Display rotation set to %d deg.\n", deg);
+         }
+         else
+         {
+             cli_printf("Usage: rotate [0|90|180|270]\n");
+         }
+#endif
+     }},
+#endif
     {"setpanic", "<msg> Set persistent panic message for next boot", "Setting...", DoSetPanic},
     {"simbeat", "[on|off] [bpm] Simulate audio beat", "Simulate Beat:",
      [](const cli_argv &argv) {
@@ -864,15 +1054,96 @@ static const command core_commands[] = {
         }
     }},
     {"statuslog", "[on|off] Show/change periodic status logs", "Status logs.", DoStatusLog},
+#if HAS_SYSTEM_HARDWARE_HUB
+    {"tap", "[on|off] Enable/disable bezel tap to advance effect", "Tap detection:",
+     [](const cli_argv &argv) {
+         if (argv.size() > 1)
+         {
+             std::string_view arg = argv[1];
+             if (arg == "on" || arg == "1")
+             {
+                 SystemHardwareHub::Instance().SetTapDetectionEnabled(true);
+                 cli_printf("Bezel tap detection enabled.\n");
+             }
+             else if (arg == "off" || arg == "0")
+             {
+                 SystemHardwareHub::Instance().SetTapDetectionEnabled(false);
+                 cli_printf("Bezel tap detection disabled.\n");
+             }
+             else
+             {
+                 cli_printf("Usage: tap [on|off]\n");
+             }
+         }
+         else
+         {
+             cli_printf("Tap detection: %s\n",
+                        SystemHardwareHub::Instance().IsTapDetectionEnabled() ? "enabled" : "disabled");
+         }
+     }},
+#endif
+#if configUSE_TRACE_FACILITY && configUSE_STATS_FORMATTING_FUNCTIONS
     {"tasks", "Display FreeRTOS task list", "Task List:",
      [](const cli_argv &) {
-#if configUSE_TRACE_FACILITY && configUSE_STATS_FORMATTING_FUNCTIONS
          char buf[1024];
          vTaskList(buf);
          cli_printf("\nName          State      Prio  Stack  Num Core\n%s", buf);
-#else
-         cli_printf("Task list not enabled in FreeRTOS config\n");
+     }},
 #endif
+    {"tempoffset", "[degrees] View or set ambient temperature calibration offset (°F)", "Temperature offset:",
+     [](const cli_argv &argv) {
+         if (argv.size() > 1)
+         {
+             char *endptr = nullptr;
+             std::string argStr(argv[1]);
+             float offset = std::strtof(argStr.c_str(), &endptr);
+             if (endptr == argStr.c_str())
+             {
+                 cli_printf("Invalid temperature offset: %s\n", argStr.c_str());
+                 return;
+             }
+             g_ptrSystem->GetDeviceConfig().SetTempOffset(offset);
+             cli_printf("Ambient temperature offset set to %.1f °F\n", offset);
+             auto rawOpt = SensorManager::GetRawAmbientTemp();
+             if (rawOpt.has_value())
+             {
+                 g_Values.AmbientTemp = *rawOpt + offset;
+                 cli_printf("Calibrated ambient temperature: %.1f °F (Raw: %.1f °F)\n",
+                            *g_Values.AmbientTemp, *rawOpt);
+             }
+         }
+         else
+         {
+             cli_printf("Ambient temperature offset: %.1f °F\n",
+                        g_ptrSystem->GetDeviceConfig().GetTempOffset());
+             if (g_Values.AmbientTemp.has_value())
+             {
+                 cli_printf("Current calibrated ambient temp: %.1f °F\n",
+                            *g_Values.AmbientTemp);
+             }
+         }
+     }},
+    {"thermal", "Display thermal safety and throttling status", "Thermal status:",
+     [](const cli_argv &) {
+         cli_printf("Thermal State: %s (Throttle: %d/255, %3.0f%%)\n",
+                    SensorManager::GetThermalStateName(),
+                    g_Values.ThermalThrottle,
+                    (g_Values.ThermalThrottle / 2.55));
+         if (g_Values.InternalTemp.has_value())
+         {
+             cli_printf("  Die Temp:     %.1f °F (Rate: %+.1f °F/min)\n",
+                        *g_Values.InternalTemp,
+                        SensorManager::GetDieRiseRate());
+         }
+         if (g_Values.AmbientTemp.has_value())
+         {
+             auto raw = SensorManager::GetRawAmbientTemp().value_or(*g_Values.AmbientTemp);
+             cli_printf("  Ambient Temp: %.1f °F (Raw: %.1f °F, Offset: %+.1f °F, Rate: %+.1f °F/min)\n",
+                        *g_Values.AmbientTemp,
+                        raw,
+                        g_ptrSystem->GetDeviceConfig().GetTempOffset(),
+                        SensorManager::GetAmbientRiseRate());
+         }
      }},
     {"uptime", "Show system uptime", "Showing uptime...", DoUptime},
     {"+", "Nudge brightness up", "Brightness +10", [](const cli_argv &) {

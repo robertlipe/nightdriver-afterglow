@@ -157,7 +157,8 @@ void HUB75GFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsDr
     // We set ourselves to the lower of the fader value or the brightness value, or the power constrained value,
     // whichever is lowest, so that we can fade between effects without having to change the brightness setting.
 
-    auto targetBrightness = min({ g_ptrSystem->GetDeviceConfig().GetBrightness(), g_Values.Fader, g_Values.MatrixScaledBrightness });
+    auto targetBrightness = min({ g_ptrSystem->GetDeviceConfig().GetBrightness(), g_Values.Fader, g_Values.MatrixScaledBrightness, g_Values.ThermalThrottle });
+    g_Values.Brite = 100.0f * (float)targetBrightness / 255.0f;
 
     debugV("MW: %lu, Setting Scaled Brightness to: %lu", (unsigned long)g_Values.MatrixPowerMilliwatts, (unsigned long)targetBrightness);
     SetBrightness(targetBrightness);
