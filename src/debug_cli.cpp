@@ -227,6 +227,14 @@ static void PrintHelp(const cli_argv &argv)
 //
 static thread_local std::shared_ptr<ConsoleSession> _activeSession;
 
+void cli_write(std::string_view text)
+{
+    if (_activeSession)
+        _activeSession->WriteText(text);
+    else
+        ConsoleManager::Instance().Broadcast(text);
+}
+
 //
 // Parse and run cmd_line. Zero copies or allocations.
 //
@@ -686,7 +694,7 @@ static void StreamToCli(F &&fn)
     FILE *f = open_memstream(&buf, &size);
     if (!f)
     {
-        // Fallback directly to stdout if open_memstream fails
+        cli_printf("Error: Insufficient memory to buffer output stream.\n");
         fn(stdout);
         return;
     }
@@ -699,7 +707,7 @@ static void StreamToCli(F &&fn)
 
     if (buf)
     {
-        cli_printf("%s", buf);
+        cli_write(std::string_view(buf, size));
         free(buf);
     }
 }
@@ -733,7 +741,7 @@ static void DoHeap(const cli_argv & = {})
 
     FILE *old_stdout = stdout;
     stdout = f;
-    fprintf(stdout, "--- Default Heap (Internal SRAM) ---\n");
+    fprintf(stdout, "--- Default Heap (MALLOC_CAP_DEFAULT) ---\n");
     heap_caps_print_heap_info(MALLOC_CAP_DEFAULT);
 #if USE_PSRAM
     if (psramFound())
@@ -747,7 +755,7 @@ static void DoHeap(const cli_argv & = {})
 
     if (buf)
     {
-        cli_printf("%s", buf);
+        cli_write(std::string_view(buf, size));
         free(buf);
     }
 }
@@ -759,7 +767,7 @@ static void DoGpio(const cli_argv &argv)
     {
         int pin = -1;
         auto [ptr, ec] = std::from_chars(argv[1].data(), argv[1].data() + argv[1].size(), pin);
-        if (ec != std::errc() || pin < 0 || !GPIO_IS_VALID_GPIO(pin))
+        if (ec != std::errc() || pin < 0 || pin >= SOC_GPIO_PIN_COUNT || !GPIO_IS_VALID_GPIO(pin))
         {
             cli_printf("Invalid GPIO pin: '%.*s'\n", (int)argv[1].size(), argv[1].data());
             return;
@@ -1203,10 +1211,7 @@ void cli_printf(const char *fmt, ...)
 
     // Direct output to the session that originated the current command, if any.
     // This prevents commands run on telnet from also spewing on serial and vice versa.
-    if (_activeSession)
-        _activeSession->WriteText(std::string_view(buf, static_cast<size_t>(len)));
-    else
-        ConsoleManager::Instance().Broadcast(std::string_view(buf, static_cast<size_t>(len)));
+    cli_write(std::string_view(buf, static_cast<size_t>(len)));
 
     if (must_free)
         free(buf);

@@ -326,10 +326,14 @@ def prune_fastled(lib_path):
             with open(lib_json_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4)
         except Exception as e:
-            print(f"[Shared-Libs] Warning: failed to patch FastLED library.json: {e}", file=sys.stderr)
+            print(f"[Shared-Libs] Error: failed to patch FastLED library.json: {e}", file=sys.stderr)
+            return
 
-    with open(marker_path, "w", encoding="utf-8") as f:
-        f.write(prune_version + "\n")
+    try:
+        with open(marker_path, "w", encoding="utf-8") as f:
+            f.write(prune_version + "\n")
+    except OSError as e:
+        print(f"[Shared-Libs] Warning: failed to write prune marker: {e}", file=sys.stderr)
 
 
 # Simple lock mechanism to prevent race conditions when invoked concurrently by PIO
