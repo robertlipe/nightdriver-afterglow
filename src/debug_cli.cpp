@@ -847,6 +847,267 @@ static void DoDump(const cli_argv &argv)
     }
 }
 
+static const char* GetPinConflictDescription(int pin)
+{
+#if defined(IR_REMOTE_PIN) && IR_REMOTE_PIN >= 0
+    if (pin == IR_REMOTE_PIN) return "IR Remote (IR_REMOTE_PIN)";
+#endif
+#if defined(I2S_BCLK_PIN) && I2S_BCLK_PIN >= 0
+    if (pin == I2S_BCLK_PIN) return "I2S Bit Clock (I2S_BCLK_PIN)";
+#endif
+#if defined(I2S_WS_PIN) && I2S_WS_PIN >= 0
+    if (pin == I2S_WS_PIN) return "I2S Word Select (I2S_WS_PIN)";
+#endif
+#if defined(I2S_DATA_IN_PIN) && I2S_DATA_IN_PIN >= 0
+    if (pin == I2S_DATA_IN_PIN) return "I2S Data In (I2S_DATA_IN_PIN)";
+#endif
+#if defined(DHT11_PIN) && DHT11_PIN >= 0
+    if (pin == DHT11_PIN) return "DHT11 Sensor (DHT11_PIN)";
+#endif
+    return nullptr;
+}
+
+static void DoStrip(const cli_argv &argv)
+{
+    auto &config = g_ptrSystem->GetDeviceConfig();
+    const auto &strips = config.GetStrips();
+
+    auto printUsage = []() {
+        cli_printf("Usage:\n"
+                   "  strip [list]                              - List configured channels\n"
+                   "  strip set <ch> pin <pin>                  - Set data GPIO pin\n"
+                   "  strip set <ch> length <n>                 - Set pixel count\n"
+                   "  strip set <ch> order <RGB|GRB|...>        - Set color order\n"
+                   "  strip set <ch> chipset <WS2812B|WS2811|..>- Set chipset\n"
+                   "  strip set <ch> enable <on|off>            - Enable or disable channel\n"
+                   "  strip add <pin> <len> [order] [chipset]   - Add a new channel\n"
+                   "  strip remove <ch>                         - Remove a channel\n"
+                   "  strip apply                               - Save to /device.cfg and restart\n");
+    };
+
+    auto printStripsTable = [&strips]() {
+        if (strips.empty())
+        {
+            cli_printf("No LED strips configured.\n");
+            return;
+        }
+        cli_printf("Ch   Pin Clock Length Order   Chipset  Status\n");
+        cli_printf("--   --- ----- ------ -----   -------  ------\n");
+        for (size_t i = 0; i < strips.size(); ++i)
+        {
+            const auto &s = strips[i];
+            char clockBuf[16] = "--";
+            if (s.clockPin >= 0)
+                snprintf(clockBuf, sizeof(clockBuf), "%d", s.clockPin);
+
+            cli_printf("%2zu  %4d  %4s %6u %-7s %-8s %s\n",
+                       i, s.dataPin, clockBuf, s.length,
+                       ColorOrderToString(s.colorOrder),
+                       ChipsetToString(s.chipset),
+                       s.enabled ? "ENABLED" : "DISABLED");
+        }
+    };
+
+    if (argv.size() < 2 || StringCompareInsensitive(argv[1], "list"))
+    {
+        printStripsTable();
+        return;
+    }
+
+    std::string_view sub = argv[1];
+
+    if (StringCompareInsensitive(sub, "apply"))
+    {
+        cli_printf("Saving configuration to /device.cfg...\n");
+        config.FlushToDisk();
+        cli_printf("Restarting system to reinitialize LED channels...\n");
+        esp_restart();
+        return;
+    }
+
+    if (StringCompareInsensitive(sub, "set"))
+    {
+        if (argv.size() < 5)
+        {
+            printUsage();
+            return;
+        }
+
+        auto chOpt = ParseInt<size_t>(argv[2]);
+        if (!chOpt || *chOpt >= strips.size())
+        {
+            cli_printf("Invalid channel index: '%.*s' (valid: 0..%zu)\n",
+                       (int)argv[2].size(), argv[2].data(), strips.empty() ? 0 : strips.size() - 1);
+            return;
+        }
+
+        size_t ch = *chOpt;
+        StripConfig sc = strips[ch];
+        std::string_view prop = argv[3];
+
+        if (StringCompareInsensitive(prop, "pin"))
+        {
+            int pin = -1;
+            if (!TryParseGpioPin(argv[4], pin))
+            {
+                cli_printf("Invalid GPIO pin: '%.*s'\n", (int)argv[4].size(), argv[4].data());
+                return;
+            }
+            if (const char *conflict = GetPinConflictDescription(pin))
+            {
+                cli_printf("Warning: GPIO %d is already assigned to %s!\n", pin, conflict);
+            }
+            sc.dataPin = pin;
+            config.SetStrip(ch, sc);
+            cli_printf("Channel %zu pin set to %d. Run 'strip apply' to commit and restart.\n", ch, pin);
+        }
+        else if (StringCompareInsensitive(prop, "length") || StringCompareInsensitive(prop, "count"))
+        {
+            auto lenOpt = ParseInt<uint16_t>(argv[4]);
+            if (!lenOpt || *lenOpt == 0)
+            {
+                cli_printf("Invalid length: '%.*s' (must be > 0)\n", (int)argv[4].size(), argv[4].data());
+                return;
+            }
+            sc.length = *lenOpt;
+            config.SetStrip(ch, sc);
+            cli_printf("Channel %zu length set to %u. Run 'strip apply' to commit and restart.\n", ch, sc.length);
+        }
+        else if (StringCompareInsensitive(prop, "order"))
+        {
+            auto orderOpt = ParseColorOrder(argv[4]);
+            if (!orderOpt)
+            {
+                cli_printf("Invalid color order: '%.*s' (valid: RGB, RBG, GRB, GBR, BRG, BGR)\n",
+                           (int)argv[4].size(), argv[4].data());
+                return;
+            }
+            sc.colorOrder = *orderOpt;
+            config.SetStrip(ch, sc);
+            cli_printf("Channel %zu color order set to %s. Run 'strip apply' to commit and restart.\n",
+                       ch, ColorOrderToString(sc.colorOrder));
+        }
+        else if (StringCompareInsensitive(prop, "chipset"))
+        {
+            auto csOpt = ParseChipsetType(argv[4]);
+            if (!csOpt)
+            {
+                cli_printf("Invalid chipset: '%.*s' (valid: WS2812B, WS2811, WS2815, APA102, SK9822)\n",
+                           (int)argv[4].size(), argv[4].data());
+                return;
+            }
+            sc.chipset = *csOpt;
+            config.SetStrip(ch, sc);
+            cli_printf("Channel %zu chipset set to %s. Run 'strip apply' to commit and restart.\n",
+                       ch, ChipsetToString(sc.chipset));
+        }
+        else if (StringCompareInsensitive(prop, "enable"))
+        {
+            std::string_view val = argv[4];
+            bool enable = (StringCompareInsensitive(val, "on") ||
+                           StringCompareInsensitive(val, "true") ||
+                           StringCompareInsensitive(val, "1") ||
+                           StringCompareInsensitive(val, "yes"));
+            sc.enabled = enable;
+            config.SetStrip(ch, sc);
+            cli_printf("Channel %zu %s. Run 'strip apply' to commit and restart.\n",
+                       ch, enable ? "enabled" : "disabled");
+        }
+        else
+        {
+            cli_printf("Unknown property: '%.*s'. Valid: pin, length, order, chipset, enable\n",
+                       (int)prop.size(), prop.data());
+        }
+        return;
+    }
+
+    if (StringCompareInsensitive(sub, "add"))
+    {
+        if (argv.size() < 4)
+        {
+            cli_printf("Usage: strip add <pin> <length> [order] [chipset]\n");
+            return;
+        }
+
+        int pin = -1;
+        if (!TryParseGpioPin(argv[2], pin))
+        {
+            cli_printf("Invalid GPIO pin: '%.*s'\n", (int)argv[2].size(), argv[2].data());
+            return;
+        }
+
+        auto lenOpt = ParseInt<uint16_t>(argv[3]);
+        if (!lenOpt || *lenOpt == 0)
+        {
+            cli_printf("Invalid length: '%.*s' (must be > 0)\n", (int)argv[3].size(), argv[3].data());
+            return;
+        }
+
+        StripConfig sc;
+        sc.dataPin = pin;
+        sc.length = *lenOpt;
+        sc.colorOrder = EOrder::GRB;
+        sc.chipset = ChipsetType::WS2812B;
+        sc.enabled = true;
+
+        if (argv.size() > 4)
+        {
+            if (auto orderOpt = ParseColorOrder(argv[4]))
+                sc.colorOrder = *orderOpt;
+            else
+            {
+                cli_printf("Invalid color order: '%.*s'\n", (int)argv[4].size(), argv[4].data());
+                return;
+            }
+        }
+
+        if (argv.size() > 5)
+        {
+            if (auto csOpt = ParseChipsetType(argv[5]))
+                sc.chipset = *csOpt;
+            else
+            {
+                cli_printf("Invalid chipset: '%.*s'\n", (int)argv[5].size(), argv[5].data());
+                return;
+            }
+        }
+
+        if (const char *conflict = GetPinConflictDescription(pin))
+        {
+            cli_printf("Warning: GPIO %d is already assigned to %s!\n", pin, conflict);
+        }
+
+        config.AddStrip(sc);
+        cli_printf("Added channel %zu (pin %d, len %u, %s, %s). Run 'strip apply' to commit and restart.\n",
+                   config.GetStrips().size() - 1, sc.dataPin, sc.length,
+                   ColorOrderToString(sc.colorOrder), ChipsetToString(sc.chipset));
+        return;
+    }
+
+    if (StringCompareInsensitive(sub, "remove"))
+    {
+        if (argv.size() < 3)
+        {
+            cli_printf("Usage: strip remove <ch>\n");
+            return;
+        }
+
+        auto chOpt = ParseInt<size_t>(argv[2]);
+        if (!chOpt || *chOpt >= strips.size())
+        {
+            cli_printf("Invalid channel index: '%.*s'\n", (int)argv[2].size(), argv[2].data());
+            return;
+        }
+
+        size_t ch = *chOpt;
+        config.RemoveStrip(ch);
+        cli_printf("Removed channel %zu. Run 'strip apply' to commit and restart.\n", ch);
+        return;
+    }
+
+    printUsage();
+}
+
 static const command core_commands[] = {
     {"bright", "[level] Display/Set brightness 0-255", "Brightness:",
      [](const cli_argv &argv) {
@@ -1084,6 +1345,7 @@ static const command core_commands[] = {
         }
     }},
     {"statuslog", "[on|off] Show/change periodic status logs", "Status logs.", DoStatusLog},
+    {"strip", "[list|set|add|remove|apply] Configure LED strip channels", "LED Strips:", DoStrip},
 #if HAS_SYSTEM_HARDWARE_HUB
     {"rtc", "[sync|read] Read or synchronize PCF85063 real-time clock", "RTC status:",
      [](const cli_argv &argv) {

@@ -32,6 +32,9 @@
 
 #include "globals.h"
 
+#include <cstdint>
+#include <optional>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -105,6 +108,31 @@
 #define POWER_LIMIT_MIN             1000
 #define POWER_LIMIT_DEFAULT         4500
 
+enum class ChipsetType : uint8_t {
+    WS2812B = 0,   // 800kHz clockless (WS2812, WS2812B, WS2813, SK6812)
+    WS2811,        // 400kHz / 800kHz
+    WS2815,        // 12V clockless
+    APA102,        // 2-wire SPI (Data + Clock)
+    SK9822,        // 2-wire SPI (Data + Clock)
+};
+
+const char* ChipsetToString(ChipsetType type);
+std::optional<ChipsetType> ParseChipsetType(std::string_view str);
+
+const char* ColorOrderToString(EOrder order);
+std::optional<EOrder> ParseColorOrder(std::string_view str);
+
+struct StripConfig {
+    int dataPin = -1;
+    int clockPin = -1;                // For SPI chipsets (APA102/SK9822), -1 for clockless
+    uint16_t length = 60;
+    EOrder colorOrder = EOrder::GRB;
+    ChipsetType chipset = ChipsetType::WS2812B;
+    bool enabled = true;
+
+    bool operator==(const StripConfig& other) const = default;
+};
+
 // DeviceConfig holds, persists and loads device-wide configuration settings. Effect-specific settings should
 // be managed using overrides of the respective methods in LEDStripEffect (mainly FillSettingSpecs(),
 // SerializeSettingsToJSON() and SetSetting()).
@@ -146,6 +174,7 @@ class DeviceConfig : public IJSONSerializable
     float   tempOffset = 0.0f;
     bool    autoOrientation = true;
     bool    tapDetection = true;
+    std::vector<StripConfig> strips;
 
     #if ENABLE_WIFI
     uint32_t portalTimeoutSeconds = 0; // 0 for AUTO mode, otherwise fixed seconds
@@ -204,6 +233,7 @@ class DeviceConfig : public IJSONSerializable
     static constexpr const char * TempOffsetTag = NAME_OF(tempOffset);
     static constexpr const char * AutoOrientationTag = NAME_OF(autoOrientation);
     static constexpr const char * TapDetectionTag = NAME_OF(tapDetection);
+    static constexpr const char * StripsTag = "strips";
     #if ENABLE_WIFI
     static constexpr const char * PortalTimeoutSecondsTag = NAME_OF(portalTimeoutSeconds);
     #endif
@@ -288,4 +318,12 @@ class DeviceConfig : public IJSONSerializable
 
     bool GetTapDetection() const { return tapDetection; }
     void SetTapDetection(bool newTapDetection);
+
+    const std::vector<StripConfig>& GetStrips() const { return strips; }
+    void SetStrips(const std::vector<StripConfig>& newStrips);
+    bool SetStrip(size_t index, const StripConfig& config);
+    bool AddStrip(const StripConfig& config);
+    bool RemoveStrip(size_t index);
+    void FlushToDisk();
+    void InitializeDefaultStrips();
 };
