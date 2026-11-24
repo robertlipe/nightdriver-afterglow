@@ -164,6 +164,27 @@ bool ContainsInsensitive(std::string_view haystack, std::string_view needle)
 
 
 //
+// Number Parsing Helpers
+// Safe for non-null-terminated string_views, zero allocations.
+//
+template <typename T = int>
+static std::optional<T> ParseInt(std::string_view str, int base = 10)
+{
+    while (!str.empty() && std::isspace(static_cast<unsigned char>(str.front())))
+        str.remove_prefix(1);
+
+    if (str.empty())
+        return std::nullopt;
+
+    T val{};
+    auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), val, base);
+    if (ec != std::errc() || ptr != str.data() + str.size())
+        return std::nullopt;
+
+    return val;
+}
+
+//
 // Registration
 //
 void RegisterCommand(const command *cmd)
@@ -367,18 +388,15 @@ static std::optional<size_t> ResolveEffect(std::string_view arg)
     auto& effectManager = g_ptrSystem->GetEffectManager();
 
     // Try as index first
-    // Try as index first
-    size_t val = 0;
-    auto [ptr, ec] = std::from_chars(arg.begin(), arg.end(), val);
-    if (ec == std::errc() && ptr == arg.end())
+    if (auto val = ParseInt<size_t>(arg))
     {
-        if (val < effectManager.EffectCount())
+        if (*val < effectManager.EffectCount())
         {
-            return val;
+            return *val;
         }
         else
         {
-            cli_printf("Error: Effect index %zu out of range (0-%u)\n", val, effectManager.EffectCount() - 1);
+            cli_printf("Error: Effect index %zu out of range (0-%u)\n", *val, effectManager.EffectCount() - 1);
             return std::nullopt;
         }
     }
@@ -735,14 +753,23 @@ static void DoHeap(const cli_argv & = {})
     });
 }
 
+static bool TryParseGpioPin(std::string_view token, int &outPin)
+{
+    auto pin = ParseInt<int>(token);
+    if (!pin || *pin < 0 || *pin >= SOC_GPIO_PIN_COUNT || !GPIO_IS_VALID_GPIO(*pin))
+        return false;
+
+    outPin = *pin;
+    return true;
+}
+
 static void DoGpio(const cli_argv &argv)
 {
     uint64_t mask = SOC_GPIO_VALID_GPIO_MASK;
     if (argv.size() > 1)
     {
         int pin = -1;
-        auto [ptr, ec] = std::from_chars(argv[1].data(), argv[1].data() + argv[1].size(), pin);
-        if (ec != std::errc() || ptr != argv[1].data() + argv[1].size() || pin < 0 || pin >= SOC_GPIO_PIN_COUNT || !GPIO_IS_VALID_GPIO(pin))
+        if (!TryParseGpioPin(argv[1], pin))
         {
             cli_printf("Invalid GPIO pin: '%.*s'\n", (int)argv[1].size(), argv[1].data());
             return;
@@ -815,8 +842,10 @@ static const command core_commands[] = {
      [](const cli_argv &argv) {
          if (argv.size() > 1)
          {
-             int val = atoi(std::string(argv[1]).c_str());
-             g_ptrSystem->GetDeviceConfig().SetBrightness(val);
+             if (auto val = ParseInt<int>(argv[1]))
+                 g_ptrSystem->GetDeviceConfig().SetBrightness(std::clamp(*val, 0, 255));
+             else
+                 cli_printf("Invalid brightness: '%.*s'\n", (int)argv[1].size(), argv[1].data());
          }
          cli_printf("Brightness: %lu\n", (unsigned long)g_ptrSystem->GetDeviceConfig().GetBrightness());
      }},
@@ -853,16 +882,23 @@ static const command core_commands[] = {
              CRGB newColor = g_ptrSystem->GetDeviceConfig().GlobalColor();
              if (argv.size() == 2) // Assume hex if one arg
              {
-                 std::string hexStr(argv[1]);
-                 if (hexStr[0] == '#') hexStr.erase(0, 1);
-                 uint32_t val = strtol(hexStr.c_str(), nullptr, 16);
-                 newColor = CRGB(val);
+                 std::string_view hexStr = argv[1];
+                 if (!hexStr.empty() && hexStr.front() == '#')
+                     hexStr.remove_prefix(1);
+                 if (auto val = ParseInt<uint32_t>(hexStr, 16))
+                     newColor = CRGB(*val);
+                 else
+                     cli_printf("Invalid hex color: '%.*s'\n", (int)argv[1].size(), argv[1].data());
              }
              else if (argv.size() == 4) // Assume R G B
              {
-                 newColor.r = atoi(std::string(argv[1]).c_str());
-                 newColor.g = atoi(std::string(argv[2]).c_str());
-                 newColor.b = atoi(std::string(argv[3]).c_str());
+                 auto r = ParseInt<uint8_t>(argv[1]);
+                 auto g = ParseInt<uint8_t>(argv[2]);
+                 auto b = ParseInt<uint8_t>(argv[3]);
+                 if (r && g && b)
+                     newColor = CRGB(*r, *g, *b);
+                 else
+                     cli_printf("Invalid RGB components.\n");
              }
              g_ptrSystem->GetDeviceConfig().SetGlobalColor(newColor);
          }
@@ -1005,10 +1041,10 @@ static const command core_commands[] = {
         if (argv.size() > 1) {
             if (StringCompareInsensitive(argv[1], "on")) g_Analyzer.SetSimulateBeat(true);
             else if (StringCompareInsensitive(argv[1], "off")) g_Analyzer.SetSimulateBeat(false);
-            else if (isdigit(argv[1][0])) g_Analyzer.SetSimulateBPM(atoi(std::string(argv[1]).c_str()));
+            else if (auto bpm = ParseInt<int>(argv[1])) g_Analyzer.SetSimulateBPM(*bpm);
         }
         if (argv.size() > 2) {
-             g_Analyzer.SetSimulateBPM(atoi(std::string(argv[2]).c_str()));
+             if (auto bpm = ParseInt<int>(argv[2])) g_Analyzer.SetSimulateBPM(*bpm);
         }
         cli_printf("SimBeat: %s  BPM: %d\n", g_Analyzer.GetSimulateBeat() ? "ON" : "OFF", g_Analyzer.GetSimulateBPM());
      }},
