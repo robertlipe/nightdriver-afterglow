@@ -30,8 +30,13 @@
 
 #include "globals.h"
 
+#include <iterator>
+#include <vector>
+
 #include "deviceconfig.h"
 #include "effectmanager.h"
+#include "fl/channels/channel.h"
+#include "fl/channels/config.h"
 #include "nd_panic.h"
 #include "systemcontainer.h"
 #include "values.h"
@@ -39,60 +44,66 @@
 
 void WS281xGFX::AddLEDs(std::vector<std::shared_ptr<GFXBase>>& devices)
 {
-    // Macro to add LEDs to a channel
+    debugI("Adding LEDs to FastLED via Channels API...");
 
-    #if FASTLED_EXPERIMENTAL_ESP32_RGBW_ENABLED
-        #define ADD_CHANNEL(channel) \
-            debugI("Adding %zu LEDs to pin %d from channel %d on FastLED.", devices[channel]->GetLEDCount(), LED_PIN ## channel, channel); \
-            FastLED.addLeds<WS2812, LED_PIN ## channel, COLOR_ORDER>(devices[channel]->leds, devices[channel]->GetLEDCount()).setRgbw(Rgbw(kRGBWDefaultColorTemp, FASTLED_EXPERIMENTAL_ESP32_RGBW_MODE )); \
-            pinMode(LED_PIN ## channel, OUTPUT)
-    #else
-        #define ADD_CHANNEL(channel) \
-            debugI("Adding %zu LEDs to pin %d from channel %d on FastLED.", devices[channel]->GetLEDCount(), LED_PIN ## channel, channel); \
-            FastLED.addLeds<WS2812B, LED_PIN ## channel, COLOR_ORDER>(devices[channel]->leds, devices[channel]->GetLEDCount()); \
-            pinMode(LED_PIN ## channel, OUTPUT)
-    #endif
+    const int defaultPins[] = {
+#if NUM_CHANNELS >= 1 && LED_PIN0 >= 0
+        LED_PIN0,
+#endif
+#if NUM_CHANNELS >= 2 && LED_PIN1 >= 0
+        LED_PIN1,
+#endif
+#if NUM_CHANNELS >= 3 && LED_PIN2 >= 0
+        LED_PIN2,
+#endif
+#if NUM_CHANNELS >= 4 && LED_PIN3 >= 0
+        LED_PIN3,
+#endif
+#if NUM_CHANNELS >= 5 && LED_PIN4 >= 0
+        LED_PIN4,
+#endif
+#if NUM_CHANNELS >= 6 && LED_PIN5 >= 0
+        LED_PIN5,
+#endif
+#if NUM_CHANNELS >= 7 && LED_PIN6 >= 0
+        LED_PIN6,
+#endif
+#if NUM_CHANNELS >= 8 && LED_PIN7 >= 0
+        LED_PIN7,
+#endif
+    };
 
-    debugI("Adding LEDs to FastLED...");
+    auto timing = fl::makeTimingConfig<fl::TIMING_WS2812_800KHZ>();
 
-    // The following "unrolled conditional compile loop" to set up the channels is needed because the LED pin
-    //   is a template parameter to FastLED.addLeds()
+    for (size_t ch = 0; ch < devices.size() && ch < std::size(defaultPins); ++ch)
+    {
+        int pin = defaultPins[ch];
+        if (pin < 0)
+            continue;
 
-    #if NUM_CHANNELS >= 1 && LED_PIN0 >= 0
-        ADD_CHANNEL(0);
-    #endif
+        debugI("Adding %zu LEDs to pin %d from channel %zu on FastLED.",
+               devices[ch]->GetLEDCount(), pin, ch);
 
-    #if NUM_CHANNELS >= 2 && LED_PIN1 >= 0
-        ADD_CHANNEL(1);
-    #endif
+        fl::ClocklessChipset chipset(pin, timing);
+        fl::ChannelConfig config(
+            chipset,
+            fl::span<CRGB>(devices[ch]->leds, devices[ch]->GetLEDCount()),
+            COLOR_ORDER
+        );
 
-    #if NUM_CHANNELS >= 3 && LED_PIN2 >= 0
-        ADD_CHANNEL(2);
-    #endif
+        auto channel = FastLED.add(config);
+#if FASTLED_EXPERIMENTAL_ESP32_RGBW_ENABLED
+        if (channel)
+        {
+            channel->setRgbw(Rgbw(kRGBWDefaultColorTemp, FASTLED_EXPERIMENTAL_ESP32_RGBW_MODE));
+        }
+#endif
+        pinMode(pin, OUTPUT);
+    }
 
-    #if NUM_CHANNELS >= 4 && LED_PIN3 >= 0
-        ADD_CHANNEL(3);
-    #endif
-
-    #if NUM_CHANNELS >= 5 && LED_PIN4 >= 0
-        ADD_CHANNEL(4);
-    #endif
-
-    #if NUM_CHANNELS >= 6 && LED_PIN5 >= 0
-        ADD_CHANNEL(5);
-    #endif
-
-    #if NUM_CHANNELS >= 7 && LED_PIN6 >= 0
-        ADD_CHANNEL(6);
-    #endif
-
-    #if NUM_CHANNELS >= 8 && LED_PIN7 >= 0
-        ADD_CHANNEL(7);
-    #endif
-
-    #ifdef POWER_LIMIT_MW
-        set_max_power_in_milliwatts(POWER_LIMIT_MW);                // Set brightness limit
-    #endif
+#ifdef POWER_LIMIT_MW
+    set_max_power_in_milliwatts(POWER_LIMIT_MW);
+#endif
 }
 
 WS281xGFX::WS281xGFX(size_t w, size_t h) : GFXBase(w, h)
@@ -111,11 +122,6 @@ WS281xGFX::~WS281xGFX()
 
 void WS281xGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devices)
 {
-    // We don't support more than 8 parallel channels
-    #if NUM_CHANNELS > 8
-        #error The maximum value of NUM_CHANNELS (number of parallel channels) is 8
-    #endif
-
     for (int i = 0; i < NUM_CHANNELS; i++)
     {
         debugW("Allocating WS281xGFX for channel %d", i);
