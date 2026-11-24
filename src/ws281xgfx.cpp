@@ -72,10 +72,14 @@ void WS281xGFX::AddLEDs(std::vector<std::shared_ptr<GFXBase>>& devices)
         LED_PIN7,
 #endif
     };
+    constexpr size_t kDefaultPinCount = sizeof(defaultPins) / sizeof(defaultPins[0]);
+
+    if constexpr (kDefaultPinCount == 0)
+        return;
 
     auto timing = fl::makeTimingConfig<fl::TIMING_WS2812_800KHZ>();
 
-    for (size_t ch = 0; ch < devices.size() && ch < std::size(defaultPins); ++ch)
+    for (size_t ch = 0; ch < devices.size() && ch < kDefaultPinCount; ++ch)
     {
         int pin = defaultPins[ch];
         if (pin < 0)
