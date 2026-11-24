@@ -689,12 +689,22 @@ static void DoStatusLog(const cli_argv& argv)
 template <typename F>
 static void StreamToCli(F &&fn)
 {
-    char *buf = nullptr;
-    size_t size = 0;
-    FILE *f = open_memstream(&buf, &size);
+    FILE *f = funopen(
+        nullptr,
+        nullptr,
+        [](void *, const char *buf, int size) -> int {
+            if (size > 0)
+            {
+                cli_write(std::string_view(buf, static_cast<size_t>(size)));
+            }
+            return size;
+        },
+        nullptr,
+        nullptr);
+
     if (!f)
     {
-        cli_printf("Error: Insufficient memory to buffer output stream.\n");
+        cli_printf("Error: Insufficient memory to open output stream.\n");
         fn(stdout);
         return;
     }
@@ -704,60 +714,21 @@ static void StreamToCli(F &&fn)
     fn(f);
     fclose(f);
     stdout = old_stdout;
-
-    if (buf)
-    {
-        cli_write(std::string_view(buf, size));
-        free(buf);
-    }
 }
 
 static void DoHeap(const cli_argv & = {})
 {
-    char *buf = nullptr;
-    size_t size = 0;
-    FILE *f = open_memstream(&buf, &size);
-    if (!f)
-    {
-        // Low-memory stack-buffered summary if heap is too exhausted for memstream
-        multi_heap_info_t info;
-        heap_caps_get_info(&info, MALLOC_CAP_DEFAULT);
-        cli_printf("Heap Summary (MALLOC_CAP_DEFAULT):\n");
-        cli_printf("  Free space       : %zu bytes (largest block: %zu bytes)\n", info.total_free_bytes, info.largest_free_block);
-        cli_printf("  Allocated space  : %zu bytes\n", info.total_allocated_bytes);
-        cli_printf("  Min ever free    : %zu bytes\n", info.minimum_free_bytes);
-        cli_printf("  Blocks           : %zu allocated, %zu free (%zu total)\n", info.allocated_blocks, info.free_blocks, info.total_blocks);
+    StreamToCli([](FILE *f) {
+        fprintf(f, "--- Default Heap (MALLOC_CAP_DEFAULT) ---\n");
+        heap_caps_print_heap_info(MALLOC_CAP_DEFAULT);
 #if USE_PSRAM
         if (psramFound())
         {
-            heap_caps_get_info(&info, MALLOC_CAP_SPIRAM);
-            cli_printf("PSRAM Summary (MALLOC_CAP_SPIRAM):\n");
-            cli_printf("  Free space       : %zu bytes (largest block: %zu bytes)\n", info.total_free_bytes, info.largest_free_block);
-            cli_printf("  Allocated space  : %zu bytes\n", info.total_allocated_bytes);
+            fprintf(f, "\n--- PSRAM (External SPIRAM) ---\n");
+            heap_caps_print_heap_info(MALLOC_CAP_SPIRAM);
         }
 #endif
-        return;
-    }
-
-    FILE *old_stdout = stdout;
-    stdout = f;
-    fprintf(stdout, "--- Default Heap (MALLOC_CAP_DEFAULT) ---\n");
-    heap_caps_print_heap_info(MALLOC_CAP_DEFAULT);
-#if USE_PSRAM
-    if (psramFound())
-    {
-        fprintf(stdout, "\n--- PSRAM (External SPIRAM) ---\n");
-        heap_caps_print_heap_info(MALLOC_CAP_SPIRAM);
-    }
-#endif
-    fclose(f);
-    stdout = old_stdout;
-
-    if (buf)
-    {
-        cli_write(std::string_view(buf, size));
-        free(buf);
-    }
+    });
 }
 
 static void DoGpio(const cli_argv &argv)
