@@ -31,18 +31,22 @@
 #include <cctype>
 #include <charconv>
 #include <cstring>
+#include <driver/gpio.h>
 #include <esp_heap_caps.h>
+#include <esp_intr_alloc.h>
 #include <esp_log.h>
 #include <esp_partition.h>
 #include <esp_system.h>
 #include <esp_timer.h>
+#include <esp_vfs.h>
 #if ENABLE_WIFI
 #include <WiFi.h>
 #endif
 #include <freertos/FreeRTOS.h>
-
 #include <freertos/task.h>
 #include <optional>
+#include <soc/soc_caps.h>
+#include <stdio.h>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -160,6 +164,27 @@ bool ContainsInsensitive(std::string_view haystack, std::string_view needle)
 
 
 //
+// Number Parsing Helpers
+// Safe for non-null-terminated string_views, zero allocations.
+//
+template <typename T = int>
+static std::optional<T> ParseInt(std::string_view str, int base = 10)
+{
+    while (!str.empty() && std::isspace(static_cast<unsigned char>(str.front())))
+        str.remove_prefix(1);
+
+    if (str.empty())
+        return std::nullopt;
+
+    T val{};
+    auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), val, base);
+    if (ec != std::errc() || ptr != str.data() + str.size())
+        return std::nullopt;
+
+    return val;
+}
+
+//
 // Registration
 //
 void RegisterCommand(const command *cmd)
@@ -223,6 +248,14 @@ static void PrintHelp(const cli_argv &argv)
 // Falls back to Broadcast if called from outside a RunCommand context.
 //
 static thread_local std::shared_ptr<ConsoleSession> _activeSession;
+
+void cli_write(std::string_view text)
+{
+    if (_activeSession)
+        _activeSession->WriteText(text);
+    else
+        ConsoleManager::Instance().Broadcast(text);
+}
 
 //
 // Parse and run cmd_line. Zero copies or allocations.
@@ -355,18 +388,15 @@ static std::optional<size_t> ResolveEffect(std::string_view arg)
     auto& effectManager = g_ptrSystem->GetEffectManager();
 
     // Try as index first
-    // Try as index first
-    size_t val = 0;
-    auto [ptr, ec] = std::from_chars(arg.begin(), arg.end(), val);
-    if (ec == std::errc() && ptr == arg.end())
+    if (auto val = ParseInt<size_t>(arg))
     {
-        if (val < effectManager.EffectCount())
+        if (*val < effectManager.EffectCount())
         {
-            return val;
+            return *val;
         }
         else
         {
-            cli_printf("Error: Effect index %zu out of range (0-%u)\n", val, effectManager.EffectCount() - 1);
+            cli_printf("Error: Effect index %zu out of range (0-%u)\n", *val, effectManager.EffectCount() - 1);
             return std::nullopt;
         }
     }
@@ -512,12 +542,14 @@ static void DoCat(const cli_argv &argv)
         return;
     }
 
-    char buf[65]; // +1 for null terminator, 64 chars per chunk
+    char buf[256];
     while (file.available())
     {
-        size_t len = file.readBytes(buf, sizeof(buf) - 1);
-        buf[len] = 0;
-        cli_printf("%s", buf);
+        size_t len = file.readBytes(buf, sizeof(buf));
+        if (len > 0)
+        {
+            cli_write(std::string_view(buf, len));
+        }
     }
     // cli_printf("\n"); // Optional: Ensure newline? Left raw for now.
 
@@ -645,7 +677,8 @@ static void DoSetPanic(const cli_argv& argv)
 static void DoDmesg(const cli_argv&)
 {
     ConsoleManager::Instance().PrintDmesg([](const std::string& line) {
-        cli_printf("%s\n", line.c_str());
+        cli_write(line);
+        cli_write("\n");
     });
 }
 
@@ -675,41 +708,132 @@ static void DoStatusLog(const cli_argv& argv)
     }
 }
 
-static void DoHeap(const cli_argv &)
+template <typename F>
+static void StreamToCli(F &&fn)
 {
-    char *buf = nullptr;
-    size_t size = 0;
-    FILE *f = open_memstream(&buf, &size);
-    if (f)
+    FILE *f = funopen(
+        nullptr,
+        nullptr,
+        [](void *, const char *buf, int size) -> int {
+            if (size > 0)
+            {
+                cli_write(std::string_view(buf, static_cast<size_t>(size)));
+            }
+            return size;
+        },
+        nullptr,
+        nullptr);
+
+    if (!f)
     {
-        FILE *old_stdout = stdout;
-        stdout = f;
+        cli_printf("Error: Insufficient memory to open output stream.\n");
+        fn(stdout);
+        return;
+    }
+
+    FILE *old_stdout = stdout;
+    stdout = f;
+    fn(f);
+    fclose(f);
+    stdout = old_stdout;
+}
+
+static void DoHeap(const cli_argv & = {})
+{
+    StreamToCli([](FILE *f) {
+        fprintf(f, "--- Default Heap (MALLOC_CAP_DEFAULT) ---\n");
         heap_caps_print_heap_info(MALLOC_CAP_DEFAULT);
 #if USE_PSRAM
         if (psramFound())
         {
+            fprintf(f, "\n--- PSRAM (External SPIRAM) ---\n");
             heap_caps_print_heap_info(MALLOC_CAP_SPIRAM);
         }
 #endif
-        fclose(f);
-        stdout = old_stdout;
+    });
+}
 
-        if (buf)
+static bool TryParseGpioPin(std::string_view token, int &outPin)
+{
+    auto pin = ParseInt<int>(token);
+    if (!pin || *pin < 0 || *pin >= SOC_GPIO_PIN_COUNT || !GPIO_IS_VALID_GPIO(*pin))
+        return false;
+
+    outPin = *pin;
+    return true;
+}
+
+static void DoGpio(const cli_argv &argv)
+{
+    uint64_t mask = SOC_GPIO_VALID_GPIO_MASK;
+    if (argv.size() > 1)
+    {
+        int pin = -1;
+        if (!TryParseGpioPin(argv[1], pin))
         {
-            cli_printf("%s", buf);
-            free(buf);
+            cli_printf("Invalid GPIO pin: '%.*s'\n", (int)argv[1].size(), argv[1].data());
+            return;
         }
+        mask = (1ULL << pin);
     }
+
+    StreamToCli([mask](FILE *f) {
+        gpio_dump_io_configuration(f, mask);
+    });
+}
+
+static void DoDump(const cli_argv &argv)
+{
+    if (argv.size() < 2)
+    {
+        cli_printf("Usage: dump [fds|gpio [pin]|heap|intr|tasks|timers]\n");
+        return;
+    }
+
+    std::string_view sub = argv[1];
+    if (StringCompareInsensitive(sub, "gpio"))
+    {
+        cli_argv gpio_argv(argv.begin() + 1, argv.end());
+        DoGpio(gpio_argv);
+    }
+    else if (StringCompareInsensitive(sub, "heap"))
+    {
+        DoHeap();
+    }
+    else if (StringCompareInsensitive(sub, "intr") || StringCompareInsensitive(sub, "interrupts"))
+    {
+        StreamToCli([](FILE *f) {
+            esp_intr_dump(f);
+        });
+    }
+    else if (StringCompareInsensitive(sub, "timers"))
+    {
+        StreamToCli([](FILE *f) {
+            esp_timer_dump(f);
+        });
+    }
+    else if (StringCompareInsensitive(sub, "fds") || StringCompareInsensitive(sub, "vfs"))
+    {
+        StreamToCli([](FILE *f) {
+            fprintf(f, "--- Open File Descriptors ---\n");
+            esp_vfs_dump_fds(f);
+            fprintf(f, "\n--- Registered VFS Mounts ---\n");
+            esp_vfs_dump_registered_paths(f);
+        });
+    }
+#if configUSE_TRACE_FACILITY && configUSE_STATS_FORMATTING_FUNCTIONS
+    else if (StringCompareInsensitive(sub, "tasks"))
+    {
+        char buf[1024];
+        vTaskList(buf);
+        cli_write("\nName          State      Prio  Stack  Num Core\n");
+        cli_write(buf);
+    }
+#endif
     else
     {
-        // Fallback to our clean summary if open_memstream fails
-        multi_heap_info_t info;
-        heap_caps_get_info(&info, MALLOC_CAP_DEFAULT);
-        cli_printf("Heap Summary (MALLOC_CAP_DEFAULT):\n");
-        cli_printf("  Free space       : %zu bytes (largest block: %zu bytes)\n", info.total_free_bytes, info.largest_free_block);
-        cli_printf("  Allocated space  : %zu bytes\n", info.total_allocated_bytes);
-        cli_printf("  Min ever free    : %zu bytes\n", info.minimum_free_bytes);
-        cli_printf("  Blocks           : %zu allocated, %zu free (%zu total)\n", info.allocated_blocks, info.free_blocks, info.total_blocks);
+        cli_printf("Unknown dump target: '%.*s'\n", (int)sub.size(), sub.data());
+        cli_printf("Usage: dump [fds|gpio [pin]|heap|intr|tasks|timers]\n");
     }
 }
 
@@ -718,8 +842,10 @@ static const command core_commands[] = {
      [](const cli_argv &argv) {
          if (argv.size() > 1)
          {
-             int val = atoi(std::string(argv[1]).c_str());
-             g_ptrSystem->GetDeviceConfig().SetBrightness(val);
+             if (auto val = ParseInt<int>(argv[1]))
+                 g_ptrSystem->GetDeviceConfig().SetBrightness(std::clamp(*val, 0, 255));
+             else
+                 cli_printf("Invalid brightness: '%.*s'\n", (int)argv[1].size(), argv[1].data());
          }
          cli_printf("Brightness: %lu\n", (unsigned long)g_ptrSystem->GetDeviceConfig().GetBrightness());
      }},
@@ -756,16 +882,23 @@ static const command core_commands[] = {
              CRGB newColor = g_ptrSystem->GetDeviceConfig().GlobalColor();
              if (argv.size() == 2) // Assume hex if one arg
              {
-                 std::string hexStr(argv[1]);
-                 if (hexStr[0] == '#') hexStr.erase(0, 1);
-                 uint32_t val = strtol(hexStr.c_str(), nullptr, 16);
-                 newColor = CRGB(val);
+                 std::string_view hexStr = argv[1];
+                 if (!hexStr.empty() && hexStr.front() == '#')
+                     hexStr.remove_prefix(1);
+                 if (auto val = ParseInt<uint32_t>(hexStr, 16))
+                     newColor = CRGB(*val);
+                 else
+                     cli_printf("Invalid hex color: '%.*s'\n", (int)argv[1].size(), argv[1].data());
              }
              else if (argv.size() == 4) // Assume R G B
              {
-                 newColor.r = atoi(std::string(argv[1]).c_str());
-                 newColor.g = atoi(std::string(argv[2]).c_str());
-                 newColor.b = atoi(std::string(argv[3]).c_str());
+                 auto r = ParseInt<uint8_t>(argv[1]);
+                 auto g = ParseInt<uint8_t>(argv[2]);
+                 auto b = ParseInt<uint8_t>(argv[3]);
+                 if (r && g && b)
+                     newColor = CRGB(*r, *g, *b);
+                 else
+                     cli_printf("Invalid RGB components.\n");
              }
              g_ptrSystem->GetDeviceConfig().SetGlobalColor(newColor);
          }
@@ -786,7 +919,9 @@ static const command core_commands[] = {
         }
      }},
     {"dmesg", "Display the circular log buffer", "dmesg:", DoDmesg},
+    {"dump", "[fds|gpio|heap|intr|tasks|timers] Dump diagnostic state", nullptr, DoDump},
     {"effect", "[next|prev|name|index] Show/change current effect", "Effects.", DoEffectCommand}, // Function pointer
+    {"gpio", "[pin] Display GPIO configuration and muxing", "GPIO configuration:", DoGpio},
     {"heap", "Display heap memory info", "Heap usage:", DoHeap},
     {"help", "Display command line options", "Displaying system help",
      PrintHelp}, // Function pointer logic requires PrintHelp signature match. It does.
@@ -906,10 +1041,10 @@ static const command core_commands[] = {
         if (argv.size() > 1) {
             if (StringCompareInsensitive(argv[1], "on")) g_Analyzer.SetSimulateBeat(true);
             else if (StringCompareInsensitive(argv[1], "off")) g_Analyzer.SetSimulateBeat(false);
-            else if (isdigit(argv[1][0])) g_Analyzer.SetSimulateBPM(atoi(std::string(argv[1]).c_str()));
+            else if (auto bpm = ParseInt<int>(argv[1])) g_Analyzer.SetSimulateBPM(*bpm);
         }
         if (argv.size() > 2) {
-             g_Analyzer.SetSimulateBPM(atoi(std::string(argv[2]).c_str()));
+             if (auto bpm = ParseInt<int>(argv[2])) g_Analyzer.SetSimulateBPM(*bpm);
         }
         cli_printf("SimBeat: %s  BPM: %d\n", g_Analyzer.GetSimulateBeat() ? "ON" : "OFF", g_Analyzer.GetSimulateBPM());
      }},
@@ -972,7 +1107,8 @@ static const command core_commands[] = {
      [](const cli_argv &) {
          char buf[1024];
          vTaskList(buf);
-         cli_printf("\nName          State      Prio  Stack  Num Core\n%s", buf);
+         cli_write("\nName          State      Prio  Stack  Num Core\n");
+         cli_write(buf);
      }},
 #endif
     {"tempoffset", "[degrees] View or set ambient temperature calibration offset (°F)", "Temperature offset:",
@@ -1088,10 +1224,7 @@ void cli_printf(const char *fmt, ...)
 
     // Direct output to the session that originated the current command, if any.
     // This prevents commands run on telnet from also spewing on serial and vice versa.
-    if (_activeSession)
-        _activeSession->WriteText(std::string_view(buf, static_cast<size_t>(len)));
-    else
-        ConsoleManager::Instance().Broadcast(std::string_view(buf, static_cast<size_t>(len)));
+    cli_write(std::string_view(buf, static_cast<size_t>(len)));
 
     if (must_free)
         free(buf);

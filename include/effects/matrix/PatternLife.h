@@ -64,6 +64,7 @@
 #ifndef PatternLife_H
 #define PatternLife_H
 
+#include <algorithm>
 #include <bitset>
 
 extern "C"
@@ -119,8 +120,6 @@ extern "C"
 class Cell
 {
 public:
-  uint8_t alive : 1;
-  uint8_t prev  : 1;
   uint8_t hue;
   uint8_t brightness;
 };
@@ -134,8 +133,9 @@ class PatternLife : public EffectWithId<PatternLife>
 {
 private:
     Cell world[MATRIX_WIDTH][MATRIX_HEIGHT]{};
+    uint8_t alive[2][MATRIX_WIDTH][MATRIX_HEIGHT]{};
+    uint8_t currentGen = 0;
     uint32_t checksums[CRC_LENGTH]{};
-    bool aliveData[MATRIX_WIDTH * MATRIX_HEIGHT]{};
     int iChecksum = 0;
     uint32_t bStuckInLoop = 0;
     unsigned int density = 50;
@@ -207,14 +207,14 @@ private:
         for (int i = 0; i < MATRIX_WIDTH; i++) {
             for (int j = 0; j < MATRIX_HEIGHT; j++) {
                 if ((rand() % 100) < density) {
-                    world[i][j].alive = 1;
+                    alive[currentGen][i][j] = 1;
                     world[i][j].brightness = 128;
                 }
                 else {
-                    world[i][j].alive = 0;
+                    alive[currentGen][i][j] = 0;
                     world[i][j].brightness = 0;
                 }
-                world[i][j].prev = world[i][j].alive;
+                alive[1 - currentGen][i][j] = alive[currentGen][i][j];
                 world[i][j].hue = 0;
             }
         }
@@ -223,15 +223,16 @@ private:
             checksums[i] = 0xFFFFFFF;
     }
 
-    int neighbours(int x, int y) {
-        return (world[(x + 1) % MATRIX_WIDTH][y].prev) +
-            (world[x][(y + 1) % MATRIX_HEIGHT].prev) +
-            (world[(x + MATRIX_WIDTH - 1) % MATRIX_WIDTH][y].prev) +
-            (world[x][(y + MATRIX_HEIGHT - 1) % MATRIX_HEIGHT].prev) +
-            (world[(x + 1) % MATRIX_WIDTH][(y + 1) % MATRIX_HEIGHT].prev) +
-            (world[(x + MATRIX_WIDTH - 1) % MATRIX_WIDTH][(y + 1) % MATRIX_HEIGHT].prev) +
-            (world[(x + MATRIX_WIDTH - 1) % MATRIX_WIDTH][(y + MATRIX_HEIGHT - 1) % MATRIX_HEIGHT].prev) +
-            (world[(x + 1) % MATRIX_WIDTH][(y + MATRIX_HEIGHT - 1) % MATRIX_HEIGHT].prev);
+    inline int neighbours(int x, int y, int xm1, int xp1, int ym1, int yp1) const {
+        const auto& cur = alive[currentGen];
+        return cur[xp1][y] +
+               cur[x][yp1] +
+               cur[xm1][y] +
+               cur[x][ym1] +
+               cur[xp1][yp1] +
+               cur[xm1][yp1] +
+               cur[xm1][ym1] +
+               cur[xp1][ym1];
     }
 
 public:
@@ -266,21 +267,15 @@ public:
 
         // We maintain a scrolling window of the last N crcs and if the current crc makes it all
         // the way down to the bottom half we assume we're stuck in a loop and restart.
-        // We have to first extract the alive bits alone because we don't want the hue and brightness
-        // data to mess with the CRC.
+        // alive array is contiguous in memory, so we compute CRC directly with zero allocation/copy.
 
-        for (int i = 0; i < MATRIX_WIDTH; i++)
-            for (int j = 0; j < MATRIX_HEIGHT; j++)
-                aliveData[i * MATRIX_HEIGHT + j] = world[i][j].alive;
-
-        auto crc = uzlib_crc32(aliveData, MATRIX_WIDTH * MATRIX_HEIGHT * sizeof(bool), 0xffffffff);
-        for (int i = 0; i < CRC_LENGTH - 1; i++)
-            checksums[i] = checksums[i+1];
+        auto crc = uzlib_crc32(reinterpret_cast<const uint8_t*>(&alive[currentGen][0][0]),
+                               MATRIX_WIDTH * MATRIX_HEIGHT, 0xffffffff);
+        std::copy(checksums + 1, checksums + CRC_LENGTH, checksums);
         checksums[CRC_LENGTH - 1] = crc;
 
-
         // Look for any occurrences of the current CRC in the first half of the window, which would mean
-        // a loop has occurred.  If
+        // a loop has occurred.
 
         if (bStuckInLoop)
         {
@@ -297,7 +292,7 @@ public:
 
             for (int x = 0; x < MATRIX_WIDTH; x++)
                 for (int y = 0; y < MATRIX_HEIGHT; y++)
-                        world[x][y].brightness *= 0.9;
+                    world[x][y].brightness *= 0.9;
             if (elapsed > resetTime)
                 Reset();
         }
@@ -315,39 +310,41 @@ public:
             }
         }
 
-        // Birth and death cycle
-        for (int x = 0; x < MATRIX_WIDTH; x++) {
-            for (int y = 0; y < MATRIX_HEIGHT; y++) {
-                // Default is for cell to stay the same
-                if (world[x][y].brightness > 0 && world[x][y].prev == 0)
-                  world[x][y].brightness *= 0.75;
+        // Birth and death cycle using ping-pong buffers and zero-modulo coordinate arithmetic
+        const uint8_t nextGen = 1 - currentGen;
 
-                int count = neighbours(x, y);
-                if (count == 3 && world[x][y].prev == 0) {
+        for (int x = 0; x < MATRIX_WIDTH; x++) {
+            const int xm1 = (x == 0) ? MATRIX_WIDTH - 1 : x - 1;
+            const int xp1 = (x == MATRIX_WIDTH - 1) ? 0 : x + 1;
+
+            for (int y = 0; y < MATRIX_HEIGHT; y++) {
+                const int ym1 = (y == 0) ? MATRIX_HEIGHT - 1 : y - 1;
+                const int yp1 = (y == MATRIX_HEIGHT - 1) ? 0 : y + 1;
+
+                const uint8_t isAlive = alive[currentGen][x][y];
+
+                // Default is for dying cell brightness to fade
+                if (world[x][y].brightness > 0 && isAlive == 0)
+                    world[x][y].brightness *= 0.75;
+
+                int count = neighbours(x, y, xm1, xp1, ym1, yp1);
+                if (count == 3 && isAlive == 0) {
                     // A new cell is born
-                    world[x][y].alive = 1;
+                    alive[nextGen][x][y] = 1;
                     world[x][y].hue += 1;
                     world[x][y].brightness = 255;
-                } else if ((count < 2 || count > 3) && world[x][y].prev == 1) {
+                } else if ((count < 2 || count > 3) && isAlive == 1) {
                     // Cell dies
-                    world[x][y].alive = 0;
+                    alive[nextGen][x][y] = 0;
                     world[x][y].brightness = 0;
+                } else {
+                    alive[nextGen][x][y] = isAlive;
                 }
             }
         }
 
-        // Copy next generation into place
-
-        int cCount = 0;
-
-        for (int x = 0; x < MATRIX_WIDTH; x++) {
-            for (int y = 0; y < MATRIX_HEIGHT; y++) {
-                if (world[x][y].prev != world[x][y].alive)
-                    cCount++;
-                world[x][y].prev = world[x][y].alive;
-            }
-        }
-
+        // Flip buffers in O(1) time
+        currentGen = nextGen;
         cGeneration++;
     }
 };

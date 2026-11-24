@@ -239,6 +239,103 @@ def exact_pin(spec):
     return match.group(1) if match else None
 
 
+def prune_fastled(lib_path):
+    """Prune FastLED's multimedia/codec/asio bloat down to core LED drivers.
+
+    FastLED 3.10+ unconditionally compiles 37 unity translation units (fl/build/*.cpp),
+    dragging in MPEG-1, H.264, MP3, Vorbis, libnsgif, TJpg_Decoder, a custom Boost.Asio
+    TCP/IP stack, and Web UI.
+    This rewrites library.json srcFilter to only compile the 11 load-bearing units,
+    replaces fl/stl/asio/_build.cpp.hpp with an empty stub, and adds fl.audio_stub.cpp
+    to satisfy CFastLED::add() without pulling in the audio/codec avalanche.
+    """
+    marker_path = os.path.join(lib_path, ".nd_pruned")
+    prune_version = "v1"
+    if os.path.exists(marker_path):
+        try:
+            with open(marker_path, "r", encoding="utf-8") as f:
+                if f.read().strip() == prune_version:
+                    return
+        except OSError:
+            pass
+
+    print("[Shared-Libs] Pruning FastLED multimedia/codec/asio bloat...", file=sys.stderr)
+
+    # 1. Stub fl/stl/asio/_build.cpp.hpp to disable rogue TCP/HTTP parser in STL
+    asio_build = os.path.join(lib_path, "src", "fl", "stl", "asio", "_build.cpp.hpp")
+    if os.path.exists(os.path.dirname(asio_build)):
+        with open(asio_build, "w", encoding="utf-8") as f:
+            f.write("// Pruned by NightDriver: Asio/HTTP stack not needed by LED drivers\n")
+
+    # 2. Add fl.audio_stub.cpp to satisfy CFastLED::add() without audio/codec deps
+    stub_path = os.path.join(lib_path, "src", "fl", "build", "fl.audio_stub.cpp")
+    os.makedirs(os.path.dirname(stub_path), exist_ok=True)
+    with open(stub_path, "w", encoding="utf-8") as f:
+        f.write(
+            '/// @file fl.audio_stub.cpp\n'
+            '/// Minimal stub for FastLED AudioManager to satisfy CFastLED::add()\n'
+            '#include "fl/audio/audio_manager.h"\n\n'
+            'namespace fl {\n'
+            'namespace audio {\n\n'
+            'AudioManager &AudioManager::instance() FL_NO_EXCEPT {\n'
+            '    static AudioManager sInstance;\n'
+            '    return sInstance;\n'
+            '}\n\n'
+            'shared_ptr<Processor> AudioManager::add(const Config &) FL_NO_EXCEPT {\n'
+            '    return nullptr;\n'
+            '}\n\n'
+            'shared_ptr<Processor> AudioManager::add(shared_ptr<IInput>) FL_NO_EXCEPT {\n'
+            '    return nullptr;\n'
+            '}\n\n'
+            'shared_ptr<Processor> AudioManager::add(UIAudio &) FL_NO_EXCEPT {\n'
+            '    return nullptr;\n'
+            '}\n\n'
+            'void AudioManager::remove(shared_ptr<Processor>) FL_NO_EXCEPT {}\n\n'
+            'shared_ptr<Processor> &AudioManager::processor() FL_NO_EXCEPT {\n'
+            '    static shared_ptr<Processor> sProc;\n'
+            '    return sProc;\n'
+            '}\n\n'
+            '} // namespace audio\n'
+            '} // namespace fl\n'
+        )
+
+    # 3. Whitelist core compilation units in library.json
+    lib_json_path = os.path.join(lib_path, "library.json")
+    if os.path.exists(lib_json_path):
+        try:
+            with open(lib_json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            data["build"]["srcFilter"] = [
+                "-<**/*.cpp>",
+                "+<fl/build/src.cpp>",
+                "+<fl/build/platforms+.cpp>",
+                "+<fl/build/fl.channels+.cpp>",
+                "+<fl/build/fl.chipsets+.cpp>",
+                "+<fl/build/fl.gfx+.cpp>",
+                "+<fl/build/fl.log+.cpp>",
+                "+<fl/build/fl.math+.cpp>",
+                "+<fl/build/fl.stl+.cpp>",
+                "+<fl/build/fl.system+.cpp>",
+                "+<fl/build/fl.task+.cpp>",
+                "+<fl/build/fl.audio_stub.cpp>",
+                "+<*.h>",
+                "+<platforms/esp/32/drivers/gpio_isr_rx/*.S>",
+            ]
+
+            with open(lib_json_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4)
+        except Exception as e:
+            print(f"[Shared-Libs] Error: failed to patch FastLED library.json: {e}", file=sys.stderr)
+            return
+
+    try:
+        with open(marker_path, "w", encoding="utf-8") as f:
+            f.write(prune_version + "\n")
+    except OSError as e:
+        print(f"[Shared-Libs] Warning: failed to write prune marker: {e}", file=sys.stderr)
+
+
 # Simple lock mechanism to prevent race conditions when invoked concurrently by PIO
 def acquire_lock(lock_path, timeout=300):
     start = time.time()
@@ -320,11 +417,19 @@ try:
                 # later run can tell whether the tree on disk still matches.
                 os.makedirs(lib_path, exist_ok=True)
                 write_version_marker(version_file, lib, read_resolved_version(lib_path))
+
+                if clean_name == "FastLED":
+                    prune_fastled(lib_path)
             except Exception as e:
                 print(f"[Shared-Libs] Error: failed to install dependency {lib}: {e}", file=sys.stderr)
                 safe_rmtree(lib_path)
                 safe_rmtree(expected_path)
                 sys.exit(1)
+
+    # Ensure FastLED on disk is pruned even if it was installed in a previous run
+    fastled_dir = os.path.join(TARGET_DIR, "FastLED")
+    if os.path.exists(fastled_dir):
+        prune_fastled(fastled_dir)
 finally:
     release_lock(lock_fd, lock_path)
 

@@ -49,7 +49,7 @@ class PatternSMStarDeep : public EffectWithId<PatternSMStarDeep>
     PatternSMStarDeep(const JsonObjectConst &jsonObject) : EffectWithId<PatternSMStarDeep>(jsonObject) {}
 
     // Draws a multi-point star.
-    // This code can draw outside of the matrix boundaries, but DrawStarLine() is expected to handle clipping.
+    // This code can draw outside of the matrix boundaries, but DrawStarLine() handles clipping.
     void DrawStar(int16_t centerX, int16_t centerY, int16_t outerRadius, int16_t innerRadius, uint8_t numPoints, uint8_t angleOffset,
                   uint8_t colorIndex)
     {
@@ -58,22 +58,26 @@ class PatternSMStarDeep : public EffectWithId<PatternSMStarDeep>
         const CRGB starColor = g()->IsPalettePaused() ? g()->ColorFromCurrentPalette(colorIndex) : ColorFromPalette(*curPalette, colorIndex);
         const uint8_t angle_step = 255 / numPoints;
 
+        // Precompute the initial inner vertex (half-step before the first point)
+        const uint8_t first_inner_angle = static_cast<uint8_t>(-angleOffset - angle_step / 2);
+        int16_t prev_inner_x = centerX + ((innerRadius * (static_cast<int16_t>(sin8(first_inner_angle)) - 128)) / 128);
+        int16_t prev_inner_y = centerY + ((innerRadius * (static_cast<int16_t>(cos8(first_inner_angle)) - 128)) / 128);
+
         for (int i = 0; i < numPoints; i++)
         {
-            const uint8_t outer_angle = i * angle_step - angleOffset;
-            const int16_t outer_x = centerX + ((outerRadius * (sin8(outer_angle) - 128.0f)) / 128.0f);
-            const int16_t outer_y = centerY + ((outerRadius * (cos8(outer_angle) - 128.0f)) / 128.0f);
+            const uint8_t outer_angle = static_cast<uint8_t>(i * angle_step - angleOffset);
+            const int16_t outer_x = centerX + ((outerRadius * (static_cast<int16_t>(sin8(outer_angle)) - 128)) / 128);
+            const int16_t outer_y = centerY + ((outerRadius * (static_cast<int16_t>(cos8(outer_angle)) - 128)) / 128);
 
-            const uint8_t inner_angle_1 = outer_angle + angle_step / 2;
-            const int16_t inner_x_1 = centerX + ((innerRadius * (sin8(inner_angle_1) - 128.0f)) / 128.0f);
-            const int16_t inner_y_1 = centerY + ((innerRadius * (cos8(inner_angle_1) - 128.0f)) / 128.0f);
+            const uint8_t next_inner_angle = static_cast<uint8_t>(outer_angle + angle_step / 2);
+            const int16_t next_inner_x = centerX + ((innerRadius * (static_cast<int16_t>(sin8(next_inner_angle)) - 128)) / 128);
+            const int16_t next_inner_y = centerY + ((innerRadius * (static_cast<int16_t>(cos8(next_inner_angle)) - 128)) / 128);
 
-            const uint8_t inner_angle_2 = outer_angle - angle_step / 2;
-            const int16_t inner_x_2 = centerX + ((innerRadius * (sin8(inner_angle_2) - 128.0f)) / 128.0f);
-            const int16_t inner_y_2 = centerY + ((innerRadius * (cos8(inner_angle_2) - 128.0f)) / 128.0f);
+            DrawStarLine(prev_inner_x, prev_inner_y, outer_x, outer_y, starColor);
+            DrawStarLine(outer_x, outer_y, next_inner_x, next_inner_y, starColor);
 
-            DrawStarLine(inner_x_1, inner_y_1, outer_x, outer_y, starColor);
-            DrawStarLine(inner_x_2, inner_y_2, outer_x, outer_y, starColor);
+            prev_inner_x = next_inner_x;
+            prev_inner_y = next_inner_y;
         }
     }
 
@@ -82,6 +86,12 @@ class PatternSMStarDeep : public EffectWithId<PatternSMStarDeep>
     // which differ from the standard g()->DrawLine().
     void DrawStarLine(int x1, int y1, int x2, int y2, CRGB color)
     {
+        // Trivial rejection if line segment is entirely off-screen
+        if ((x1 < 0 && x2 < 0) || (x1 >= MATRIX_WIDTH && x2 >= MATRIX_WIDTH) ||
+            (y1 < 0 && y2 < 0) || (y1 >= MATRIX_HEIGHT && y2 >= MATRIX_HEIGHT))
+        {
+            return;
+        }
         int x, y;
         int dx, dy;
         int err;
