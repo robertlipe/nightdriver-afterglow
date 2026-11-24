@@ -47,6 +47,7 @@
 #include "deviceconfig.h"
 #include "effectmanager.h"
 #include "jsonserializer.h"
+#include "string_utils.h"
 #include "systemcontainer.h"
 
 extern const char timezones_start[] asm("_binary_config_timezones_json_start");
@@ -71,11 +72,6 @@ extern const char timezones_start[] asm("_binary_config_timezones_json_start");
 // Generally speaking, one will also want to add logic to the webserver to retrieve and set the setting.
 
 namespace {
-
-bool EqualsIgnoreCase(std::string_view a, std::string_view b) noexcept
-{
-    return a.size() == b.size() && strncasecmp(a.data(), b.data(), a.size()) == 0;
-}
 
 struct ColorOrderEntry {
     std::string_view name;

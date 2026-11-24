@@ -128,39 +128,7 @@ static std::vector<std::string_view> Tokenize(std::string_view input)
     return output;
 }
 
-//
-// String Comparison
-//
-bool StringCompareInsensitive(std::string_view sv, const char *in_s)
-{
-    if (!in_s)
-        return false;
-    const unsigned char *s = (const unsigned char *)in_s;
-    for (unsigned char c : sv)
-    {
-        if (!*s || tolower(c) != tolower(*s))
-            return false;
-        s++;
-    }
-    return *s == '\0';
-}
 
-bool StringStartsWithInsensitive(std::string_view haystack, std::string_view needle)
-{
-    if (needle.length() > haystack.length())
-        return false;
-    return std::equal(needle.begin(), needle.end(), haystack.begin(),
-                      [](char ch1, char ch2) { return std::tolower(ch1) == std::tolower(ch2); });
-}
-
-bool ContainsInsensitive(std::string_view haystack, std::string_view needle)
-{
-    if (needle.empty())
-        return true;
-    auto it = std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end(),
-                          [](char ch1, char ch2) { return std::tolower(ch1) == std::tolower(ch2); });
-    return it != haystack.end();
-}
 
 
 //

@@ -29,6 +29,7 @@
 //---------------------------------------------------------------------------
 
 #include "globals.h"
+#include "string_utils.h"
 
 #include <string_view>
 #include <vector>
@@ -62,7 +63,9 @@ namespace DebugCLI
     };
 
     // Case-insensitive string comparison for commands.
-    bool StringCompareInsensitive(std::string_view sv, const char* s);
+    using ::StringCompareInsensitive;
+    using ::StringStartsWithInsensitive;
+    using ::ContainsInsensitive;
 
     // Register a single command.
     void RegisterCommand(const command* cmd);
