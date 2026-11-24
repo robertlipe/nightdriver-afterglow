@@ -77,11 +77,13 @@ namespace DebugCLI
         RegisterCommands(cmds, N);
     }
 
+    // Direct text output to the active console session (or broadcast fallback).
+    // Preferred over cli_printf for literal strings, usage blocks, and static notices
+    // to avoid vsnprintf stack buffers, heap allocation, and format parsing overhead.
+    void cli_write(std::string_view text);
+
     // printf-style output to all active console sessions
     void cli_printf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
-
-    // Direct text output to the active console session (or broadcast fallback)
-    void cli_write(std::string_view text);
 
     // Process a single byte of input from a specific session.
     void ProcessCLIByte(char c, std::shared_ptr<ConsoleSession> session);

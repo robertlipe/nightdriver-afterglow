@@ -110,7 +110,8 @@ NightDriverStrip is a comprehensive C++ firmware framework for the ESP32 microco
 ---
 
 ## Interactive Debugging & CLI
-Accessible via Serial (115200). core logic in `src/debug_cli.cpp`. Supports fuzzy effect matching and tab completion.
+Accessible via Serial (115200). Core logic in `src/debug_cli.cpp`. Supports fuzzy effect matching and tab completion.
+*   **Literal string output (`cli_write` vs `cli_printf`):** Prefer `cli_write(std::string_view)` over `cli_printf()` whenever outputting literal strings, usage text, banners, tables, or static notices. `cli_write()` sends the string view straight to `ConsoleSession::WriteText()`, avoiding `vsnprintf` stack buffering, heap allocations (`vasprintf`), and format string processing overhead.
 
 ---
 

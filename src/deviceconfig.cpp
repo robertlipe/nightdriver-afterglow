@@ -37,10 +37,12 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstring>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string_view>
+#include <strings.h>
 
 #include "deviceconfig.h"
 #include "effectmanager.h"
@@ -70,13 +72,9 @@ extern const char timezones_start[] asm("_binary_config_timezones_json_start");
 
 namespace {
 
-constexpr bool EqualsIgnoreCase(std::string_view a, std::string_view b) noexcept
+bool EqualsIgnoreCase(std::string_view a, std::string_view b) noexcept
 {
-    return a.size() == b.size() &&
-           std::equal(a.begin(), a.end(), b.begin(), [](char c1, char c2) {
-               return std::tolower(static_cast<unsigned char>(c1)) ==
-                      std::tolower(static_cast<unsigned char>(c2));
-           });
+    return a.size() == b.size() && strncasecmp(a.data(), b.data(), a.size()) == 0;
 }
 
 struct ColorOrderEntry {
@@ -113,38 +111,47 @@ constexpr auto kChipsets = std::to_array<ChipsetEntry>({
 
 const char* ChipsetToString(ChipsetType type)
 {
-    auto it = std::ranges::find_if(kChipsets, [type](const auto& e) {
-        return e.type == type;
-    });
-    return (it != kChipsets.end()) ? it->name.data() : "WS2812B";
+    for (const auto& e : kChipsets)
+    {
+        if (e.type == type)
+            return e.name.data();
+    }
+    return "WS2812B";
 }
 
 std::optional<ChipsetType> ParseChipsetType(std::string_view str)
 {
-    auto it = std::ranges::find_if(kChipsets, [str](const auto& e) {
+    for (const auto& e : kChipsets)
+    {
         if (EqualsIgnoreCase(e.name, str))
-            return true;
-        return std::ranges::any_of(e.aliases, [str](std::string_view alias) {
-            return EqualsIgnoreCase(alias, str);
-        });
-    });
-    return (it != kChipsets.end()) ? std::optional(it->type) : std::nullopt;
+            return e.type;
+        for (auto alias : e.aliases)
+        {
+            if (EqualsIgnoreCase(alias, str))
+                return e.type;
+        }
+    }
+    return std::nullopt;
 }
 
 const char* ColorOrderToString(EOrder order)
 {
-    auto it = std::ranges::find_if(kColorOrders, [order](const auto& e) {
-        return e.order == order;
-    });
-    return (it != kColorOrders.end()) ? it->name.data() : "GRB";
+    for (const auto& e : kColorOrders)
+    {
+        if (e.order == order)
+            return e.name.data();
+    }
+    return "GRB";
 }
 
 std::optional<EOrder> ParseColorOrder(std::string_view str)
 {
-    auto it = std::ranges::find_if(kColorOrders, [str](const auto& e) {
-        return EqualsIgnoreCase(e.name, str);
-    });
-    return (it != kColorOrders.end()) ? std::optional(it->order) : std::nullopt;
+    for (const auto& e : kColorOrders)
+    {
+        if (EqualsIgnoreCase(e.name, str))
+            return e.order;
+    }
+    return std::nullopt;
 }
 
 void DeviceConfig::SaveToJSON() const
@@ -284,24 +291,20 @@ bool DeviceConfig::DeserializeFromJSON(const JsonObjectConst& jsonObject, bool s
         for (JsonObjectConst stripObj : jsonObject[StripsTag].as<JsonArrayConst>())
         {
             StripConfig sc;
-            if (stripObj["pin"].is<int>())
-                sc.dataPin = stripObj["pin"].as<int>();
-            if (stripObj["clock"].is<int>())
-                sc.clockPin = stripObj["clock"].as<int>();
-            if (stripObj["length"].is<uint16_t>())
-                sc.length = stripObj["length"].as<uint16_t>();
-            if (stripObj["order"].is<const char*>())
+            sc.dataPin = stripObj["pin"] | -1;
+            sc.clockPin = stripObj["clock"] | -1;
+            sc.length = stripObj["length"] | static_cast<uint16_t>(60);
+            if (const char* orderStr = stripObj["order"])
             {
-                if (auto order = ParseColorOrder(stripObj["order"].as<const char*>()))
+                if (auto order = ParseColorOrder(orderStr))
                     sc.colorOrder = *order;
             }
-            if (stripObj["chipset"].is<const char*>())
+            if (const char* csStr = stripObj["chipset"])
             {
-                if (auto cs = ParseChipsetType(stripObj["chipset"].as<const char*>()))
+                if (auto cs = ParseChipsetType(csStr))
                     sc.chipset = *cs;
             }
-            if (stripObj["enabled"].is<bool>())
-                sc.enabled = stripObj["enabled"].as<bool>();
+            sc.enabled = stripObj["enabled"] | true;
             strips.push_back(sc);
         }
     }

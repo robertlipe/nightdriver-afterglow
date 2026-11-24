@@ -871,28 +871,29 @@ static void DoStrip(const cli_argv &argv)
 {
     auto &config = g_ptrSystem->GetDeviceConfig();
     const auto &strips = config.GetStrips();
+    static constexpr std::string_view kApplyNotice = " Run 'strip apply' to commit and restart.\n";
 
     auto printUsage = []() {
-        cli_printf("Usage:\n"
-                   "  strip [list]                              - List configured channels\n"
-                   "  strip set <ch> pin <pin>                  - Set data GPIO pin\n"
-                   "  strip set <ch> length <n>                 - Set pixel count\n"
-                   "  strip set <ch> order <RGB|GRB|...>        - Set color order\n"
-                   "  strip set <ch> chipset <WS2812B|WS2811|..>- Set chipset\n"
-                   "  strip set <ch> enable <on|off>            - Enable or disable channel\n"
-                   "  strip add <pin> <len> [order] [chipset]   - Add a new channel\n"
-                   "  strip remove <ch>                         - Remove a channel\n"
-                   "  strip apply                               - Save to /device.cfg and restart\n");
+        cli_write("Usage:\n"
+                  "  strip [list]                              - List configured channels\n"
+                  "  strip set <ch> pin <pin>                  - Set data GPIO pin\n"
+                  "  strip set <ch> length <n>                 - Set pixel count\n"
+                  "  strip set <ch> order <RGB|GRB|...>        - Set color order\n"
+                  "  strip set <ch> chipset <WS2812B|WS2811|..>- Set chipset\n"
+                  "  strip set <ch> enable <on|off>            - Enable or disable channel\n"
+                  "  strip add <pin> <len> [order] [chipset]   - Add a new channel\n"
+                  "  strip remove <ch>                         - Remove a channel\n"
+                  "  strip apply                               - Save to /device.cfg and restart\n");
     };
 
     auto printStripsTable = [&strips]() {
         if (strips.empty())
         {
-            cli_printf("No LED strips configured.\n");
+            cli_write("No LED strips configured.\n");
             return;
         }
-        cli_printf("Ch   Pin Clock Length Order   Chipset  Status\n");
-        cli_printf("--   --- ----- ------ -----   -------  ------\n");
+        cli_write("Ch   Pin Clock Length Order   Chipset  Status\n"
+                  "--   --- ----- ------ -----   -------  ------\n");
         for (size_t i = 0; i < strips.size(); ++i)
         {
             const auto &s = strips[i];
@@ -918,9 +919,9 @@ static void DoStrip(const cli_argv &argv)
 
     if (StringCompareInsensitive(sub, "apply"))
     {
-        cli_printf("Saving configuration to /device.cfg...\n");
+        cli_write("Saving configuration to /device.cfg...\n");
         config.FlushToDisk();
-        cli_printf("Restarting system to reinitialize LED channels...\n");
+        cli_write("Restarting system to reinitialize LED channels...\n");
         esp_restart();
         return;
     }
@@ -959,7 +960,8 @@ static void DoStrip(const cli_argv &argv)
             }
             sc.dataPin = pin;
             config.SetStrip(ch, sc);
-            cli_printf("Channel %zu pin set to %d. Run 'strip apply' to commit and restart.\n", ch, pin);
+            cli_printf("Channel %zu pin set to %d.", ch, pin);
+            cli_write(kApplyNotice);
         }
         else if (StringCompareInsensitive(prop, "length") || StringCompareInsensitive(prop, "count"))
         {
@@ -971,7 +973,8 @@ static void DoStrip(const cli_argv &argv)
             }
             sc.length = *lenOpt;
             config.SetStrip(ch, sc);
-            cli_printf("Channel %zu length set to %u. Run 'strip apply' to commit and restart.\n", ch, sc.length);
+            cli_printf("Channel %zu length set to %u.", ch, sc.length);
+            cli_write(kApplyNotice);
         }
         else if (StringCompareInsensitive(prop, "order"))
         {
@@ -984,8 +987,8 @@ static void DoStrip(const cli_argv &argv)
             }
             sc.colorOrder = *orderOpt;
             config.SetStrip(ch, sc);
-            cli_printf("Channel %zu color order set to %s. Run 'strip apply' to commit and restart.\n",
-                       ch, ColorOrderToString(sc.colorOrder));
+            cli_printf("Channel %zu color order set to %s.", ch, ColorOrderToString(sc.colorOrder));
+            cli_write(kApplyNotice);
         }
         else if (StringCompareInsensitive(prop, "chipset"))
         {
@@ -998,8 +1001,8 @@ static void DoStrip(const cli_argv &argv)
             }
             sc.chipset = *csOpt;
             config.SetStrip(ch, sc);
-            cli_printf("Channel %zu chipset set to %s. Run 'strip apply' to commit and restart.\n",
-                       ch, ChipsetToString(sc.chipset));
+            cli_printf("Channel %zu chipset set to %s.", ch, ChipsetToString(sc.chipset));
+            cli_write(kApplyNotice);
         }
         else if (StringCompareInsensitive(prop, "enable"))
         {
@@ -1010,8 +1013,8 @@ static void DoStrip(const cli_argv &argv)
                            StringCompareInsensitive(val, "yes"));
             sc.enabled = enable;
             config.SetStrip(ch, sc);
-            cli_printf("Channel %zu %s. Run 'strip apply' to commit and restart.\n",
-                       ch, enable ? "enabled" : "disabled");
+            cli_printf("Channel %zu %s.", ch, enable ? "enabled" : "disabled");
+            cli_write(kApplyNotice);
         }
         else
         {
@@ -1025,7 +1028,7 @@ static void DoStrip(const cli_argv &argv)
     {
         if (argv.size() < 4)
         {
-            cli_printf("Usage: strip add <pin> <length> [order] [chipset]\n");
+            cli_write("Usage: strip add <pin> <length> [order] [chipset]\n");
             return;
         }
 
@@ -1078,9 +1081,10 @@ static void DoStrip(const cli_argv &argv)
         }
 
         config.AddStrip(sc);
-        cli_printf("Added channel %zu (pin %d, len %u, %s, %s). Run 'strip apply' to commit and restart.\n",
+        cli_printf("Added channel %zu (pin %d, len %u, %s, %s).",
                    config.GetStrips().size() - 1, sc.dataPin, sc.length,
                    ColorOrderToString(sc.colorOrder), ChipsetToString(sc.chipset));
+        cli_write(kApplyNotice);
         return;
     }
 
@@ -1088,7 +1092,7 @@ static void DoStrip(const cli_argv &argv)
     {
         if (argv.size() < 3)
         {
-            cli_printf("Usage: strip remove <ch>\n");
+            cli_write("Usage: strip remove <ch>\n");
             return;
         }
 
@@ -1101,7 +1105,8 @@ static void DoStrip(const cli_argv &argv)
 
         size_t ch = *chOpt;
         config.RemoveStrip(ch);
-        cli_printf("Removed channel %zu. Run 'strip apply' to commit and restart.\n", ch);
+        cli_printf("Removed channel %zu.", ch);
+        cli_write(kApplyNotice);
         return;
     }
 
