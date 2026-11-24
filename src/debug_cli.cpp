@@ -523,12 +523,14 @@ static void DoCat(const cli_argv &argv)
         return;
     }
 
-    char buf[65]; // +1 for null terminator, 64 chars per chunk
+    char buf[256];
     while (file.available())
     {
-        size_t len = file.readBytes(buf, sizeof(buf) - 1);
-        buf[len] = 0;
-        cli_printf("%s", buf);
+        size_t len = file.readBytes(buf, sizeof(buf));
+        if (len > 0)
+        {
+            cli_write(std::string_view(buf, len));
+        }
     }
     // cli_printf("\n"); // Optional: Ensure newline? Left raw for now.
 
@@ -656,7 +658,8 @@ static void DoSetPanic(const cli_argv& argv)
 static void DoDmesg(const cli_argv&)
 {
     ConsoleManager::Instance().PrintDmesg([](const std::string& line) {
-        cli_printf("%s\n", line.c_str());
+        cli_write(line);
+        cli_write("\n");
     });
 }
 
@@ -795,7 +798,8 @@ static void DoDump(const cli_argv &argv)
     {
         char buf[1024];
         vTaskList(buf);
-        cli_printf("\nName          State      Prio  Stack  Num Core\n%s", buf);
+        cli_write("\nName          State      Prio  Stack  Num Core\n");
+        cli_write(buf);
     }
 #endif
     else
@@ -1066,7 +1070,8 @@ static const command core_commands[] = {
      [](const cli_argv &) {
          char buf[1024];
          vTaskList(buf);
-         cli_printf("\nName          State      Prio  Stack  Num Core\n%s", buf);
+         cli_write("\nName          State      Prio  Stack  Num Core\n");
+         cli_write(buf);
      }},
 #endif
     {"tempoffset", "[degrees] View or set ambient temperature calibration offset (°F)", "Temperature offset:",
