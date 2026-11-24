@@ -222,6 +222,7 @@ bool DeviceConfig::SerializeToJSON(JsonObject& jsonObject, bool includeSensitive
         obj["pin"] = sc.dataPin;
         obj["clock"] = sc.clockPin;
         obj["length"] = sc.length;
+        obj["offset"] = sc.offset;
         obj["order"] = ColorOrderToString(sc.colorOrder);
         obj["chipset"] = ChipsetToString(sc.chipset);
         obj["enabled"] = sc.enabled;
@@ -290,6 +291,7 @@ bool DeviceConfig::DeserializeFromJSON(const JsonObjectConst& jsonObject, bool s
             sc.dataPin = stripObj["pin"] | -1;
             sc.clockPin = stripObj["clock"] | -1;
             sc.length = stripObj["length"] | static_cast<uint16_t>(60);
+            sc.offset = stripObj["offset"] | static_cast<uint16_t>(0);
             if (const char* orderStr = stripObj["order"])
             {
                 if (auto order = ParseColorOrder(orderStr))
@@ -850,6 +852,7 @@ void DeviceConfig::InitializeDefaultStrips()
         StripConfig sc;
         sc.dataPin = defaultPins[i];
         sc.clockPin = -1;
+        sc.offset = 0;
 #if defined(NUM_LEDS)
         sc.length = NUM_LEDS;
 #elif defined(MATRIX_WIDTH)

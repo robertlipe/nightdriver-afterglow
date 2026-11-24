@@ -126,6 +126,7 @@ struct StripConfig {
     int dataPin = -1;
     int clockPin = -1;                // For SPI chipsets (APA102/SK9822), -1 for clockless
     uint16_t length = 60;
+    uint16_t offset = 0;              // Starting offset in master pixel canvas
     EOrder colorOrder = EOrder::GRB;
     ChipsetType chipset = ChipsetType::WS2812B;
     bool enabled = true;

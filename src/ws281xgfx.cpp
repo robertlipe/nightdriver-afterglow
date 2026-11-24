@@ -46,16 +46,37 @@ void WS281xGFX::AddLEDs(std::vector<std::shared_ptr<GFXBase>>& devices)
 {
     debugI("Adding LEDs to FastLED via Channels API...");
 
-    const auto& strips = g_ptrSystem->GetDeviceConfig().GetStrips();
+    if (devices.empty())
+        return;
 
-    for (size_t ch = 0; ch < devices.size() && ch < strips.size(); ++ch)
+    const auto& strips = g_ptrSystem->GetDeviceConfig().GetStrips();
+    CRGB* masterBuffer = devices[0]->leds;
+    const size_t masterBufferSize = devices[0]->GetLEDCount();
+
+    for (size_t ch = 0; ch < strips.size(); ++ch)
     {
         const auto& strip = strips[ch];
         if (!strip.enabled || strip.dataPin < 0)
             continue;
 
-        debugI("Adding %zu LEDs to pin %d from channel %zu on FastLED (chipset %s, order %s).",
-               devices[ch]->GetLEDCount(), strip.dataPin, ch,
+        size_t offset = strip.offset;
+        size_t len = strip.length;
+
+        if (offset >= masterBufferSize)
+        {
+            debugE("Strip %zu offset (%zu) exceeds master buffer size (%zu)! Skipping.",
+                   ch, offset, masterBufferSize);
+            continue;
+        }
+        if (offset + len > masterBufferSize)
+        {
+            debugW("Strip %zu range [%zu..%zu] exceeds master buffer (%zu). Clamping length.",
+                   ch, offset, offset + len, masterBufferSize);
+            len = masterBufferSize - offset;
+        }
+
+        debugI("Adding %zu LEDs to pin %d from offset %zu on FastLED (chipset %s, order %s).",
+               len, strip.dataPin, offset,
                ChipsetToString(strip.chipset), ColorOrderToString(strip.colorOrder));
 
         fl::ChipsetTimingConfig timing;
@@ -74,7 +95,7 @@ void WS281xGFX::AddLEDs(std::vector<std::shared_ptr<GFXBase>>& devices)
         fl::ClocklessChipset chipset(strip.dataPin, timing);
         fl::ChannelConfig config(
             chipset,
-            fl::span<CRGB>(devices[ch]->leds, devices[ch]->GetLEDCount()),
+            fl::span<CRGB>(&masterBuffer[offset], len),
             strip.colorOrder
         );
 
@@ -120,20 +141,33 @@ void WS281xGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& device
     }
     else
     {
-        for (size_t i = 0; i < strips.size(); i++)
+        size_t masterPixels = MATRIX_WIDTH * MATRIX_HEIGHT;
+        for (const auto& s : strips)
         {
-            debugW("Allocating WS281xGFX for strip %zu (len=%u, pin=%d, enabled=%d)",
-                   i, strips[i].length, strips[i].dataPin, strips[i].enabled);
-            size_t w = strips[i].length;
-            size_t h = 1;
-#if MATRIX_HEIGHT > 1
-            if (strips.size() == 1)
+            if (s.enabled)
             {
-                w = MATRIX_WIDTH;
-                h = MATRIX_HEIGHT;
+                size_t needed = static_cast<size_t>(s.offset) + s.length;
+                if (needed > masterPixels)
+                    masterPixels = needed;
             }
+        }
+
+        debugW("Allocating master WS281xGFX canvas with %zu pixels for %zu configured strip(s)",
+               masterPixels, strips.size());
+        size_t w = masterPixels;
+        size_t h = 1;
+#if MATRIX_HEIGHT > 1
+        if (strips.size() == 1 && masterPixels == MATRIX_WIDTH * MATRIX_HEIGHT)
+        {
+            w = MATRIX_WIDTH;
+            h = MATRIX_HEIGHT;
+        }
 #endif
-            devices.push_back(std::make_shared<WS281xGFX>(w, h));
+        devices.push_back(std::make_shared<WS281xGFX>(w, h));
+
+        for (size_t i = 1; i < strips.size(); i++)
+        {
+            devices.push_back(std::make_shared<WS281xGFX>(strips[i].length, 1));
         }
     }
 
@@ -166,11 +200,20 @@ void WS281xGFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsD
     }
 
     auto& effectManager = g_ptrSystem->GetEffectManager();
+    const int channelCount = FastLED.count();
+    const auto& strips = g_ptrSystem->GetDeviceConfig().GetStrips();
+    CRGB* masterLeds = effectManager.g()->leds;
+    const size_t masterCount = effectManager.g()->GetLEDCount();
 
-    const int channelCount = std::min(FastLED.count(), static_cast<int>(g_ptrSystem->GetDevices().size()));
-    for (int i = 0; i < channelCount; i++)
+    for (int i = 0; i < channelCount && i < static_cast<int>(strips.size()); i++)
     {
-        FastLED[i].setLeds(effectManager.g(i)->leds, pixelsDrawn);
+        const auto& strip = strips[i];
+        if (strip.offset < masterCount)
+        {
+            size_t available = masterCount - strip.offset;
+            size_t count = std::min(static_cast<size_t>(strip.length), available);
+            FastLED[i].setLeds(masterLeds + strip.offset, count);
+        }
         fadeLightBy(FastLED[i].leds(), FastLED[i].size(), 255 - g_ptrSystem->GetDeviceConfig().GetBrightness());
     }
     FastLED.show(min(g_Values.Fader, g_Values.ThermalThrottle)); //Shows the pixels

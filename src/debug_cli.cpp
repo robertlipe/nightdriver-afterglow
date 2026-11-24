@@ -846,10 +846,11 @@ static void DoStrip(const cli_argv &argv)
                   "  strip [list]                              - List configured channels\n"
                   "  strip set <ch> pin <pin>                  - Set data GPIO pin\n"
                   "  strip set <ch> length <n>                 - Set pixel count\n"
+                  "  strip set <ch> offset <n>                 - Set pixel offset in canvas\n"
                   "  strip set <ch> order <RGB|GRB|...>        - Set color order\n"
                   "  strip set <ch> chipset <WS2812B|WS2811|..>- Set chipset\n"
                   "  strip set <ch> enable <on|off>            - Enable or disable channel\n"
-                  "  strip add <pin> <len> [order] [chipset]   - Add a new channel\n"
+                  "  strip add <pin> <len> [order] [cs] [off]  - Add a new channel\n"
                   "  strip remove <ch>                         - Remove a channel\n"
                   "  strip apply                               - Save to /device.cfg and restart\n");
     };
@@ -860,8 +861,8 @@ static void DoStrip(const cli_argv &argv)
             cli_write("No LED strips configured.\n");
             return;
         }
-        cli_write("Ch   Pin Clock Length Order   Chipset  Status\n"
-                  "--   --- ----- ------ -----   -------  ------\n");
+        cli_write("Ch   Pin Clock Length Offset Order   Chipset  Status\n"
+                  "--   --- ----- ------ ------ -----   -------  ------\n");
         for (size_t i = 0; i < strips.size(); ++i)
         {
             const auto &s = strips[i];
@@ -869,8 +870,8 @@ static void DoStrip(const cli_argv &argv)
             if (s.clockPin >= 0)
                 snprintf(clockBuf, sizeof(clockBuf), "%d", s.clockPin);
 
-            cli_printf("%2zu  %4d  %4s %6u %-7s %-8s %s\n",
-                       i, s.dataPin, clockBuf, s.length,
+            cli_printf("%2zu  %4d  %4s %6u %6u %-7s %-8s %s\n",
+                       i, s.dataPin, clockBuf, s.length, s.offset,
                        ColorOrderToString(s.colorOrder),
                        ChipsetToString(s.chipset),
                        s.enabled ? "ENABLED" : "DISABLED");
@@ -944,6 +945,19 @@ static void DoStrip(const cli_argv &argv)
             cli_printf("Channel %zu length set to %u.", ch, sc.length);
             cli_write(kApplyNotice);
         }
+        else if (StringCompareInsensitive(prop, "offset"))
+        {
+            auto offOpt = ParseInt<uint16_t>(argv[4]);
+            if (!offOpt)
+            {
+                cli_printf("Invalid offset: '%.*s'\n", (int)argv[4].size(), argv[4].data());
+                return;
+            }
+            sc.offset = *offOpt;
+            config.SetStrip(ch, sc);
+            cli_printf("Channel %zu offset set to %u.", ch, sc.offset);
+            cli_write(kApplyNotice);
+        }
         else if (StringCompareInsensitive(prop, "order"))
         {
             auto orderOpt = ParseColorOrder(argv[4]);
@@ -986,7 +1000,7 @@ static void DoStrip(const cli_argv &argv)
         }
         else
         {
-            cli_printf("Unknown property: '%.*s'. Valid: pin, length, order, chipset, enable\n",
+            cli_printf("Unknown property: '%.*s'. Valid: pin, length, offset, order, chipset, enable\n",
                        (int)prop.size(), prop.data());
         }
         return;
@@ -996,7 +1010,7 @@ static void DoStrip(const cli_argv &argv)
     {
         if (argv.size() < 4)
         {
-            cli_write("Usage: strip add <pin> <length> [order] [chipset]\n");
+            cli_write("Usage: strip add <pin> <length> [order] [chipset] [offset]\n");
             return;
         }
 
@@ -1017,6 +1031,7 @@ static void DoStrip(const cli_argv &argv)
         StripConfig sc;
         sc.dataPin = pin;
         sc.length = *lenOpt;
+        sc.offset = 0;
         sc.colorOrder = EOrder::GRB;
         sc.chipset = ChipsetType::WS2812B;
         sc.enabled = true;
@@ -1043,14 +1058,25 @@ static void DoStrip(const cli_argv &argv)
             }
         }
 
+        if (argv.size() > 6)
+        {
+            if (auto offOpt = ParseInt<uint16_t>(argv[6]))
+                sc.offset = *offOpt;
+            else
+            {
+                cli_printf("Invalid offset: '%.*s'\n", (int)argv[6].size(), argv[6].data());
+                return;
+            }
+        }
+
         if (const char *conflict = GetPinConflictDescription(pin))
         {
             cli_printf("Warning: GPIO %d is already assigned to %s!\n", pin, conflict);
         }
 
         config.AddStrip(sc);
-        cli_printf("Added channel %zu (pin %d, len %u, %s, %s).",
-                   config.GetStrips().size() - 1, sc.dataPin, sc.length,
+        cli_printf("Added channel %zu (pin %d, len %u, offset %u, %s, %s).",
+                   config.GetStrips().size() - 1, sc.dataPin, sc.length, sc.offset,
                    ColorOrderToString(sc.colorOrder), ChipsetToString(sc.chipset));
         cli_write(kApplyNotice);
         return;
