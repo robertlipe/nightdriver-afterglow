@@ -43,9 +43,10 @@
 #include <WiFi.h>
 #endif
 #include <freertos/FreeRTOS.h>
-
 #include <freertos/task.h>
 #include <optional>
+#include <soc/soc_caps.h>
+#include <stdio.h>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -741,7 +742,7 @@ static void DoGpio(const cli_argv &argv)
     {
         int pin = -1;
         auto [ptr, ec] = std::from_chars(argv[1].data(), argv[1].data() + argv[1].size(), pin);
-        if (ec != std::errc() || pin < 0 || pin >= SOC_GPIO_PIN_COUNT || !GPIO_IS_VALID_GPIO(pin))
+        if (ec != std::errc() || ptr != argv[1].data() + argv[1].size() || pin < 0 || pin >= SOC_GPIO_PIN_COUNT || !GPIO_IS_VALID_GPIO(pin))
         {
             cli_printf("Invalid GPIO pin: '%.*s'\n", (int)argv[1].size(), argv[1].data());
             return;
