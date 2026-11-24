@@ -167,7 +167,8 @@ void WS281xGFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsD
 
     auto& effectManager = g_ptrSystem->GetEffectManager();
 
-    for (int i = 0; i < NUM_CHANNELS; i++)
+    const int channelCount = std::min(FastLED.count(), static_cast<int>(g_ptrSystem->GetDevices().size()));
+    for (int i = 0; i < channelCount; i++)
     {
         FastLED[i].setLeds(effectManager.g(i)->leds, pixelsDrawn);
         fadeLightBy(FastLED[i].leds(), FastLED[i].size(), 255 - g_ptrSystem->GetDeviceConfig().GetBrightness());
