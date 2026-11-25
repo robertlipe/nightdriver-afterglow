@@ -154,15 +154,23 @@ void WS281xGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& device
     }
     else
     {
+        std::bitset<64> seenPins;
         size_t masterPixels = MATRIX_WIDTH * MATRIX_HEIGHT;
         for (const auto& s : strips)
         {
-            if (s.enabled)
+            if (!s.enabled || s.dataPin < 0)
+                continue;
+
+            if (static_cast<size_t>(s.dataPin) < seenPins.size())
             {
-                size_t needed = static_cast<size_t>(s.offset) + s.length;
-                if (needed > masterPixels)
-                    masterPixels = needed;
+                if (seenPins.test(s.dataPin))
+                    continue;
+                seenPins.set(s.dataPin);
             }
+
+            size_t needed = static_cast<size_t>(s.offset) + s.length;
+            if (needed > masterPixels)
+                masterPixels = needed;
         }
 
         debugW("Allocating master WS281xGFX canvas with %zu pixels for %zu configured strip(s)",
@@ -177,11 +185,6 @@ void WS281xGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& device
         }
 #endif
         devices.push_back(std::make_shared<WS281xGFX>(w, h));
-
-        for (size_t i = 1; i < strips.size(); i++)
-        {
-            devices.push_back(std::make_shared<WS281xGFX>(strips[i].length, 1));
-        }
     }
 
     AddLEDs(devices);
@@ -212,21 +215,9 @@ void WS281xGFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsD
         return;
     }
 
-    auto& effectManager = g_ptrSystem->GetEffectManager();
     const int channelCount = FastLED.count();
-    const auto& strips = g_ptrSystem->GetDeviceConfig().GetStrips();
-    CRGB* masterLeds = effectManager.g()->leds;
-    const size_t masterCount = effectManager.g()->GetLEDCount();
-
-    for (int i = 0; i < channelCount && i < static_cast<int>(strips.size()); i++)
+    for (int i = 0; i < channelCount; i++)
     {
-        const auto& strip = strips[i];
-        if (strip.offset < masterCount)
-        {
-            size_t available = masterCount - strip.offset;
-            size_t count = std::min(static_cast<size_t>(strip.length), available);
-            FastLED[i].setLeds(masterLeds + strip.offset, count);
-        }
         fadeLightBy(FastLED[i].leds(), FastLED[i].size(), 255 - g_ptrSystem->GetDeviceConfig().GetBrightness());
     }
     uint8_t showScale = g_Values.Fader;
@@ -252,6 +243,6 @@ void WS281xGFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsD
         g_Values.Brite = 100.0 * g_ptrSystem->GetDeviceConfig().GetBrightness() / 255;
     #endif
     g_Values.Brite = (g_Values.Brite * showScale) / 255.0f;
-    g_Values.Watts = calculate_unscaled_power_mW(effectManager.g()->leds, pixelsDrawn) / 1000; // 1000 for mw->W
+    g_Values.Watts = calculate_unscaled_power_mW(leds, pixelsDrawn) / 1000; // 1000 for mw->W
 }
 
