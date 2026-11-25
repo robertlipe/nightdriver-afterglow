@@ -31,6 +31,7 @@
 #include "globals.h"
 #include "string_utils.h"
 
+#include <cstddef>
 #include <string_view>
 #include <vector>
 
@@ -84,6 +85,38 @@ namespace DebugCLI
     // Preferred over cli_printf for literal strings, usage blocks, and static notices
     // to avoid vsnprintf stack buffers, heap allocation, and format parsing overhead.
     void cli_write(std::string_view text);
+
+    // Primitive outputters for cli_print. Non-template to prevent flash bloat.
+    void cli_put(std::string_view sv);
+    void cli_put(const char* s);
+    void cli_put(std::nullptr_t);
+    void cli_put(char c);
+    void cli_put(bool b);
+    void cli_put(const String& s);
+
+    void cli_put_signed(long long val);
+    void cli_put_unsigned(unsigned long long val);
+
+    inline void cli_put(signed char v) { cli_put_signed(v); }
+    inline void cli_put(short v) { cli_put_signed(v); }
+    inline void cli_put(int v) { cli_put_signed(v); }
+    inline void cli_put(long v) { cli_put_signed(v); }
+    inline void cli_put(long long v) { cli_put_signed(v); }
+
+    inline void cli_put(unsigned char v) { cli_put_unsigned(v); }
+    inline void cli_put(unsigned short v) { cli_put_unsigned(v); }
+    inline void cli_put(unsigned int v) { cli_put_unsigned(v); }
+    inline void cli_put(unsigned long v) { cli_put_unsigned(v); }
+    inline void cli_put(unsigned long long v) { cli_put_unsigned(v); }
+
+    // Type-safe variadic fold printer. Evaluates arguments left-to-right using
+    // non-template cli_put overloads. Avoids format string parsing, vsnprintf
+    // stack buffers, and %.*s hazard for string_views.
+    template <typename... Args>
+    inline void cli_print(const Args&... args)
+    {
+        (cli_put(args), ...);
+    }
 
     // printf-style output to all active console sessions
     void cli_printf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));

@@ -197,7 +197,7 @@ static void PrintHelp(const cli_argv &argv)
             }
             else
             {
-                cli_printf("Command '%.*s' not found or ambiguous.\n", (int)target.length(), target.data());
+                cli_print("Command '", target, "' not found or ambiguous.\n");
             }
         }
     }
@@ -223,6 +223,50 @@ void cli_write(std::string_view text)
         _activeSession->WriteText(text);
     else
         ConsoleManager::Instance().Broadcast(text);
+}
+
+void cli_put(std::string_view sv)
+{
+    cli_write(sv);
+}
+
+void cli_put(const char* s)
+{
+    cli_write(s ? s : "(null)");
+}
+
+void cli_put(std::nullptr_t)
+{
+    cli_write("(null)");
+}
+
+void cli_put(char c)
+{
+    cli_write(std::string_view(&c, 1));
+}
+
+void cli_put(bool b)
+{
+    cli_write(b ? "true" : "false");
+}
+
+void cli_put(const String& s)
+{
+    cli_write(std::string_view(s.c_str(), s.length()));
+}
+
+void cli_put_signed(long long val)
+{
+    char buf[24];
+    auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), val);
+    cli_write(std::string_view(buf, ptr - buf));
+}
+
+void cli_put_unsigned(unsigned long long val)
+{
+    char buf[24];
+    auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), val);
+    cli_write(std::string_view(buf, ptr - buf));
 }
 
 //
@@ -253,7 +297,7 @@ void RunCommand(std::string_view cmd_line, std::shared_ptr<ConsoleSession> sessi
         }
         else
         {
-            cli_printf("Unknown command: %.*s\n", (int)argv[0].length(), argv[0].data());
+            cli_print("Unknown command: ", argv[0], "\n");
         }
     }
 
@@ -402,14 +446,14 @@ static std::optional<size_t> ResolveEffect(std::string_view arg)
     }
     else if (matches > 1)
     {
-        cli_printf("Error: Ambiguous match for '%.*s'. Candidates:\n", (int)arg.length(), arg.data());
+        cli_print("Error: Ambiguous match for '", arg, "'. Candidates:\n");
         for (const auto& c : candidates)
             cli_printf("  %s\n", c.c_str());
         return std::nullopt;
     }
     else
     {
-        cli_printf("Error: No effect matching '%.*s' found.\n", (int)arg.length(), arg.data());
+        cli_print("Error: No effect matching '", arg, "' found.\n");
         return std::nullopt;
     }
 }
@@ -636,7 +680,7 @@ static void DoCrashMe(const cli_argv& argv)
     }
     else
     {
-        cli_printf("Unknown mode: %.*s (try null, abort, wdt)\n", (int)mode.length(), mode.data());
+        cli_print("Unknown mode: ", mode, " (try null, abort, wdt)\n");
     }
 }
 
@@ -749,7 +793,7 @@ static void DoGpio(const cli_argv &argv)
         int pin = -1;
         if (!TryParseGpioPin(argv[1], pin))
         {
-            cli_printf("Invalid GPIO pin: '%.*s'\n", (int)argv[1].size(), argv[1].data());
+            cli_print("Invalid GPIO pin: '", argv[1], "'\n");
             return;
         }
         mask = (1ULL << pin);
@@ -810,7 +854,7 @@ static void DoDump(const cli_argv &argv)
 #endif
     else
     {
-        cli_printf("Unknown dump target: '%.*s'\n", (int)sub.size(), sub.data());
+        cli_print("Unknown dump target: '", sub, "'\n");
         cli_printf("Usage: dump [fds|gpio [pin]|heap|intr|tasks|timers]\n");
     }
 }
@@ -906,8 +950,8 @@ static void DoStrip(const cli_argv &argv)
         auto chOpt = ParseInt<size_t>(argv[2]);
         if (!chOpt || *chOpt >= strips.size())
         {
-            cli_printf("Invalid channel index: '%.*s' (valid: 0..%zu)\n",
-                       (int)argv[2].size(), argv[2].data(), strips.empty() ? 0 : strips.size() - 1);
+            cli_print("Invalid channel index: '", argv[2], "' (valid: 0..",
+                      strips.empty() ? 0 : strips.size() - 1, ")\n");
             return;
         }
 
@@ -920,71 +964,66 @@ static void DoStrip(const cli_argv &argv)
             int pin = -1;
             if (!TryParseGpioPin(argv[4], pin))
             {
-                cli_printf("Invalid GPIO pin: '%.*s'\n", (int)argv[4].size(), argv[4].data());
+                cli_print("Invalid GPIO pin: '", argv[4], "'\n");
                 return;
             }
             if (const char *conflict = GetPinConflictDescription(pin))
             {
-                cli_printf("Warning: GPIO %d is already assigned to %s!\n", pin, conflict);
+                cli_print("Warning: GPIO ", pin, " is already assigned to ", conflict, "!\n");
             }
             sc.dataPin = pin;
             config.SetStrip(ch, sc);
-            cli_printf("Channel %zu pin set to %d.", ch, pin);
-            cli_write(kApplyNotice);
+            cli_print("Channel ", ch, " pin set to ", pin, ".", kApplyNotice);
         }
         else if (StringCompareInsensitive(prop, "length") || StringCompareInsensitive(prop, "count"))
         {
             auto lenOpt = ParseInt<uint16_t>(argv[4]);
             if (!lenOpt || *lenOpt == 0)
             {
-                cli_printf("Invalid length: '%.*s' (must be > 0)\n", (int)argv[4].size(), argv[4].data());
+                cli_print("Invalid length: '", argv[4], "' (must be > 0)\n");
                 return;
             }
             sc.length = *lenOpt;
             config.SetStrip(ch, sc);
-            cli_printf("Channel %zu length set to %u.", ch, sc.length);
-            cli_write(kApplyNotice);
+            cli_print("Channel ", ch, " length set to ", sc.length, ".", kApplyNotice);
         }
         else if (StringCompareInsensitive(prop, "offset"))
         {
             auto offOpt = ParseInt<uint16_t>(argv[4]);
             if (!offOpt)
             {
-                cli_printf("Invalid offset: '%.*s'\n", (int)argv[4].size(), argv[4].data());
+                cli_print("Invalid offset: '", argv[4], "'\n");
                 return;
             }
             sc.offset = *offOpt;
             config.SetStrip(ch, sc);
-            cli_printf("Channel %zu offset set to %u.", ch, sc.offset);
-            cli_write(kApplyNotice);
+            cli_print("Channel ", ch, " offset set to ", sc.offset, ".", kApplyNotice);
         }
         else if (StringCompareInsensitive(prop, "order"))
         {
             auto orderOpt = ParseColorOrder(argv[4]);
             if (!orderOpt)
             {
-                cli_printf("Invalid color order: '%.*s' (valid: RGB, RBG, GRB, GBR, BRG, BGR)\n",
-                           (int)argv[4].size(), argv[4].data());
+                cli_print("Invalid color order: '", argv[4],
+                          "' (valid: RGB, RBG, GRB, GBR, BRG, BGR)\n");
                 return;
             }
             sc.colorOrder = *orderOpt;
             config.SetStrip(ch, sc);
-            cli_printf("Channel %zu color order set to %s.", ch, ColorOrderToString(sc.colorOrder));
-            cli_write(kApplyNotice);
+            cli_print("Channel ", ch, " color order set to ", ColorOrderToString(sc.colorOrder), ".", kApplyNotice);
         }
         else if (StringCompareInsensitive(prop, "chipset"))
         {
             auto csOpt = ParseChipsetType(argv[4]);
             if (!csOpt)
             {
-                cli_printf("Invalid chipset: '%.*s' (valid: WS2812B, WS2811, WS2815, APA102, SK9822)\n",
-                           (int)argv[4].size(), argv[4].data());
+                cli_print("Invalid chipset: '", argv[4],
+                          "' (valid: WS2812B, WS2811, WS2815, APA102, SK9822)\n");
                 return;
             }
             sc.chipset = *csOpt;
             config.SetStrip(ch, sc);
-            cli_printf("Channel %zu chipset set to %s.", ch, ChipsetToString(sc.chipset));
-            cli_write(kApplyNotice);
+            cli_print("Channel ", ch, " chipset set to ", ChipsetToString(sc.chipset), ".", kApplyNotice);
         }
         else if (StringCompareInsensitive(prop, "enable"))
         {
@@ -995,13 +1034,12 @@ static void DoStrip(const cli_argv &argv)
                            StringCompareInsensitive(val, "yes"));
             sc.enabled = enable;
             config.SetStrip(ch, sc);
-            cli_printf("Channel %zu %s.", ch, enable ? "enabled" : "disabled");
-            cli_write(kApplyNotice);
+            cli_print("Channel ", ch, enable ? " enabled." : " disabled.", kApplyNotice);
         }
         else
         {
-            cli_printf("Unknown property: '%.*s'. Valid: pin, length, offset, order, chipset, enable\n",
-                       (int)prop.size(), prop.data());
+            cli_print("Unknown property: '", prop,
+                      "'. Valid: pin, length, offset, order, chipset, enable\n");
         }
         return;
     }
@@ -1017,14 +1055,14 @@ static void DoStrip(const cli_argv &argv)
         int pin = -1;
         if (!TryParseGpioPin(argv[2], pin))
         {
-            cli_printf("Invalid GPIO pin: '%.*s'\n", (int)argv[2].size(), argv[2].data());
+            cli_print("Invalid GPIO pin: '", argv[2], "'\n");
             return;
         }
 
         auto lenOpt = ParseInt<uint16_t>(argv[3]);
         if (!lenOpt || *lenOpt == 0)
         {
-            cli_printf("Invalid length: '%.*s' (must be > 0)\n", (int)argv[3].size(), argv[3].data());
+            cli_print("Invalid length: '", argv[3], "' (must be > 0)\n");
             return;
         }
 
@@ -1042,7 +1080,7 @@ static void DoStrip(const cli_argv &argv)
                 sc.colorOrder = *orderOpt;
             else
             {
-                cli_printf("Invalid color order: '%.*s'\n", (int)argv[4].size(), argv[4].data());
+                cli_print("Invalid color order: '", argv[4], "'\n");
                 return;
             }
         }
@@ -1053,7 +1091,7 @@ static void DoStrip(const cli_argv &argv)
                 sc.chipset = *csOpt;
             else
             {
-                cli_printf("Invalid chipset: '%.*s'\n", (int)argv[5].size(), argv[5].data());
+                cli_print("Invalid chipset: '", argv[5], "'\n");
                 return;
             }
         }
@@ -1064,21 +1102,21 @@ static void DoStrip(const cli_argv &argv)
                 sc.offset = *offOpt;
             else
             {
-                cli_printf("Invalid offset: '%.*s'\n", (int)argv[6].size(), argv[6].data());
+                cli_print("Invalid offset: '", argv[6], "'\n");
                 return;
             }
         }
 
         if (const char *conflict = GetPinConflictDescription(pin))
         {
-            cli_printf("Warning: GPIO %d is already assigned to %s!\n", pin, conflict);
+            cli_print("Warning: GPIO ", pin, " is already assigned to ", conflict, "!\n");
         }
 
         config.AddStrip(sc);
-        cli_printf("Added channel %zu (pin %d, len %u, offset %u, %s, %s).",
-                   config.GetStrips().size() - 1, sc.dataPin, sc.length, sc.offset,
-                   ColorOrderToString(sc.colorOrder), ChipsetToString(sc.chipset));
-        cli_write(kApplyNotice);
+        cli_print("Added channel ", config.GetStrips().size() - 1, " (pin ", sc.dataPin,
+                  ", len ", sc.length, ", offset ", sc.offset, ", ",
+                  ColorOrderToString(sc.colorOrder), ", ", ChipsetToString(sc.chipset), ").",
+                  kApplyNotice);
         return;
     }
 
@@ -1093,14 +1131,13 @@ static void DoStrip(const cli_argv &argv)
         auto chOpt = ParseInt<size_t>(argv[2]);
         if (!chOpt || *chOpt >= strips.size())
         {
-            cli_printf("Invalid channel index: '%.*s'\n", (int)argv[2].size(), argv[2].data());
+            cli_print("Invalid channel index: '", argv[2], "'\n");
             return;
         }
 
         size_t ch = *chOpt;
         config.RemoveStrip(ch);
-        cli_printf("Removed channel %zu.", ch);
-        cli_write(kApplyNotice);
+        cli_print("Removed channel ", ch, ".", kApplyNotice);
         return;
     }
 
@@ -1115,9 +1152,9 @@ static const command core_commands[] = {
              if (auto val = ParseInt<int>(argv[1]))
                  g_ptrSystem->GetDeviceConfig().SetBrightness(std::clamp(*val, 0, 255));
              else
-                 cli_printf("Invalid brightness: '%.*s'\n", (int)argv[1].size(), argv[1].data());
+                 cli_print("Invalid brightness: '", argv[1], "'\n");
          }
-         cli_printf("Brightness: %lu\n", (unsigned long)g_ptrSystem->GetDeviceConfig().GetBrightness());
+         cli_print("Brightness: ", g_ptrSystem->GetDeviceConfig().GetBrightness(), "\n");
      }},
     {"cat", "Display file content", "Printing file...", DoCat},
     {"clearcoredump", "Erase the coredump partition", "Clearing...", DoClearCoredump},
@@ -1158,7 +1195,7 @@ static const command core_commands[] = {
                  if (auto val = ParseInt<uint32_t>(hexStr, 16))
                      newColor = CRGB(*val);
                  else
-                     cli_printf("Invalid hex color: '%.*s'\n", (int)argv[1].size(), argv[1].data());
+                     cli_print("Invalid hex color: '", argv[1], "'\n");
              }
              else if (argv.size() == 4) // Assume R G B
              {
@@ -1224,11 +1261,11 @@ static const command core_commands[] = {
              if (StringCompareInsensitive(levelStr, l.name))
              {
                  esp_log_level_set(std::string(tag).c_str(), l.level);
-                 cli_printf("Set level for tag '%s' to %d (%s)\n", std::string(tag).c_str(), l.level, l.name);
+                 cli_print("Set level for tag '", tag, "' to ", l.level, " (", l.name, ")\n");
                  return;
              }
          }
-         cli_printf("Invalid level '%s'. Valid: none error warn info debug verbose\n", std::string(levelStr).c_str());
+         cli_print("Invalid level '", levelStr, "'. Valid: none error warn info debug verbose\n");
      }},
     {"ls", "Show filesytem directory", "NAME", DoDirectoryListing},                    // Function pointer
     {"partitions", "Display partition table", "Partition Table:", DoPartitions},
@@ -1332,15 +1369,15 @@ static const command core_commands[] = {
     }},
     {"setsetting", "<key> <value> Set property of current effect", "Setting property:", [](const cli_argv& argv) {
         if (argv.size() < 3) {
-            cli_printf("Usage: setsetting <key> <value>\n");
+            cli_write("Usage: setsetting <key> <value>\n");
             return;
         }
         auto& effect = g_ptrSystem->GetEffectManager().GetCurrentEffect();
         if (effect.SetSetting(String(argv[1].data(), argv[1].length()), String(argv[2].data(), argv[2].length()))) {
-            cli_printf("Successfully set %.*s to %.*s.\n", (int)argv[1].length(), argv[1].data(), (int)argv[2].length(), argv[2].data());
+            cli_print("Successfully set ", argv[1], " to ", argv[2], ".\n");
             SaveEffectManagerConfig();
         } else {
-            cli_printf("Failed to set %.*s.\n", (int)argv[1].length(), argv[1].data());
+            cli_print("Failed to set ", argv[1], ".\n");
         }
     }},
     {"statuslog", "[on|off] Show/change periodic status logs", "Status logs.", DoStatusLog},
