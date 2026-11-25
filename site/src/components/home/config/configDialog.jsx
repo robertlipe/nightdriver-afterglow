@@ -418,6 +418,7 @@ const ConfigDialog = ({heading, effectIndex, open, setOpen, saveCallback}) => {
                         <StripsConfigEditor
                             strips={curConfData.strips}
                             onChange={(newStrips) => updateData('strips', JSON.stringify(newStrips))}
+                            updateError={updateError}
                         />
                     )}
                 </Box>);

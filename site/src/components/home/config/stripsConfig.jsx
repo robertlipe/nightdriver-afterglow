@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
+    Alert,
     Box,
     Button,
     Card,
@@ -87,8 +88,26 @@ CanvasPreview.propTypes = {
 /**
  * LED Strip Channels Editor Component
  */
-const StripsConfigEditor = ({ strips, onChange }) => {
+const StripsConfigEditor = ({ strips, onChange, updateError }) => {
     const [localStrips, setLocalStrips] = useState(strips || []);
+
+    // Detect duplicate pins across all active (enabled) strips
+    const activeStrips = localStrips.filter(s => s.enabled);
+    const pinCounts = {};
+    activeStrips.forEach(s => {
+        pinCounts[s.pin] = (pinCounts[s.pin] || 0) + 1;
+    });
+    const duplicatePins = new Set(
+        Object.keys(pinCounts)
+            .filter(p => pinCounts[p] > 1)
+            .map(p => parseInt(p, 10))
+    );
+
+    useEffect(() => {
+        if (updateError) {
+            updateError('strips', duplicatePins.size > 0);
+        }
+    }, [duplicatePins.size, updateError]);
 
     const updateStrips = (newStrips) => {
         setLocalStrips(newStrips);
@@ -109,12 +128,29 @@ const StripsConfigEditor = ({ strips, onChange }) => {
 
     const handleAddStrip = () => {
         let nextOffset = 0;
+        let nextPin = 15;
         if (localStrips.length > 0) {
             const last = localStrips[localStrips.length - 1];
             nextOffset = (last.offset || 0) + (last.length || 0);
+
+            // Select next unused pin starting from last.pin + 1 (up to 64 GPIOs for S31/P4)
+            const usedPins = new Set(localStrips.map(s => s.pin));
+            let candidatePin = (last.pin || 14) + 1;
+            while (usedPins.has(candidatePin) && candidatePin < 64) {
+                candidatePin++;
+            }
+            if (candidatePin < 64) {
+                nextPin = candidatePin;
+            } else {
+                candidatePin = 1;
+                while (usedPins.has(candidatePin) && candidatePin < 64) {
+                    candidatePin++;
+                }
+                if (candidatePin < 64) nextPin = candidatePin;
+            }
         }
         const newStrip = {
-            pin: 15,
+            pin: nextPin,
             clock: -1,
             length: 60,
             offset: nextOffset,
@@ -153,48 +189,61 @@ const StripsConfigEditor = ({ strips, onChange }) => {
                 Configure GPIO pins, pixel lengths, and canvas offsets for multi-strip daisy chains or mirrored outputs.
             </Typography>
 
+            {duplicatePins.size > 0 && (
+                <Alert severity="warning" sx={{ mb: 1.5 }}>
+                    Duplicate GPIO pin detected ({Array.from(duplicatePins).map(p => `GPIO ${p}`).join(', ')}). Multiple active channels cannot drive the same pin.
+                </Alert>
+            )}
+
             <CanvasPreview strips={localStrips} />
 
-            {localStrips.map((strip, idx) => (
-                <Card key={idx} variant="outlined" sx={{ mb: 1.5, p: 0.5, bgcolor: strip.enabled ? 'background.paper' : 'action.disabledBackground' }}>
-                    <CardContent sx={{ pb: '12px !important' }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Chip label={`Channel ${idx}`} size="small" color="primary" />
-                                <FormControlLabel
-                                    control={
-                                        <Switch
-                                            size="small"
-                                            checked={Boolean(strip.enabled)}
-                                            onChange={(e) => handleFieldChange(idx, 'enabled', e.target.checked)}
-                                        />
-                                    }
-                                    label={strip.enabled ? 'Enabled' : 'Disabled'}
-                                />
+            {localStrips.map((strip, idx) => {
+                const isDup = strip.enabled && duplicatePins.has(strip.pin);
+                return (
+                    <Card key={idx} variant="outlined" sx={{ mb: 1.5, p: 0.5, bgcolor: strip.enabled ? 'background.paper' : 'action.disabledBackground', borderColor: isDup ? 'error.main' : undefined }}>
+                        <CardContent sx={{ pb: '12px !important' }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Chip label={`Channel ${idx}`} size="small" color="primary" />
+                                    {isDup && (
+                                        <Chip label="Duplicate Pin" size="small" color="error" variant="outlined" />
+                                    )}
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                size="small"
+                                                checked={Boolean(strip.enabled)}
+                                                onChange={(e) => handleFieldChange(idx, 'enabled', e.target.checked)}
+                                            />
+                                        }
+                                        label={strip.enabled ? 'Enabled' : 'Disabled'}
+                                    />
+                                </Box>
+                                <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleRemoveStrip(idx)}
+                                    disabled={localStrips.length <= 1}
+                                    title={localStrips.length <= 1 ? 'At least one channel is required' : `Delete Channel ${idx}`}
+                                >
+                                    <Icon>delete</Icon>
+                                </IconButton>
                             </Box>
-                            <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleRemoveStrip(idx)}
-                                disabled={localStrips.length <= 1}
-                                title={localStrips.length <= 1 ? 'At least one channel is required' : `Delete Channel ${idx}`}
-                            >
-                                <Icon>delete</Icon>
-                            </IconButton>
-                        </Box>
 
-                        <Divider sx={{ mb: 1.5 }} />
+                            <Divider sx={{ mb: 1.5 }} />
 
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-                            <TextField
-                                label="Data Pin (GPIO)"
-                                type="number"
-                                size="small"
-                                sx={{ minWidth: 120, flex: 1 }}
-                                value={strip.pin}
-                                onChange={(e) => handleFieldChange(idx, 'pin', parseInt(e.target.value, 10) || 0)}
-                                inputProps={{ min: 0, max: 48 }}
-                            />
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                                <TextField
+                                    label="Data Pin (GPIO)"
+                                    type="number"
+                                    size="small"
+                                    sx={{ minWidth: 120, flex: 1 }}
+                                    value={strip.pin}
+                                    onChange={(e) => handleFieldChange(idx, 'pin', parseInt(e.target.value, 10) || 0)}
+                                    inputProps={{ min: 0, max: 64 }}
+                                    error={isDup}
+                                    helperText={isDup ? 'GPIO already in use' : ''}
+                                />
 
                             {isSpiChipset(strip.chipset) && (
                                 <TextField
@@ -204,7 +253,7 @@ const StripsConfigEditor = ({ strips, onChange }) => {
                                     sx={{ minWidth: 120, flex: 1 }}
                                     value={strip.clock >= 0 ? strip.clock : ''}
                                     onChange={(e) => handleFieldChange(idx, 'clock', e.target.value === '' ? -1 : parseInt(e.target.value, 10))}
-                                    inputProps={{ min: 0, max: 48 }}
+                                    inputProps={{ min: 0, max: 64 }}
                                 />
                             )}
 
@@ -263,14 +312,16 @@ const StripsConfigEditor = ({ strips, onChange }) => {
                         </Box>
                     </CardContent>
                 </Card>
-            ))}
+            );
+        })}
         </Box>
     );
 };
 
 StripsConfigEditor.propTypes = {
     strips: PropTypes.arrayOf(PropTypes.object),
-    onChange: PropTypes.func
+    onChange: PropTypes.func,
+    updateError: PropTypes.func
 };
 
 export default StripsConfigEditor;

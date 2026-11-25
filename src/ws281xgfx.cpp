@@ -30,6 +30,7 @@
 
 #include "globals.h"
 
+#include <bitset>
 #include <iterator>
 #include <vector>
 
@@ -52,12 +53,24 @@ void WS281xGFX::AddLEDs(std::vector<std::shared_ptr<GFXBase>>& devices)
     const auto& strips = g_ptrSystem->GetDeviceConfig().GetStrips();
     CRGB* masterBuffer = devices[0]->leds;
     const size_t masterBufferSize = devices[0]->GetLEDCount();
+    std::bitset<64> seenPins;
 
     for (size_t ch = 0; ch < strips.size(); ++ch)
     {
         const auto& strip = strips[ch];
         if (!strip.enabled || strip.dataPin < 0)
             continue;
+
+        if (static_cast<size_t>(strip.dataPin) < seenPins.size())
+        {
+            if (seenPins.test(strip.dataPin))
+            {
+                debugW("Strip %zu: GPIO %d already assigned to a previous channel; skipping duplicate to avoid hardware driver corruption",
+                       ch, strip.dataPin);
+                continue;
+            }
+            seenPins.set(strip.dataPin);
+        }
 
         size_t offset = strip.offset;
         size_t len = strip.length;
