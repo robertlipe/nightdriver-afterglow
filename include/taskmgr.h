@@ -34,8 +34,9 @@
 //    watchdog on for our own idle tasks, and feed the watchdog in
 //    ProcessIdleTime as we consume all available idle time.
 //
-//    BUGBUG(davepl): I think this means that vTaskDelete is never called
-//                    since it was handled by the idle tasks.
+//    Historically, starving the system idle tasks meant vTaskDelete(NULL) memory
+//    was never reclaimed. ProcessIdleTime() now yields for 1 FreeRTOS tick per
+//    measurement window so prvIdleTask (priority 0) can reap terminated tasks.
 //
 //
 // History:     Jul-12-2018         Davepl      Created
@@ -47,7 +48,6 @@
 
 #include <Arduino.h>
 #include <esp_arduino_version.h>
-#include <esp_task_wdt.h>
 #include <freertos/task.h>
 #include <utility>
 

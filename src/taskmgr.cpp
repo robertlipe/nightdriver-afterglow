@@ -19,7 +19,6 @@
 #include "taskmgr.h"
 #include "values.h"
 
-#include <esp_task_wdt.h>
 
 namespace
 {
@@ -59,6 +58,12 @@ void IdleTask::ProcessIdleTime()
         {
             // We've used up all the time, so calculate the idle ratio and reset the counter
             _idleRatio = ((float) counter  / delta);
+            // Yield for 1 FreeRTOS tick to let the real FreeRTOS idle task (prvIdleTask at priority 0) run.
+            // In FreeRTOS, prvCheckTasksWaitingTermination() runs inside the system idle task to free memory
+            // (TCBs, stacks) for tasks that called vTaskDelete(NULL). Because IdleTask runs at tskIDLE_PRIORITY + 1,
+            // without this periodic yield, priority 0 is 100% starved, stranding deleted task memory forever.
+            vTaskDelay(1);
+
             _lastMeasurement = millis();
             counter = 0;
 
@@ -93,7 +98,6 @@ void IdleTask::ProcessIdleTime()
         else
         {
             // Burn a little time and update the counter
-            esp_task_wdt_reset();
             delayMicroseconds(kMillisPerLoop*1000);
             counter += kMillisPerLoop;
         }
@@ -123,17 +127,6 @@ void TaskManager::begin()
     xTaskCreatePinnedToCore(IdleTask::IdleTaskEntry, "Idle1", IDLE_STACK_SIZE, &_taskIdle1, tskIDLE_PRIORITY + 1, &_hIdle1, 1);
 #endif
 
-    // We need to turn off the watchdogs because our idle measurement tasks burn all of the idle time just
-    // to see how much there is (it's how they measure free CPU).  Thus, we starve the system's normal idle tasks
-    // and have to feed the watchdog on our own.
-
-    for (int i = 0; i < CONFIG_FREERTOS_NUMBER_OF_CORES; ++i) {
-        esp_task_wdt_delete(xTaskGetIdleTaskHandleForCore(i));
-    }
-    esp_task_wdt_add(_hIdle0);
-#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
-    esp_task_wdt_add(_hIdle1);
-#endif
 }
 
 void TaskManager::CheckHeap()
