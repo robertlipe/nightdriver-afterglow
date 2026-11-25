@@ -72,6 +72,8 @@ static void time_sync_notification_cb(struct timeval *tv)
 
         if (!l_bClockSet.load(std::memory_order_relaxed))
         {
+            // Initial synchronization: step the system clock immediately rather than slewing
+            settimeofday(tv, nullptr);
             shouldLog = true;
         }
         else
