@@ -325,6 +325,8 @@ class DeviceConfig : public IJSONSerializable
     bool SetStrip(size_t index, const StripConfig& config);
     bool AddStrip(const StripConfig& config);
     bool RemoveStrip(size_t index);
+    bool SetStripsFromJSON(const JsonArrayConst& array);
+    bool SetStripsFromJSON(const char* jsonString);
     void FlushToDisk();
     void InitializeDefaultStrips();
 };

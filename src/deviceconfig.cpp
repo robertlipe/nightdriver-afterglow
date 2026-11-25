@@ -284,27 +284,7 @@ bool DeviceConfig::DeserializeFromJSON(const JsonObjectConst& jsonObject, bool s
 
     if (jsonObject[StripsTag].is<JsonArrayConst>())
     {
-        strips.clear();
-        for (JsonObjectConst stripObj : jsonObject[StripsTag].as<JsonArrayConst>())
-        {
-            StripConfig sc;
-            sc.dataPin = stripObj["pin"] | -1;
-            sc.clockPin = stripObj["clock"] | -1;
-            sc.length = stripObj["length"] | static_cast<uint16_t>(60);
-            sc.offset = stripObj["offset"] | static_cast<uint16_t>(0);
-            if (const char* orderStr = stripObj["order"])
-            {
-                if (auto order = ParseColorOrder(orderStr))
-                    sc.colorOrder = *order;
-            }
-            if (const char* csStr = stripObj["chipset"])
-            {
-                if (auto cs = ParseChipsetType(csStr))
-                    sc.chipset = *cs;
-            }
-            sc.enabled = stripObj["enabled"] | true;
-            strips.push_back(sc);
-        }
+        SetStripsFromJSON(jsonObject[StripsTag].as<JsonArrayConst>());
     }
 
     if (strips.empty())
@@ -806,6 +786,48 @@ bool DeviceConfig::RemoveStrip(size_t index)
     strips.erase(strips.begin() + index);
     SaveToJSON();
     return true;
+}
+
+bool DeviceConfig::SetStripsFromJSON(const JsonArrayConst& array)
+{
+    std::vector<StripConfig> newStrips;
+    for (JsonObjectConst stripObj : array)
+    {
+        StripConfig sc;
+        sc.dataPin = stripObj["pin"] | -1;
+        sc.clockPin = stripObj["clock"] | -1;
+        sc.length = stripObj["length"] | static_cast<uint16_t>(60);
+        sc.offset = stripObj["offset"] | static_cast<uint16_t>(0);
+        if (const char* orderStr = stripObj["order"])
+        {
+            if (auto order = ParseColorOrder(orderStr))
+                sc.colorOrder = *order;
+        }
+        if (const char* csStr = stripObj["chipset"])
+        {
+            if (auto cs = ParseChipsetType(csStr))
+                sc.chipset = *cs;
+        }
+        sc.enabled = stripObj["enabled"] | true;
+        newStrips.push_back(sc);
+    }
+    if (newStrips.empty())
+        return false;
+    SetStrips(newStrips);
+    return true;
+}
+
+bool DeviceConfig::SetStripsFromJSON(const char* jsonString)
+{
+    if (!jsonString || *jsonString == '\0')
+        return false;
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, jsonString);
+    if (err)
+        return false;
+    if (doc.is<JsonArrayConst>())
+        return SetStripsFromJSON(doc.as<JsonArrayConst>());
+    return false;
 }
 
 void DeviceConfig::InitializeDefaultStrips()

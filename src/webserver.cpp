@@ -1058,6 +1058,11 @@ void CWebServer::SetSettingsIfPresent(AsyncWebServerRequest * pRequest)
     #endif
 
 
+    if (pRequest->hasParam(DeviceConfig::StripsTag, true))
+    {
+        deviceConfig.SetStripsFromJSON(pRequest->getParam(DeviceConfig::StripsTag, true)->value().c_str());
+    }
+
     #if SHOW_VU_METER
     PushPostParamIfPresent<bool>(pRequest, DeviceConfig::ShowVUMeterTag, SET_VALUE(effectManager.ShowVU(value)));
     #endif
