@@ -216,7 +216,21 @@ void WS281xGFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsD
         }
         fadeLightBy(FastLED[i].leds(), FastLED[i].size(), 255 - g_ptrSystem->GetDeviceConfig().GetBrightness());
     }
-    FastLED.show(min(g_Values.Fader, g_Values.ThermalThrottle)); //Shows the pixels
+    uint8_t showScale = g_Values.Fader;
+    if (g_Values.ThermalThrottle == 0)
+    {
+        showScale = 0; // Emergency shutdown
+    }
+    else if (g_ptrSystem->GetDeviceConfig().GetBrightness() <= 8)
+    {
+        // Board is already at minimal hardware brightness; avoid integer truncation to absolute zero
+        showScale = g_Values.Fader;
+    }
+    else
+    {
+        showScale = min(g_Values.Fader, g_Values.ThermalThrottle);
+    }
+    FastLED.show(showScale); // Shows the pixels
 
     g_Values.FPS = FastLED.getFPS();
     #ifdef POWER_LIMIT_MW
@@ -224,7 +238,7 @@ void WS281xGFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsD
     #else
         g_Values.Brite = 100.0 * g_ptrSystem->GetDeviceConfig().GetBrightness() / 255;
     #endif
-    g_Values.Brite = (g_Values.Brite * min(g_Values.Fader, g_Values.ThermalThrottle)) / 255.0f;
+    g_Values.Brite = (g_Values.Brite * showScale) / 255.0f;
     g_Values.Watts = calculate_unscaled_power_mW(effectManager.g()->leds, pixelsDrawn) / 1000; // 1000 for mw->W
 }
 
