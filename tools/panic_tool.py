@@ -47,7 +47,7 @@ def find_tool(tool_name, arch_info):
 
     if tool_name == "gdb":
         # Newer PIO versions split GDB into a separate package
-        gdb_pkg = "tool-" + prefix.replace("esp32-", "esp-").replace("esp32s2-", "esp-").replace("esp32s3-", "esp-").strip("-")
+        gdb_pkg = "tool-" + prefix.replace("esp32-", "esp-").replace("esp32s2-", "esp-").replace("esp32s3-", "esp-").strip("-") + "-gdb"
         search_paths.append(os.path.join(PIO_PACKAGES_DIR, gdb_pkg, "bin"))
     full_tool_name = prefix + tool_name
     exe_suffix = ".exe" if os.name == "nt" else ""

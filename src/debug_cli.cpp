@@ -401,11 +401,21 @@ static std::optional<size_t> ResolveEffect(std::string_view arg)
         }
     }
 
-    // Try fuzzy name match
+    // Try exact name match first
+    const size_t effectCount = effectManager.EffectCount();
+    for (size_t i = 0; i < effectCount; ++i)
+    {
+        const String& name = effectManager.EffectsList()[i]->FriendlyName();
+        if (StringCompareInsensitive(arg, name.c_str()))
+        {
+            return i;
+        }
+    }
+
+    // Try fuzzy substring match
     int match_index = -1;
     int matches = 0;
     std::vector<std::string> candidates;
-    const size_t effectCount = effectManager.EffectCount();
 
     for (size_t i = 0; i < effectCount; ++i)
     {
@@ -1074,6 +1084,42 @@ static const command core_commands[] = {
         }
     }},
     {"statuslog", "[on|off] Show/change periodic status logs", "Status logs.", DoStatusLog},
+#if HAS_SYSTEM_HARDWARE_HUB
+    {"rtc", "[sync|read] Read or synchronize PCF85063 real-time clock", "RTC status:",
+     [](const cli_argv &argv) {
+         if (argv.size() > 1 && StringCompareInsensitive(argv[1], "sync"))
+         {
+             if (SystemHardwareHub::Instance().SyncRTCTimeFromSystem())
+             {
+                 cli_printf("RTC synchronized from system time.\n");
+             }
+             else
+             {
+                 cli_printf("Failed to synchronize RTC from system time.\n");
+             }
+             return;
+         }
+
+         struct tm timeinfo = {};
+         if (SystemHardwareHub::Instance().ReadRTC(timeinfo))
+         {
+             char buf[64];
+             strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S UTC", &timeinfo);
+             cli_printf("PCF85063 RTC time: %s\n", buf);
+         }
+         else
+         {
+             cli_printf("PCF85063 RTC: failed to read or oscillator stopped.\n");
+         }
+
+         time_t now = time(nullptr);
+         struct tm sys_tm = {};
+         localtime_r(&now, &sys_tm);
+         char sys_buf[64];
+         strftime(sys_buf, sizeof(sys_buf), "%Y-%m-%d %H:%M:%S %Z", &sys_tm);
+         cli_printf("System local time: %s (epoch: %lld)\n", sys_buf, (long long)now);
+     }},
+#endif
 #if HAS_SYSTEM_HARDWARE_HUB
     {"tap", "[on|off] Enable/disable bezel tap to advance effect", "Tap detection:",
      [](const cli_argv &argv) {

@@ -137,8 +137,12 @@ void ESPHUB75GFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devi
 
 void ESPHUB75GFX::SetBrightness(uint8_t amount)
 {
-    if (driver)
+    static uint8_t lastBrightness = 255;
+    if (driver && amount != lastBrightness)
+    {
+        lastBrightness = amount;
         driver->set_brightness(amount);
+    }
 }
 
 void ESPHUB75GFX::setRotation(uint8_t r)

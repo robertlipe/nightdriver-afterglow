@@ -170,14 +170,10 @@ class PatternPinwheel : public EffectWithId<PatternPinwheel>
 
         for (int i = 0; i < 64; i++)
         {
-            CRGB color;
-
-            uint8_t x = 0;
-            uint8_t y = 0;
-
-            x = beatsin8((64 - i) * 2, MATRIX_HEIGHT - i, i + 1) + 16;
-            y = g()->beatcos8((64 - i) * 2, MATRIX_HEIGHT - i, i + 1);
-            color = g()->ColorFromCurrentPalette((64 - i) * 14);
+            constexpr int xOffset = (MATRIX_WIDTH - MATRIX_HEIGHT) / 2;
+            int x = beatsin8((64 - i) * 2, MATRIX_HEIGHT - i, i + 1) + xOffset;
+            int y = g()->beatcos8((64 - i) * 2, MATRIX_HEIGHT - i, i + 1);
+            CRGB color = g()->ColorFromCurrentPalette((64 - i) * 14);
 
             if (g()->isValidPixel(x, y))
                 g()->setPixel(x, y, color);
