@@ -5,6 +5,7 @@ import httpPrefix from "../../../espaddr";
 import PropTypes from "prop-types";
 import parse from 'html-react-parser';
 import { RgbColorPicker } from "react-colorful";
+import StripsConfigEditor from "./stripsConfig";
 
 // Base styling for inputs.     
 const textFieldProps = {
@@ -401,6 +402,12 @@ const ConfigDialog = ({heading, effectIndex, open, setOpen, saveCallback}) => {
                     }    
                     return <ConfigInput key={setting.name} setting={setting} updateData={updateData} updateError={updateError}></ConfigInput>;
                 })}
+                {effectIndex === undefined && curConfData.strips && (
+                    <StripsConfigEditor
+                        strips={curConfData.strips}
+                        onChange={(newStrips) => updateData('strips', JSON.stringify(newStrips))}
+                    />
+                )}
             </Box>);
         };
         fetchConfig();
@@ -408,7 +415,7 @@ const ConfigDialog = ({heading, effectIndex, open, setOpen, saveCallback}) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [effectIndex]);
 
-    return <Dialog open={open} onClose={handleCancel}>
+    return <Dialog open={open} onClose={handleCancel} maxWidth="md" fullWidth>
         <DialogTitle>{heading} Configuration</DialogTitle>
         <DialogContent>
             {content}
