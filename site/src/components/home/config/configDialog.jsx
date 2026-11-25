@@ -344,7 +344,14 @@ const numberChanged = (value, error, description, min, max, setError, setHelper,
 const ConfigDialog = ({heading, effectIndex, open, setOpen, saveCallback}) => {
 
     const settingsEndpoint = `${httpPrefix !== undefined ? httpPrefix : ""}/settings${effectIndex !== undefined ? '/effect': ''}`;
-    const [content, setContent] = useState(<h2>Configuration Loading...</h2>);
+    const [content, setContent] = useState(
+        <Box sx={{ py: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+            <CircularProgress size={36} />
+            <Typography variant="body1" color="text.secondary">
+                Loading configuration...
+            </Typography>
+        </Box>
+    );
     const [saveData, setSaveData] = useState({});
     const [errorFields, setErrorFields] = useState(new Set());
     const [disableSubmit, setDisableSubmit] = useState(false);
@@ -395,8 +402,8 @@ const ConfigDialog = ({heading, effectIndex, open, setOpen, saveCallback}) => {
         const fetchConfig = async (attempt = 1) => {
             try {
                 const [specResp, curConfResp] = await Promise.all([
-                    fetch(spec),
-                    fetch(current)
+                    fetch(spec, { signal: AbortSignal.timeout(2500) }),
+                    fetch(current, { signal: AbortSignal.timeout(2500) })
                 ]);
                 if (!specResp.ok || !curConfResp.ok) {
                     throw new Error(`HTTP error ${specResp.status || curConfResp.status}`);
