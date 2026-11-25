@@ -23,6 +23,7 @@
 
 ## 4. Core Firmware Modernization (C++26 Standards)
 * [x] **Constants**: Replaced legacy math macros (`PI`, `M_PI`, `TWO_PI`) with `<numbers>` (`std::numbers::pi_v<float>`).
+* [ ] **Retire TaskManager VAXian Idle Spinners (`taskmgr.cpp`)**: Replace Dave's legacy VAX-era `IdleTask` busy-loop CPU-burn architecture (`Idle0` and `Idle1` spinning at `tskIDLE_PRIORITY + 1`) with native FreeRTOS idle hooks (`vApplicationIdleHook`) or tickless idle accounting. The current custom idle tasks consume massive CPU cycles simply measuring unspent time, starve priority 0 tasks like `prvIdleTask` (which reaps deleted task memory and stacks), and generate heat on battery/USB devices for zero architectural benefit.
 * [ ] **Data Structures**: Migrate raw C arrays to `std::array` across effects and math classes for bounds safety and range support.
 * [ ] **Memory Operations**: Audit manual `memset`/`memcpy` in network/display buffers; migrate to `std::fill`, `std::copy`, or value initialization.
 * [ ] **Ownership / Allocations**: Review raw `new` and `auto p = ...` in network/socket code for migration to `std::make_unique`.
