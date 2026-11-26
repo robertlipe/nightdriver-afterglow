@@ -34,6 +34,12 @@
 #include <string_view>
 #include <strings.h>
 
+// Fast, constexpr ASCII lowercase conversion for compile-time token evaluation.
+constexpr char ToLowerAscii(char c) noexcept
+{
+    return (c >= 'A' && c <= 'Z') ? static_cast<char>(c + ('a' - 'A')) : c;
+}
+
 // Case-insensitive string equality comparison for two string_views.
 // Evaluates at compile time in constexpr contexts, or utilizes strncasecmp at runtime.
 constexpr bool EqualsIgnoreCase(std::string_view a, std::string_view b) noexcept
@@ -45,8 +51,7 @@ constexpr bool EqualsIgnoreCase(std::string_view a, std::string_view b) noexcept
     {
         for (size_t i = 0; i < a.size(); ++i)
         {
-            if (std::tolower(static_cast<unsigned char>(a[i])) !=
-                std::tolower(static_cast<unsigned char>(b[i])))
+            if (ToLowerAscii(a[i]) != ToLowerAscii(b[i]))
                 return false;
         }
         return true;
@@ -82,8 +87,7 @@ constexpr bool StartsWithIgnoreCase(std::string_view haystack, std::string_view 
     {
         for (size_t i = 0; i < needle.size(); ++i)
         {
-            if (std::tolower(static_cast<unsigned char>(haystack[i])) !=
-                std::tolower(static_cast<unsigned char>(needle[i])))
+            if (ToLowerAscii(haystack[i]) != ToLowerAscii(needle[i]))
                 return false;
         }
         return true;

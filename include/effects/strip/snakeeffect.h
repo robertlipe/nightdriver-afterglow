@@ -79,9 +79,16 @@ class SnakeEffect : public EffectWithId<SnakeEffect>
     {
         if (!LEDStripEffect::Init(gfx))
             return false;
-        if (_cLEDs > 0)
+        if (LEDCount == 0 && _cLEDs > 0)
         {
             LEDCount = _cLEDs;
+            lastLEDIndex = LEDCount - 1;
+            Reset();
+        }
+        else if (LEDCount > 0)
+        {
+            if (_cLEDs > 0 && LEDCount > _cLEDs)
+                LEDCount = _cLEDs;
             lastLEDIndex = LEDCount - 1;
             Reset();
         }

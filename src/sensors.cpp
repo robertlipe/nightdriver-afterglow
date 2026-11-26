@@ -476,8 +476,12 @@ void SensorManager::EvaluateThermal(std::optional<float> rawAmbientTempF, std::o
         }
     }
 
-    // Allow a post-boot warmup grace period before tripwires evaluate surge rates
-    const bool allowSurge = (now >= kWarmupGracePeriodMs);
+    // Allow a post-boot warmup grace period before tripwires evaluate surge rates.
+    // Latch completion so millis() 49.7-day rollover never re-engages warmup grace.
+    static bool s_warmupComplete = false;
+    if (!s_warmupComplete && now >= kWarmupGracePeriodMs)
+        s_warmupComplete = true;
+    const bool allowSurge = s_warmupComplete;
 
     // Determine target thermal state:
     // 1. Critical Tripwire: Ambient >= kAmbientCriticalTempF, Die >= kDieCriticalTempF, or Die surge >= kDieCriticalSurgeRate while >= kDieCriticalSurgeFloorF

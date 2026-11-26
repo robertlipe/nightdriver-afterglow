@@ -162,8 +162,12 @@ inline void ClearFanPixels(float fPos, float count, PixelOrder order = Sequentia
   fPos += iFan * FAN_SIZE;
   while (count > 0)
   {
-    for (int i = 0; i < NUM_CHANNELS; i++)
-      FastLED[i][GetFanPixelOrder(fPos + (int)count, order)] = CRGB::Black;
+    auto index = GetFanPixelOrder(fPos + (int)count, order);
+    for (int i = 0; i < FastLED.count(); i++)
+    {
+      if (index >= 0 && index < (int)FastLED[i].size())
+        FastLED[i][index] = CRGB::Black;
+    }
     count--;
   }
 }
@@ -255,13 +259,16 @@ inline void DrawFanPixels(float fPos, float count, CRGB color, PixelOrder order 
 
   if (remaining > 0.0f && amtFirstPixel > 0.0f && iPos < (int)FastLED.size())
   {
+    auto index = GetFanPixelOrder(iPos, order);
+    CRGB newColor = LEDStripEffect::ColorFraction(color, amtFirstPixel);
     for (int i = 0; i < FastLED.count(); i++)
     {
-      auto index = GetFanPixelOrder(iPos, order);
-      CRGB newColor = LEDStripEffect::ColorFraction(color, amtFirstPixel);
-      auto l = FastLED[i][index];
-      l += newColor;
-      FastLED[i][index] = l;
+      if (index >= 0 && index < (int)FastLED[i].size())
+      {
+        auto l = FastLED[i][index];
+        l += newColor;
+        FastLED[i][index] = l;
+      }
     }
     iPos++;
     remaining -= amtFirstPixel;
@@ -271,8 +278,12 @@ inline void DrawFanPixels(float fPos, float count, CRGB color, PixelOrder order 
 
   while (remaining > 1.0f && iPos < (int)FastLED.size())
   {
+    auto index = GetFanPixelOrder(iPos, order);
     for (int i = 0; i < FastLED.count(); i++)
-      FastLED[i][GetFanPixelOrder(iPos, order)] += color;
+    {
+      if (index >= 0 && index < (int)FastLED[i].size())
+        FastLED[i][index] += color;
+    }
     iPos++;
     remaining--;
   }
@@ -281,8 +292,13 @@ inline void DrawFanPixels(float fPos, float count, CRGB color, PixelOrder order 
 
   if (remaining > 0.0f)
   {
-    for (int i = 0; i < NUM_CHANNELS; i++)
-      FastLED[i][GetFanPixelOrder(iPos, order)] += LEDStripEffect::ColorFraction(color, remaining);
+    auto index = GetFanPixelOrder(iPos, order);
+    CRGB tailColor = LEDStripEffect::ColorFraction(color, remaining);
+    for (int i = 0; i < FastLED.count(); i++)
+    {
+      if (index >= 0 && index < (int)FastLED[i].size())
+        FastLED[i][index] += tailColor;
+    }
   }
 }
 
@@ -322,12 +338,18 @@ inline void DrawRingPixels(float fPos, float count, CRGB color, int iInsulator, 
   iPos %= GetRingSize(iRing);
   if (remaining > 0.0f && amtFirstPixel > 0.0f)
   {
+    int idx = bPos + iPos;
+    CRGB newColor = LEDStripEffect::ColorFraction(color, amtFirstPixel);
     for (int i = 0; i < FastLED.count(); i++)
     {
-      if (!bMerge)
-        FastLED[i][bPos + iPos] = CRGB::Black;
-      FastLED[i][bPos + iPos++] += LEDStripEffect::ColorFraction(color, amtFirstPixel);
+      if (idx >= 0 && idx < (int)FastLED[i].size())
+      {
+        if (!bMerge)
+          FastLED[i][idx] = CRGB::Black;
+        FastLED[i][idx] += newColor;
+      }
     }
+    iPos++;
     remaining -= amtFirstPixel;
   }
 
@@ -335,13 +357,18 @@ inline void DrawRingPixels(float fPos, float count, CRGB color, int iInsulator, 
 
   while (remaining > 1.0f)
   {
+    iPos %= GetRingSize(iRing);
+    int idx = bPos + iPos;
     for (int i = 0; i < FastLED.count(); i++)
     {
-      iPos %= GetRingSize(iRing);
-      if (!bMerge)
-        FastLED[i][bPos + iPos] = CRGB::Black;
-      FastLED[i][bPos + iPos++] += color;
+      if (idx >= 0 && idx < (int)FastLED[i].size())
+      {
+        if (!bMerge)
+          FastLED[i][idx] = CRGB::Black;
+        FastLED[i][idx] += color;
+      }
     }
+    iPos++;
     remaining--;
   }
 
@@ -350,11 +377,16 @@ inline void DrawRingPixels(float fPos, float count, CRGB color, int iInsulator, 
   iPos %= GetRingSize(iRing);
   if (remaining > 0.0f)
   {
+    int idx = bPos + iPos;
+    CRGB tailColor = LEDStripEffect::ColorFraction(color, remaining);
     for (int i = 0; i < FastLED.count(); i++)
     {
-      if (!bMerge)
-        FastLED[i][bPos + iPos] = CRGB::Black;
-      FastLED[i][bPos + iPos++] += LEDStripEffect::ColorFraction(color, remaining);
+      if (idx >= 0 && idx < (int)FastLED[i].size())
+      {
+        if (!bMerge)
+          FastLED[i][idx] = CRGB::Black;
+        FastLED[i][idx] += tailColor;
+      }
     }
   }
 }
@@ -1116,14 +1148,16 @@ public:
 
         int j = (!bReversed || i > FAN_SIZE) ? i : LEDCount - 1 - i;
         uint x = GetFanPixelOrder(j, order);
-        if (x < FastLED.size())
+        if (iChannel < FastLED.count() && x < FastLED[iChannel].size())
         {
             FastLED[iChannel][x] = color;
 
             if (bMirrored)
             {
                 // Use bReversed here to match the reversal in the main index calculation
-                FastLED[iChannel][bReversed ? (2 * LEDCount - 1 - i) : LEDCount + i] = color;
+                size_t mirrorIdx = bReversed ? (2 * LEDCount - 1 - i) : LEDCount + i;
+                if (mirrorIdx < FastLED[iChannel].size())
+                    FastLED[iChannel][mirrorIdx] = color;
             }
         }
 

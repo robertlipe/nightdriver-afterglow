@@ -933,7 +933,11 @@ static void DoStrip(const cli_argv &argv)
     if (StringCompareInsensitive(sub, "apply"))
     {
         cli_write("Saving configuration to /device.cfg...\n");
-        config.FlushToDisk();
+        if (!config.FlushToDisk())
+        {
+            cli_write("Error: Failed to save /device.cfg to flash!\n");
+            return;
+        }
         cli_write("Restarting system to reinitialize LED channels...\n");
         esp_restart();
         return;

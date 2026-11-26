@@ -23,7 +23,7 @@ This unlocks:
 ```mermaid
 flowchart TD
     subgraph Config["Configuration & Storage"]
-        NVS["NVS / LittleFS (/current.cfg)"] -->|JSON| DC["DeviceConfig (std::vector<StripConfig>)"]
+        NVS["NVS / LittleFS (/device.cfg)"] -->|JSON| DC["DeviceConfig (std::vector<StripConfig>)"]
         CLI["Debug CLI ('strip' command)"] -->|Modify| DC
         Web["Web / REST API (/api/strips)"] -->|Modify| DC
     end
@@ -76,7 +76,7 @@ struct StripConfig {
 >
 > **Scope Boundary:** HUB75 matrices require 14–16 tightly coupled DMA pins and remain compile-time/board-specific for now. Dynamic reconfiguration applies to LED strips, IR remote, and I2S audio.
 
-### 3.2 JSON Representation in `current.cfg`
+### 3.2 JSON Representation in `device.cfg`
 ```json
 {
   "strips": [
@@ -121,7 +121,7 @@ In C++:
 #endif
 ```
 
-If no `"strips"` array exists in `/current.cfg` (first boot), `DeviceConfig` initializes from `kDefaultPins`:
+If no `"strips"` array exists in `/device.cfg` (first boot), `DeviceConfig` initializes from `kDefaultPins`:
 - Data pins populated from `kDefaultPins`
 - `length = NUM_LEDS` (or per-strip length array)
 - `colorOrder = COLOR_ORDER`

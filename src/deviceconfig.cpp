@@ -748,9 +748,9 @@ void DeviceConfig::SetTapDetection(bool newTapDetection)
     SetAndSave(tapDetection, newTapDetection);
 }
 
-void DeviceConfig::FlushToDisk()
+bool DeviceConfig::FlushToDisk()
 {
-    SaveToJSONFile(DEVICE_CONFIG_FILE, *this);
+    return SaveToJSONFile(DEVICE_CONFIG_FILE, *this);
 }
 
 void DeviceConfig::SetStrips(const std::vector<StripConfig>& newStrips)
@@ -768,14 +768,12 @@ bool DeviceConfig::SetStrip(size_t index, const StripConfig& config)
     if (strips[index] == config)
         return true;
     strips[index] = config;
-    SaveToJSON();
     return true;
 }
 
 bool DeviceConfig::AddStrip(const StripConfig& config)
 {
     strips.push_back(config);
-    SaveToJSON();
     return true;
 }
 
@@ -784,7 +782,6 @@ bool DeviceConfig::RemoveStrip(size_t index)
     if (index >= strips.size())
         return false;
     strips.erase(strips.begin() + index);
-    SaveToJSON();
     return true;
 }
 

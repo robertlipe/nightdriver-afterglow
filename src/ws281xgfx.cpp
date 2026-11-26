@@ -215,11 +215,7 @@ void WS281xGFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsD
         return;
     }
 
-    const int channelCount = FastLED.count();
-    for (int i = 0; i < channelCount; i++)
-    {
-        fadeLightBy(FastLED[i].leds(), FastLED[i].size(), 255 - g_ptrSystem->GetDeviceConfig().GetBrightness());
-    }
+    fadeLightBy(leds, _ledcount, 255 - g_ptrSystem->GetDeviceConfig().GetBrightness());
     uint8_t showScale = g_Values.Fader;
     if (g_Values.ThermalThrottle == 0)
     {
