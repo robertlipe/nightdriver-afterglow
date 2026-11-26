@@ -363,7 +363,7 @@ public:
         if (isValidPixel(x))
             leds[x] = color;
         else
-            debugE("Invalid setPixel request: x=%d, NUM_LEDS=%d", x, NUM_LEDS);
+            debugE("Invalid setPixel request: x=%d, ledcount=%u", x, (unsigned)_ledcount);
     }
 
     // DrawSafeCircle

@@ -143,7 +143,7 @@ CRGB GFXBase::getPixel(int16_t x, int16_t y) const
     if (isValidPixel(x, y))
         return leds[XY(x, y)];
     else
-        Panic("Invalid index in getPixel: x=%d, y=%d, NUM_LEDS=%d", x, y, NUM_LEDS);
+        Panic("Invalid index in getPixel: x=%d, y=%d, ledcount=%u", x, y, (unsigned)_ledcount);
 }
 
 // getPixel
@@ -155,7 +155,7 @@ CRGB GFXBase::getPixel(int16_t i) const
     if (isValidPixel(i))
         return leds[i];
     else
-        Panic("Invalid index in getPixel: i=%d, NUM_LEDS=%d", i, NUM_LEDS);
+        Panic("Invalid index in getPixel: i=%d, ledcount=%u", i, (unsigned)_ledcount);
 }
 
 void GFXBase::drawPixel(int16_t x, int16_t y, uint16_t color)
@@ -251,7 +251,7 @@ void GFXBase::setPixel(int16_t x, int16_t y, uint16_t color)
     if (isValidPixel(x, y))
         leds[XY(x, y)] = from16Bit(color);
     else
-        debugE("Invalid setPixel request: x=%d, y=%d, NUM_LEDS=%d", x, y, NUM_LEDS);
+        debugE("Invalid setPixel request: x=%d, y=%d, ledcount=%u", x, y, (unsigned)_ledcount);
 }
 
 void GFXBase::setPixel(int16_t x, int16_t y, CRGB color)
@@ -259,7 +259,7 @@ void GFXBase::setPixel(int16_t x, int16_t y, CRGB color)
     if (isValidPixel(x, y))
         leds[XY(x, y)] = color;
     else
-        debugE("Invalid setPixel request: x=%d, y=%d, NUM_LEDS=%d", x, y, NUM_LEDS);
+        debugE("Invalid setPixel request: x=%d, y=%d, ledcount=%u", x, y, (unsigned)_ledcount);
 }
 
 void GFXBase::setPixel(int16_t x, int r, int g, int b)
@@ -267,7 +267,7 @@ void GFXBase::setPixel(int16_t x, int r, int g, int b)
     if (isValidPixel(x))
         setPixel(x, CRGB(r, g, b));
     else
-        debugE("Invalid setPixel request: x=%d, NUM_LEDS=%d", x, NUM_LEDS);
+        debugE("Invalid setPixel request: x=%d, ledcount=%u", x, (unsigned)_ledcount);
 }
 
 // fadePixelToBlackBy
