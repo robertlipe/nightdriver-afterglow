@@ -673,14 +673,22 @@ void LoadEffectFactories()
             Effect<RainbowFillEffect>(120, 0),
             Effect<PaletteEffect>(RainbowColors_p, 4, 0.1, 0.0, 1.0, 0.0),
             Effect<BouncingBallEffect>(3, true, true, 8),
+#if ENABLE_AUDIO
             Effect<StarEffect<MusicStar>>("Rainbow Twinkle Stars", RainbowColors_p, kStarEffectProbability, 1, LINEARBLEND, 0.0, 0.0, kStarEffectMusicFactor),
+#endif
             Effect<StarEffect<Star>>("Rainbow Twinkle Stars", RainbowColors_p, kStarEffectProbability, 1, LINEARBLEND, 2.0, 0.0, kStarEffectMusicFactor),
             Effect<StarEffect<Star>>("Red Sparkle Stars", RedColors_p,   kStarEffectProbability, 1, LINEARBLEND, 2.0, 0.0, kStarEffectMusicFactor),
+#if ENABLE_AUDIO
             Effect<StarEffect<MusicStar>>("Red Stars", RedColors_p,   kStarEffectProbability, 1, LINEARBLEND, 2.0, 0.0, kStarEffectMusicFactor),
+#endif
             Effect<StarEffect<Star>>("Blue Sparkle Stars", BlueColors_p,  kStarEffectProbability, 1, LINEARBLEND, 2.0, 0.0, kStarEffectMusicFactor),
+#if ENABLE_AUDIO
             Effect<StarEffect<MusicStar>>("Blue Stars", BlueColors_p,  kStarEffectProbability, 1, LINEARBLEND, 2.0, 0.0, kStarEffectMusicFactor),
+#endif
             Effect<StarEffect<Star>>("Green Sparkle Stars", GreenColors_p, kStarEffectProbability, 1, LINEARBLEND, 2.0, 0.0, kStarEffectMusicFactor),
+#if ENABLE_AUDIO
             Effect<StarEffect<MusicStar>>("Green Stars", GreenColors_p, kStarEffectProbability, 1, LINEARBLEND, 2.0, 0.0, kStarEffectMusicFactor),
+#endif
             Effect<TwinkleEffect>(NUM_LEDS / 2, 20, 50),
             Effect<PaletteEffect>(RainbowColors_p, .25, 1, 0, 1.0, 0.0, LINEARBLEND, true, 1.0),
             Effect<PaletteEffect>(RainbowColors_p)
