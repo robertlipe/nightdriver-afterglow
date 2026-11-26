@@ -161,6 +161,7 @@ class PatternSMBoidExplosion : public EffectWithId<PatternSMBoidExplosion>
     void Draw() override
     {
         ChangePalettePeriodically();
+        fadeAllChannelsToBlackBy(32);
         for (int i = 0; i < NUM_PARTICLES; i++)
         {
             Boid boid = boids[i];
@@ -175,7 +176,6 @@ class PatternSMBoidExplosion : public EffectWithId<PatternSMBoidExplosion>
             g()->drawPixelXYF_Wu(boid.location.x, MATRIX_HEIGHT - 1 - boid.location.y,
                          ColorFromPalette(currentPalette, boid.hue, 255, currentBlending));
             boids[i] = boid;
-            fadeToBlackBy(g()->leds, NUM_LEDS, 1);
         }
     }
 };

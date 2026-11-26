@@ -162,16 +162,16 @@ class SimpleColorBeat : public BeatEffectBase, public EffectWithId<SimpleColorBe
         {
           c = CRGB::Cyan;
 
-          if (elapsed > 0.5)                                // Medium beats fill blue and proceed with insulator2
-          {
-            c = CHSV(beatsin8(4), 255, 255);
-            cInsulators = random(1, NUM_FANS);
-          }
-          else if (elapsed > 1.0)                           // Long beats fill purple and return
+          if (elapsed > 1.0)                                // Long beats fill purple and return
           {
             c = CRGB::Purple;
             setAllOnAllChannels(c.r, c.g, c.b);
             return;
+          }
+          else if (elapsed > 0.5)                           // Medium beats fill blue and proceed with insulator2
+          {
+            c = CHSV(beatsin8(4), 255, 255);
+            cInsulators = random(1, NUM_FANS);
           }
         }
 

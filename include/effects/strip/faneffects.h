@@ -390,7 +390,7 @@ class FanBeatEffect : public EffectWithId<FanBeatEffect>
 
   void Draw() override
   {
-    fadeToBlackBy(FastLED.leds(), _cLEDs, 20);
+    fadeAllChannelsToBlackBy(20);
     DrawEffect();
     delay(20);
   }
