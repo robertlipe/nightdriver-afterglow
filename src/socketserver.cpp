@@ -61,12 +61,13 @@ extern "C"
 SocketServer::SocketServer(int port, int numLeds) :
     _port(port),
     _numLeds(numLeds),
+    _maxPacketSize(STANDARD_DATA_HEADER_SIZE + LED_DATA_SIZE * std::max(numLeds, 1)),
     _server_fd(-1),
     _cbReceived(0),
     _address{}
 {
-    _abOutputBuffer.resize(MAXIMUM_PACKET_SIZE+1);        // +1 for uzlib one byte overreach bug
-    _pBuffer.resize(MAXIMUM_PACKET_SIZE);
+    _abOutputBuffer.resize(_maxPacketSize + 1);        // +1 for uzlib one byte overreach bug
+    _pBuffer.resize(_maxPacketSize);
 }
 
 void SocketServer::release()
@@ -145,7 +146,7 @@ bool SocketServer::ReadUntilNBytesReceived(size_t socket, size_t cbNeeded)
     // This test caps maximum packet size as a full buffer read of LED data.  If other packets wind up being longer,
     // the buffer itself and this test might need to change
 
-    if (cbNeeded > MAXIMUM_PACKET_SIZE)
+    if (cbNeeded > _maxPacketSize)
     {
         debugE("Unexpected request for %d bytes in ReadUntilNBytesReceived\n", cbNeeded);
         return false;
@@ -320,9 +321,9 @@ bool SocketServer::ProcessIncomingConnectionsLoop()
             uint32_t reserved       = DWORDFromMemory(&_pBuffer[12]);
             debugV("Compressed Header: compressedSize: %lu, expandedSize: %lu, reserved: %lu", (unsigned long)compressedSize, (unsigned long)expandedSize, (unsigned long)reserved);
 
-            if (expandedSize > MAXIMUM_PACKET_SIZE)
+            if (expandedSize > _maxPacketSize)
             {
-                debugE("Expanded packet would be %lu but buffer is only %lu !!!!\n", (unsigned long)expandedSize, (unsigned long)MAXIMUM_PACKET_SIZE);
+                debugE("Expanded packet would be %lu but buffer is only %lu !!!!\n", (unsigned long)expandedSize, (unsigned long)_maxPacketSize);
                 break;
             }
 
@@ -338,8 +339,8 @@ bool SocketServer::ProcessIncomingConnectionsLoop()
             // one big read one time would work best, and we use that to copy it to a regular RAM buffer.
 
             #if USE_PSRAM
-                std::unique_ptr<uint8_t []> _abTempBuffer = std::make_unique<uint8_t []>(MAXIMUM_PACKET_SIZE+1);    // Plus one for uzlib buffer overreach bug
-                std::memcpy(_abTempBuffer.get(), _pBuffer.data(), MAXIMUM_PACKET_SIZE);
+                std::unique_ptr<uint8_t []> _abTempBuffer = std::make_unique<uint8_t []>(_maxPacketSize + 1);    // Plus one for uzlib buffer overreach bug
+                std::memcpy(_abTempBuffer.get(), _pBuffer.data(), _maxPacketSize);
                 auto pSourceBuffer = &_abTempBuffer[COMPRESSED_HEADER_SIZE];
             #else
                 auto pSourceBuffer = _pBuffer.data() + COMPRESSED_HEADER_SIZE;
@@ -428,9 +429,9 @@ bool SocketServer::ProcessIncomingConnectionsLoop()
                 debugV("Uncompressed Header: channel16=%u, length=%lu, seconds=%llu, micro=%llu", channel16, (unsigned long)length32, seconds, micros);
 
                 size_t totalExpected = STANDARD_DATA_HEADER_SIZE + length32 * LED_DATA_SIZE;
-                if (totalExpected > MAXIMUM_PACKET_SIZE)
+                if (totalExpected > _maxPacketSize)
                 {
-                    debugE("Too many bytes promised (%zu) - more than we can use for our LEDs at max packet (%lu)\n", (size_t)totalExpected, (unsigned long)MAXIMUM_PACKET_SIZE);
+                    debugE("Too many bytes promised (%zu) - more than we can use for our LEDs at max packet (%lu)\n", (size_t)totalExpected, (unsigned long)_maxPacketSize);
                     break;
                 }
 
