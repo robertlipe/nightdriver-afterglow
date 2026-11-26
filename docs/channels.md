@@ -3,7 +3,7 @@
 **Date:** November 2026
 **Branch:** `channels`
 **Toolchain:** PlatformIO / Arduino 4.0 / ESP-IDF 6.1 (GCC 15, C++26)
-**Status:** Architecture Specification & Implementation Plan
+**Status:** In Progress / Phases 1–5 Delivered (Verified on Physical Hardware)
 
 ---
 
@@ -178,28 +178,81 @@ We will expose a new `strip` command using our zero-allocation `ParseInt` infras
 
 ---
 
-## 6. Phased Implementation Roadmap
+## 6. Phased Implementation Roadmap & Status
 
-### Phase 1: Dynamic `WS281xGFX::AddLEDs()` (The Core Engine)
-- Include `<fl/channels/channel.h>`.
-- Replace the 8-way `ADD_CHANNEL(i)` macro tower in `src/ws281xgfx.cpp` with a loop calling `FastLED.add(fl::ChannelConfig(...))`.
-- Drive it from legacy `#define` values first to verify FastLED 3.10 Channels API links and drives silicon cleanly on `demo` and `tinyled-demo`.
+### Phase 1: Dynamic `WS281xGFX::AddLEDs()` (The Core Engine) — **COMPLETED**
+- Included `<fl/channels/channel.h>`.
+- Replaced the 8-way macro tower in `src/ws281xgfx.cpp` with a loop calling `FastLED.add(fl::ChannelConfig(...))` with `fl::TIMING_WS2812_800KHZ` and `fl::TIMING_WS2815`.
+- Verified on physical hardware (Waveshare ESP32-S3).
 
-### Phase 2: `DeviceConfig` Strip Topology & JSON Serialization
-- Add `StripConfig` struct and `std::vector<StripConfig>` to `include/deviceconfig.h`.
-- Implement `DeviceConfig::SerializeStrips()` and `DeviceConfig::DeserializeStrips()`.
-- Populate initial defaults from compile-time flags on cold boot.
+### Phase 2: `DeviceConfig` Strip Topology & JSON Serialization — **COMPLETED**
+- Added `StripConfig` struct with `dataPin`, `clockPin`, `length`, `offset`, `colorOrder`, `chipset`, and `enabled`.
+- Implemented `DeviceConfig::SerializeStrips()` and `DeviceConfig::DeserializeStrips()`.
+- Synchronous LittleFS `/device.cfg` persistence with cold-boot initialization from `-DLED_PINS` or legacy `-DLED_PIN*` flags.
 
-### Phase 3: Interactive CLI `strip` Command
-- Implement `DoStrip` in `src/debug_cli.cpp`.
-- Validate pin inputs using `TryParseGpioPin` and `ParseInt`.
-- Support listing, editing, and staging strip configurations.
+### Phase 3: Interactive CLI `strip` Command — **COMPLETED**
+- Implemented `DoStrip` in `src/debug_cli.cpp` with zero-allocation `cli_print` variadic fold expression.
+- Commands: `strip list`, `strip set <ch> <prop> <val>`, `strip add <pin> <len> [order] [chipset] [offset]`, `strip remove <ch>`, `strip apply`.
 
-### Phase 4: Lifecycle Management (Live Reconfig vs. Reboot)
-- Implement `ApplyStripConfig()`:
-  - Phase 4A: Safe reboot workflow (`strip apply` saves and reboots).
-  - Phase 4B: In-process teardown and reallocation (pausing `DrawingTask`, `FastLED.remove()`, buffer resize).
+### Phase 4: Lifecycle Management & Canvas Slicing — **COMPLETED**
+- Staged modification workflow: live edits modify memory; `strip apply` commits to `/device.cfg` and prompts/reboots cleanly.
+- Master canvas buffer dynamically sized to `max(MATRIX_WIDTH * MATRIX_HEIGHT, max(strip.offset + strip.length))`.
+- Each FastLED channel binds directly to `&masterBuffer[strip.offset]`.
 
-### Phase 5: Web UI & REST Endpoints
-- Expose `/api/strips` REST endpoints (GET / POST) in `src/nd_network.cpp` / web server.
-- Provide simple React configuration pane in `site/` for strip layout.
+### Phase 5: Web UI & REST Endpoints — **COMPLETED**
+- Added `GET /settings` and `POST /settings` with `strips=[...]` JSON array parameter.
+- Built React component `StripsConfigEditor` in `site/src/components/home/config/stripsConfig.jsx` with card layout and visual canvas preview.
+
+---
+
+## 7. Multi-Strip Topologies & Effects Mapping
+
+Visual effects in NightDriver were originally designed around either a single 1D strip buffer (`g()->drawPixel(i, color)`) or a 2D matrix panel (`g()->drawPixel(x, y, color)`). With dynamic multi-channel strips, three distinct spatial topologies emerge:
+
+### 7.1 Topology A: Mirrored Strips (Parallel Repeaters)
+- **Use Case:** Multiple strips (e.g. 16 branches of a tree or 4 quadrants) showing the exact same visual pattern.
+- **Implementation:** All strips configure `offset = 0`, `length = L`.
+- **Canvas Behavior:** Master canvas allocates $L$ pixels. `Draw()` renders 1 frame into `masterBuffer[0..L-1]`. FastLED DMA clocks out the exact same memory slice across all $N$ pins simultaneously. Zero extra RAM, zero extra CPU.
+
+### 7.2 Topology B: Contiguous Snake (One Long Virtual Ribbon)
+- **Use Case:** Multiple physical strips wired to separate GPIO pins but placed end-to-end around a perimeter (e.g., 4 strips of 300 LEDs = 1,200 LEDs).
+- **Implementation:** Strip $k$ sets `offset = sum(length_{0..k-1})`.
+- **Canvas Behavior:** Master canvas allocates the full 1,200 pixels. Existing 1D effects (Rainbow, Larson scanner, Fire, Plasma) render across all 1,200 pixels transparently across pin boundaries.
+
+### 7.3 Topology C: Serpentine / 2D Matrix Ribbon (2D Effects on 1D Strips)
+- **Use Case:** 16 strips of 50 LEDs mounted side-by-side as a 16x50 or 50x16 low-resolution curtain or grid.
+- **Challenge:** 2D matrix effects use coordinate translation `XY(x, y)` which assumes a fixed width/height and serpentine or progressive wiring.
+- **Solution:** Add a layout mapping mode in `WS281xGFX` or `DeviceConfig` (e.g., `MatrixMapping::SerpentineColumns` or `MatrixMapping::SerpentineRows`) so that `g()->drawPixel(x, y, color)` maps `(x, y)` to the appropriate strip `offset + index`.
+
+### 7.4 Topology D: Heterogeneous / Multi-Zone (Independent Effects)
+- **Use Case:** Strip 0–3 runs "Fire", Strip 4–7 runs "Weather/Clock", Strip 8–15 runs "Audio Visualizer".
+- **Challenge:** NightDriver has a single global `EffectManager` that runs one active effect at a time.
+- **Roadmap:** Requires multi-zone abstraction or virtual sub-devices, where distinct `EffectManager` instances render into separate slices of the master canvas.
+
+---
+
+## 8. Board Profiles & LightCrafter-16 Integration
+
+### 8.1 The LightCrafter-16 Configuration Dilemma
+Currently, `custom_ld16.in_` specifies:
+```ini
+-DLED_PIN0=47
+-DLED_PIN1=21
+...
+-DLED_PIN15=48
+```
+This requires 16 separate preprocessor macros that fragment the compile cache and hit legacy channel ceilings.
+
+### 8.2 Three Evolutionary Tiers for Board Config:
+1. **Tier 1 (Immediate / Macro Cleanup):** Use `-DLED_PINS=47,21,14,9,8,16,15,7,1,2,42,41,40,39,38,48`.
+   - Supported today in `src/deviceconfig.cpp` (`constexpr int defaultPins[] = { LED_PINS };`).
+   - Reduces 16 compiler flags to a single array definition.
+2. **Tier 2 (Board Profiles in C++):**
+   - Provide a named board registry (e.g. `-DBOARD_LIGHTCRAFTER16` or CLI `board load lightcrafter16`).
+   - Bundles peripheral defaults (`WIZ_RESET_PIN=3`, IR, sensors) and default 16-channel strip layout.
+3. **Tier 3 (Universal Firmware / LittleFS JSON):**
+   - No compile-time pins in `platformio.ini`.
+   - Ship board presets as `/device.cfg` JSON templates in `data/boards/` or flash via Web UI / REST API.
+
+### 8.3 Hardware Bootstrap Note: LightCrafter-16 GPIO 3
+LightCrafter-16 routes LED 0 (GPIO 47) and LED 15 (GPIO 48) through a 74HC4066 analog multiplexer controlled by `WIZ_RESET_PIN` (GPIO 3). On boot, GPIO 3 must be driven `HIGH` before initializing FastLED, or channels 0 and 15 remain electrically disconnected.
