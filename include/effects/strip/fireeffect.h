@@ -74,7 +74,15 @@ class FireEffect : public EffectWithId<FireEffect>
 
   public:
 
-    FireEffect(const String & strName, int ledCount = NUM_LEDS, int cellsPerLED = 1, int cooling = 20, int sparking = 100, int sparks = 3, int sparkHeight = 4,  bool breversed = false, bool bmirrored = false)
+    FireEffect(const String & strName,
+		    int ledCount = 0,
+		    int cellsPerLED = 1,
+		    int cooling = 20,
+		    int sparking = 100,
+		    int sparks = 3,
+		    int sparkHeight = 4,
+		    bool breversed = false,
+		    bool bmirrored = false)
     : EffectWithId<FireEffect>(strName),
           LEDCount(ledCount),
           CellsPerLED(cellsPerLED),
@@ -85,10 +93,22 @@ class FireEffect : public EffectWithId<FireEffect>
           bReversed(breversed),
           bMirrored(bmirrored)
     {
-        if (bMirrored)
+        if (bMirrored && LEDCount > 0)
             LEDCount = LEDCount / 2;
 
         construct();
+    }
+
+    bool Init(std::vector<std::shared_ptr<GFXBase>>& gfx) override
+    {
+        if (!LEDStripEffect::Init(gfx))
+            return false;
+        if (_cLEDs > 0)
+        {
+            LEDCount = bMirrored ? (_cLEDs / 2) : _cLEDs;
+            construct();
+        }
+        return true;
     }
 
     explicit FireEffect(const JsonObjectConst& jsonObject)
@@ -217,7 +237,7 @@ class PaletteFlameEffect : public FireEffect
     PaletteFlameEffect(const String & strName,
                        const CRGBPalette16 &palette,
                        bool ignoreGlobalColor = false,
-                       int ledCount = NUM_LEDS,
+                       int ledCount = 0,
                        int cellsPerLED = 1,
                        int cooling = 20,         // Was 1.8 for NightDriverStrip
                        int sparking = 100,
@@ -277,7 +297,7 @@ class MusicalPaletteFire : public PaletteFlameEffect, protected BeatEffectBase
     MusicalPaletteFire(const String & strName,
                        const CRGBPalette16 &palette,
                        bool ignoreGlobalColor = false,
-                       int ledCount = NUM_LEDS,
+                       int ledCount = 0,
                        int cellsPerLED = 1,
                        int cooling = 20,         // Was 1.8 for NightDriverStrip
                        int sparking = 100,
@@ -360,29 +380,39 @@ class ClassicFireEffect : public EffectWithId<ClassicFireEffect>
         delay(20);
     }
 
+    std::unique_ptr<uint8_t[]> _heat;
+    size_t _heatSize = 0;
+
     void Fire(int Cooling, int Sparking, int Sparks)
     {
-        static std::unique_ptr<uint8_t[]> heat = std::make_unique<uint8_t[]>(NUM_LEDS);
+        if (_cLEDs == 0)
+            return;
+
+        if (!_heat || _heatSize < _cLEDs)
+        {
+            _heat = std::make_unique<uint8_t[]>(_cLEDs);
+            _heatSize = _cLEDs;
+        }
         setAllOnAllChannels(0,0,0);
 
         // Step 1.  Cool down every cell a little
-        for (int i = 0; i < _cLEDs; i++)
+        for (size_t i = 0; i < _cLEDs; i++)
         {
             int cooldown = random_range(0, Cooling);
-            if (cooldown > heat[i])
+            if (cooldown > _heat[i])
             {
-                heat[i] = 0;
+                _heat[i] = 0;
             }
             else
             {
-                heat[i] = heat[i] - cooldown;
+                _heat[i] = _heat[i] - cooldown;
             }
         }
 
         // Step 2.  Heat from each cell drifts 'up' and diffuses a little
-        for (int k = _cLEDs - 1; k >= 3; k--)
+        for (int k = static_cast<int>(_cLEDs) - 1; k >= 3; k--)
         {
-            heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 3]) / 3;
+            _heat[k] = (_heat[k - 1] + _heat[k - 2] + _heat[k - 3]) / 3;
         }
 
         // Step 3.  Randomly ignite new 'sparks' near the bottom
@@ -390,15 +420,15 @@ class ClassicFireEffect : public EffectWithId<ClassicFireEffect>
         {
             if (random(255) < Sparking)
             {
-                int y = random(5);
-                heat[y] = heat[y] + random(160, 255); // This randomly rolls over sometimes of course, and that's essential to the effect
+                int y = random(std::min<int>(5, static_cast<int>(_cLEDs)));
+                _heat[y] = _heat[y] + random(160, 255); // This randomly rolls over sometimes of course, and that's essential to the effect
             }
         }
 
         // Step 4.  Convert heat to LED colors
-        for (int j = 0; j < _cLEDs; j++)
+        for (size_t j = 0; j < _cLEDs; j++)
         {
-            setPixelHeatColor(j, heat[j]);
+            setPixelHeatColor(j, _heat[j]);
         }
     }
 

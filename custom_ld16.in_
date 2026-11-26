@@ -1,4 +1,8 @@
 ; --- LED Array (Lightcrafter16 / SE16) ---
+; Modern array notation (FastLED Channels API):
+-DLED_PINS=47,21,14,9,8,16,15,7,1,2,42,41,40,39,38,48
+
+; Legacy fallback definitions:
 -DLED_PIN0=47
 -DLED_PIN1=21
 -DLED_PIN2=14

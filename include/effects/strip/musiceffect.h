@@ -139,7 +139,7 @@ class SimpleColorBeat : public BeatEffectBase, public EffectWithId<SimpleColorBe
         ProcessAudio();
 
         CRGB c = (CRGB)CRGB::Blue * (g_Analyzer.VURatio() * g_Values.AppTime.LastFrameTime() * 0.75);
-        setPixelsOnAllChannels(0, NUM_LEDS, c, true);
+        setPixelsOnAllChannels(0, _cLEDs, c, true);
 
         fadeAllChannelsToBlackBy(min(255.0,1000.0 * g_Values.AppTime.LastFrameTime()));
         delay(1);

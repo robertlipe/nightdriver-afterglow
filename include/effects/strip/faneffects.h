@@ -121,7 +121,7 @@ inline int GetFanPixelOrder(int iPos, PixelOrder order = Sequential)
   if (iPos >= NUM_FANS * FAN_SIZE)
   {
     if (order == TopDown)
-      return NUM_LEDS - 1 - (iPos - NUM_FANS * FAN_SIZE);
+      return (int)FastLED.size() - 1 - (iPos - NUM_FANS * FAN_SIZE);
     else
       return iPos;
   }
@@ -144,7 +144,7 @@ inline int GetFanPixelOrder(int iPos, PixelOrder order = Sequential)
     return fanBase + ((GetRingPixelPosition(fanPos, RING_SIZE_0) + LED_FAN_OFFSET_RL) % FAN_SIZE);
 
   case Reverse:
-    return NUM_LEDS - 1 - fanPos;
+    return (int)FastLED.size() - 1 - fanPos;
 
   case Sequential:
   default:
@@ -233,9 +233,9 @@ inline void DrawFanPixels(float fPos, float count, CRGB color, PixelOrder order 
 {
   fPos += iFan * FAN_SIZE;
 
-  if (fPos + count > NUM_LEDS)
+  if (fPos + count > FastLED.size())
   {
-    debugE("DrawFanPixels called with fPos=%f, count=%f, but there are only %d LEDs", fPos, count, NUM_LEDS);
+    debugE("DrawFanPixels called with fPos=%f, count=%f, but there are only %zu LEDs", fPos, count, FastLED.size());
     return;
   }
 
@@ -253,9 +253,9 @@ inline void DrawFanPixels(float fPos, float count, CRGB color, PixelOrder order 
 
   // Blend (add) in the color of the first partial pixel
 
-  if (remaining > 0.0f && amtFirstPixel > 0.0f && iPos < NUM_LEDS)
+  if (remaining > 0.0f && amtFirstPixel > 0.0f && iPos < (int)FastLED.size())
   {
-    for (int i = 0; i < NUM_CHANNELS; i++)
+    for (int i = 0; i < FastLED.count(); i++)
     {
       auto index = GetFanPixelOrder(iPos, order);
       CRGB newColor = LEDStripEffect::ColorFraction(color, amtFirstPixel);
@@ -269,9 +269,9 @@ inline void DrawFanPixels(float fPos, float count, CRGB color, PixelOrder order 
 
   // Now draw any full pixels in the middle
 
-  while (remaining > 1.0f && iPos < NUM_LEDS)
+  while (remaining > 1.0f && iPos < (int)FastLED.size())
   {
-    for (int i = 0; i < NUM_CHANNELS; i++)
+    for (int i = 0; i < FastLED.count(); i++)
       FastLED[i][GetFanPixelOrder(iPos, order)] += color;
     iPos++;
     remaining--;
@@ -300,9 +300,9 @@ inline void DrawRingPixels(float fPos, float count, CRGB color, int iInsulator, 
     bPos += g_aRingSizeTable[i];
   bPos += iInsulator * FAN_SIZE;
 
-  if (bPos + fPos + count > NUM_LEDS + 1) // +1 because we work in the 0..1.0 range when drawing
+  if (bPos + fPos + count > FastLED.size() + 1) // +1 because we work in the 0..1.0 range when drawing
   {
-    debugE("DrawFanPixels called with fPos=%f, count=%f, but there are only %d LEDs", fPos, count, NUM_LEDS);
+    debugE("DrawFanPixels called with fPos=%f, count=%f, but there are only %zu LEDs", fPos, count, FastLED.size());
     return;
   }
 
@@ -322,7 +322,7 @@ inline void DrawRingPixels(float fPos, float count, CRGB color, int iInsulator, 
   iPos %= GetRingSize(iRing);
   if (remaining > 0.0f && amtFirstPixel > 0.0f)
   {
-    for (int i = 0; i < NUM_CHANNELS; i++)
+    for (int i = 0; i < FastLED.count(); i++)
     {
       if (!bMerge)
         FastLED[i][bPos + iPos] = CRGB::Black;
@@ -335,7 +335,7 @@ inline void DrawRingPixels(float fPos, float count, CRGB color, int iInsulator, 
 
   while (remaining > 1.0f)
   {
-    for (int i = 0; i < NUM_CHANNELS; i++)
+    for (int i = 0; i < FastLED.count(); i++)
     {
       iPos %= GetRingSize(iRing);
       if (!bMerge)
@@ -350,7 +350,7 @@ inline void DrawRingPixels(float fPos, float count, CRGB color, int iInsulator, 
   iPos %= GetRingSize(iRing);
   if (remaining > 0.0f)
   {
-    for (int i = 0; i < NUM_CHANNELS; i++)
+    for (int i = 0; i < FastLED.count(); i++)
     {
       if (!bMerge)
         FastLED[i][bPos + iPos] = CRGB::Black;
@@ -390,7 +390,7 @@ class FanBeatEffect : public EffectWithId<FanBeatEffect>
 
   void Draw() override
   {
-    fadeToBlackBy(FastLED.leds(), NUM_LEDS, 20);
+    fadeToBlackBy(FastLED.leds(), _cLEDs, 20);
     DrawEffect();
     delay(20);
   }
@@ -411,7 +411,7 @@ class FanBeatEffect : public EffectWithId<FanBeatEffect>
     }
 
     CRGB c = CHSV(random(0, 255), 255, 255);
-    for (int i = NUM_FANS * FAN_SIZE; i < NUM_LEDS; i++)
+    for (size_t i = NUM_FANS * FAN_SIZE; i < _cLEDs; i++)
       g()->setPixel(i, c);
   }
 
@@ -788,7 +788,7 @@ public:
     {
       basehue += 1;
     }
-    for (int i = 0; i < NUM_LEDS; i++)
+    for (size_t i = 0; i < this->_cLEDs; i++)
       DrawFanPixels(i, 1, CHSV(hue += _step, 255, 255), _order);
   }
 };
@@ -812,7 +812,7 @@ public:
     {
       basehue += 2;
     }
-    for (int i = 0; i < NUM_LEDS; i++)
+    for (size_t i = 0; i < this->_cLEDs; i++)
       DrawFanPixels(i, 1, CHSV(hue += 8, 255, 255), BottomUp);
   }
 };
@@ -836,7 +836,7 @@ public:
     {
       basehue += 1;
     }
-    for (int i = 0; i < NUM_LEDS; i++)
+    for (size_t i = 0; i < this->_cLEDs; i++)
       DrawFanPixels(i, 1, CHSV(hue += 4, 255, 255), TopDown);
   }
 };
@@ -860,7 +860,7 @@ public:
     {
       basehue += 1;
     }
-    for (int i = 0; i < NUM_LEDS; i++)
+    for (size_t i = 0; i < this->_cLEDs; i++)
       DrawFanPixels(i, 1, CHSV(hue += 4, 255, 255), Sequential);
   }
 };
@@ -908,7 +908,7 @@ public:
     static uint8_t basehue = 0;
     uint8_t hue = basehue;
     basehue += 8;
-    for (int i = 0; i < NUM_LEDS; i++)
+    for (size_t i = 0; i < this->_cLEDs; i++)
       DrawFanPixels(i, 1, CHSV(hue += 16, 255, 255), RightLeft);
   }
 };
@@ -931,7 +931,7 @@ public:
     static uint8_t basehue = 0;
     uint8_t hue = basehue;
     basehue += 8;
-    for (int i = 0; i < NUM_LEDS; i++)
+    for (size_t i = 0; i < this->_cLEDs; i++)
       DrawFanPixels(i, 1, CHSV(hue += 16, 255, 255), LeftRight);
   }
 };
@@ -1116,7 +1116,7 @@ public:
 
         int j = (!bReversed || i > FAN_SIZE) ? i : LEDCount - 1 - i;
         uint x = GetFanPixelOrder(j, order);
-        if (x < NUM_LEDS)
+        if (x < FastLED.size())
         {
             FastLED[iChannel][x] = color;
 
@@ -1184,7 +1184,8 @@ public:
   virtual void DrawColor(CRGB color, int phase)
   {
     const int lineLen = FAN_SIZE;
-    int q = beatsin16(24, 0, NUM_LEDS - lineLen, 0, phase);
+    int maxPos = static_cast<int>(FastLED.size()) > lineLen ? (static_cast<int>(FastLED.size()) - lineLen) : 0;
+    int q = beatsin16(24, 0, maxPos, 0, phase);
     DrawFanPixels(q, lineLen, color, BottomUp);
   }
 

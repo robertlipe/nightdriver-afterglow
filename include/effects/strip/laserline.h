@@ -55,18 +55,19 @@ class LaserShot
         _hue      = hue;
     }
 
-    virtual bool Update(float elapsed)
+    virtual bool Update(float elapsed, size_t maxLeds)
     {
         _hue += _speed * elapsed;
         _position += _speed * elapsed;
-        if (_position > NUM_LEDS)
+        if (_position > maxLeds)
             return false;
         return true;
     }
 
     virtual void Draw(std::shared_ptr<GFXBase> pGFX)
     {
-        for (float d = 0; d < _size && d + _position < NUM_LEDS; d++)
+        size_t maxLeds = pGFX ? pGFX->GetLEDCount() : 0;
+        for (float d = 0; d < _size && (d + _position) < maxLeds; d++)
             pGFX->setPixelsF(_position + d, 1.0, CHSV(_hue + d, 255, 255), true);
     }
 };
@@ -130,7 +131,7 @@ class LaserLineEffect : public BeatEffectBase, public EffectWithId<LaserLineEffe
         while(it != _shots.end())
         {
             it->Draw(_gfx);
-            if (!it->Update(g_Values.AppTime.LastFrameTime()))
+            if (!it->Update(g_Values.AppTime.LastFrameTime(), _cLEDs))
                 _shots.erase(it);
             else
                 it++;
