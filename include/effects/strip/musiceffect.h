@@ -175,12 +175,19 @@ class SimpleColorBeat : public BeatEffectBase, public EffectWithId<SimpleColorBe
           }
         }
 
-        int i;
+        int i = 0;
         for (int iPass = 0; iPass < cInsulators; iPass++)
         {
-          do {                                              // Pick a different insulator than was used last time by:
-            i = random(0, NUM_FANS);                        //  - Starting with a random number
-          } while (i == _iLastInsulator);                   //  - Repeating until it doesn't match the last pass
+          if (NUM_FANS > 1)
+          {
+            do {                                              // Pick a different insulator than was used last time by:
+              i = random(0, NUM_FANS);                        //  - Starting with a random number
+            } while (i == _iLastInsulator);                   //  - Repeating until it doesn't match the last pass
+          }
+          else
+          {
+            i = 0;
+          }
           _iLastInsulator = i;                              // Our current choice forms the new "last" choice for next pass
 
           DrawFanPixels(0, FAN_SIZE, c, Sequential, i);     // Draw twice to float-saturate our color
