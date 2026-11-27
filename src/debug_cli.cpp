@@ -889,12 +889,13 @@ static void DoStrip(const cli_argv &argv)
         cli_write("Usage:\n"
                   "  strip [list]                              - List configured channels\n"
                   "  strip set <ch> pin <pin>                  - Set data GPIO pin\n"
+                  "  strip set <ch> clock <pin>                - Set SPI clock GPIO pin (APA102/SK9822)\n"
                   "  strip set <ch> length <n>                 - Set pixel count\n"
                   "  strip set <ch> offset <n>                 - Set pixel offset in canvas\n"
                   "  strip set <ch> order <RGB|GRB|...>        - Set color order\n"
                   "  strip set <ch> chipset <WS2812B|WS2811|..>- Set chipset\n"
                   "  strip set <ch> enable <on|off>            - Enable or disable channel\n"
-                  "  strip add <pin> <len> [order] [cs] [off]  - Add a new channel\n"
+                  "  strip add <pin> <len> [order] [cs] [off] [clk] - Add a new channel\n"
                   "  strip remove <ch>                         - Remove a channel\n"
                   "  strip apply                               - Save to /device.cfg and restart\n");
     };
@@ -979,6 +980,22 @@ static void DoStrip(const cli_argv &argv)
             config.SetStrip(ch, sc);
             cli_print("Channel ", ch, " pin set to ", pin, ".", kApplyNotice);
         }
+        else if (StringCompareInsensitive(prop, "clock") || StringCompareInsensitive(prop, "clockpin"))
+        {
+            int pin = -1;
+            if (!TryParseGpioPin(argv[4], pin))
+            {
+                cli_print("Invalid GPIO pin: '", argv[4], "'\n");
+                return;
+            }
+            if (const char *conflict = GetPinConflictDescription(pin))
+            {
+                cli_print("Warning: GPIO ", pin, " is already assigned to ", conflict, "!\n");
+            }
+            sc.clockPin = pin;
+            config.SetStrip(ch, sc);
+            cli_print("Channel ", ch, " clock pin set to ", pin, ".", kApplyNotice);
+        }
         else if (StringCompareInsensitive(prop, "length") || StringCompareInsensitive(prop, "count"))
         {
             auto lenOpt = ParseInt<uint16_t>(argv[4]);
@@ -1043,7 +1060,7 @@ static void DoStrip(const cli_argv &argv)
         else
         {
             cli_print("Unknown property: '", prop,
-                      "'. Valid: pin, length, offset, order, chipset, enable\n");
+                      "'. Valid: pin, clock, length, offset, order, chipset, enable\n");
         }
         return;
     }
@@ -1052,7 +1069,7 @@ static void DoStrip(const cli_argv &argv)
     {
         if (argv.size() < 4)
         {
-            cli_write("Usage: strip add <pin> <length> [order] [chipset] [offset]\n");
+            cli_write("Usage: strip add <pin> <length> [order] [chipset] [offset] [clock]\n");
             return;
         }
 
@@ -1107,6 +1124,24 @@ static void DoStrip(const cli_argv &argv)
             else
             {
                 cli_print("Invalid offset: '", argv[6], "'\n");
+                return;
+            }
+        }
+
+        if (argv.size() > 7)
+        {
+            int clockPin = -1;
+            if (TryParseGpioPin(argv[7], clockPin))
+            {
+                sc.clockPin = clockPin;
+                if (const char *conflict = GetPinConflictDescription(clockPin))
+                {
+                    cli_print("Warning: Clock GPIO ", clockPin, " is already assigned to ", conflict, "!\n");
+                }
+            }
+            else
+            {
+                cli_print("Invalid clock GPIO pin: '", argv[7], "'\n");
                 return;
             }
         }

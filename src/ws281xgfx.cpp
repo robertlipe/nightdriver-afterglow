@@ -72,6 +72,18 @@ void WS281xGFX::AddLEDs(std::vector<std::shared_ptr<GFXBase>>& devices)
             seenPins.set(strip.dataPin);
         }
 
+        const bool isSpi = (strip.chipset == ChipsetType::APA102 || strip.chipset == ChipsetType::SK9822);
+        if (isSpi && strip.clockPin >= 0 && static_cast<size_t>(strip.clockPin) < seenPins.size())
+        {
+            if (seenPins.test(strip.clockPin))
+            {
+                debugW("Strip %zu: clock GPIO %d already assigned to a previous channel; skipping duplicate",
+                       ch, strip.clockPin);
+                continue;
+            }
+            seenPins.set(strip.clockPin);
+        }
+
         size_t offset = strip.offset;
         size_t len = strip.length;
 
@@ -190,6 +202,14 @@ void WS281xGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& device
                 if (seenPins.test(s.dataPin))
                     continue;
                 seenPins.set(s.dataPin);
+            }
+
+            const bool isSpi = (s.chipset == ChipsetType::APA102 || s.chipset == ChipsetType::SK9822);
+            if (isSpi && s.clockPin >= 0 && static_cast<size_t>(s.clockPin) < seenPins.size())
+            {
+                if (seenPins.test(s.clockPin))
+                    continue;
+                seenPins.set(s.clockPin);
             }
 
             size_t needed = static_cast<size_t>(s.offset) + s.length;
