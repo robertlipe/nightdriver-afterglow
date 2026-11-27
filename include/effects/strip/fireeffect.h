@@ -615,7 +615,7 @@ class SmoothFireEffect : public EffectWithId<SmoothFireEffect>
             {
                 if (random_range(0.0f, 1.0f) < 0.70f)
                 {
-                    int y = random_range(0, maxSpark);
+                    int y = random_range(0, maxSpark - 1);
                     _Temperatures[y] += random_range(0.6f, 1.0f);
 
                     if (!_Turbo)
