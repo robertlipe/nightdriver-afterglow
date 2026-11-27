@@ -61,28 +61,36 @@ void WS281xGFX::AddLEDs(std::vector<std::shared_ptr<GFXBase>>& devices)
         if (!strip.enabled || strip.dataPin < 0)
             continue;
 
-        if (static_cast<size_t>(strip.dataPin) < seenPins.size())
+        // Check all required pins before recording any pin in seenPins
+        if (static_cast<size_t>(strip.dataPin) < seenPins.size() && seenPins.test(strip.dataPin))
         {
-            if (seenPins.test(strip.dataPin))
-            {
-                debugW("Strip %zu: GPIO %d already assigned to a previous channel; skipping duplicate to avoid hardware driver corruption",
-                       ch, strip.dataPin);
-                continue;
-            }
-            seenPins.set(strip.dataPin);
+            debugW("Strip %zu: GPIO %d already assigned to a previous channel; skipping duplicate to avoid hardware driver corruption",
+                   ch, strip.dataPin);
+            continue;
         }
 
         const bool isSpi = (strip.chipset == ChipsetType::APA102 || strip.chipset == ChipsetType::SK9822);
-        if (isSpi && strip.clockPin >= 0 && static_cast<size_t>(strip.clockPin) < seenPins.size())
+        if (isSpi)
         {
-            if (seenPins.test(strip.clockPin))
+            if (strip.clockPin == strip.dataPin)
+            {
+                debugW("Strip %zu: data pin and clock pin cannot be identical (GPIO %d); skipping",
+                       ch, strip.dataPin);
+                continue;
+            }
+            if (strip.clockPin >= 0 && static_cast<size_t>(strip.clockPin) < seenPins.size() && seenPins.test(strip.clockPin))
             {
                 debugW("Strip %zu: clock GPIO %d already assigned to a previous channel; skipping duplicate",
                        ch, strip.clockPin);
                 continue;
             }
-            seenPins.set(strip.clockPin);
         }
+
+        // All pins are available; now reserve them
+        if (static_cast<size_t>(strip.dataPin) < seenPins.size())
+            seenPins.set(strip.dataPin);
+        if (isSpi && strip.clockPin >= 0 && static_cast<size_t>(strip.clockPin) < seenPins.size())
+            seenPins.set(strip.clockPin);
 
         size_t offset = strip.offset;
         size_t len = strip.length;
@@ -197,20 +205,22 @@ void WS281xGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& device
             if (!s.enabled || s.dataPin < 0)
                 continue;
 
-            if (static_cast<size_t>(s.dataPin) < seenPins.size())
-            {
-                if (seenPins.test(s.dataPin))
-                    continue;
-                seenPins.set(s.dataPin);
-            }
+            if (static_cast<size_t>(s.dataPin) < seenPins.size() && seenPins.test(s.dataPin))
+                continue;
 
             const bool isSpi = (s.chipset == ChipsetType::APA102 || s.chipset == ChipsetType::SK9822);
-            if (isSpi && s.clockPin >= 0 && static_cast<size_t>(s.clockPin) < seenPins.size())
+            if (isSpi)
             {
-                if (seenPins.test(s.clockPin))
+                if (s.clockPin == s.dataPin)
                     continue;
-                seenPins.set(s.clockPin);
+                if (s.clockPin >= 0 && static_cast<size_t>(s.clockPin) < seenPins.size() && seenPins.test(s.clockPin))
+                    continue;
             }
+
+            if (static_cast<size_t>(s.dataPin) < seenPins.size())
+                seenPins.set(s.dataPin);
+            if (isSpi && s.clockPin >= 0 && static_cast<size_t>(s.clockPin) < seenPins.size())
+                seenPins.set(s.clockPin);
 
             size_t needed = static_cast<size_t>(s.offset) + s.length;
             if (needed > masterPixels)
