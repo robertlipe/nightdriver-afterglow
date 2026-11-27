@@ -8,7 +8,7 @@
 * [ ] **LightCrafter-16 Bring-up**: When 80A hardware is on the bench, apply [docs/ws281xgfx_16channels.patch](ws281xgfx_16channels.patch), enable `custom_ld16.in_`, and verify GPIO 3 / `WIZ_RESET_PIN` bootstrap behavior across all 16 channels.
 * [x] **Waveshare ESP32-S3-RGB-Matrix** (`ws_s3_hub75-64x64`): Complete esp-hub75 bring-up once the RMA board arrives.
 * [x] **Memory type check**: Verified `dev_ws_s3_hub75` memory type (`opi_opi`) against schematic (ESP32-S3-WROOM-2-N32R16V has 32MB Octal Flash & 16MB Octal PSRAM). Updated comments in `platformio.ini`.
-* [x] **Hardware Ethernet Support** LightCrafter16, some GledOPTO, and several waveshare boards have hardware ethernet. Streaming data (both direction), our console telnet server, REST, and web interface over copper seems like reasonable things to support.
+* [ ] **Hardware Ethernet Support** LightCrafter16, some GledOPTO, and several waveshare boards have hardware ethernet. Streaming data (both direction), our console telnet server, REST, and web interface over copper seems like reasonable things to support.
 
 ## 3. Effects Modernization & Engine Optimization
 * [x] **PatternCyclicCA (Scrubbed)**: Retired from active roadmap. Boundary absorption on low-res matrices collapses spiral rotors into diagonal wipes; code preserved in git history.
@@ -23,6 +23,7 @@
 
 ## 4. Core Firmware Modernization (C++26 Standards)
 * [x] **Constants**: Replaced legacy math macros (`PI`, `M_PI`, `TWO_PI`) with `<numbers>` (`std::numbers::pi_v<float>`).
+* [ ] **Retire TaskManager VAXian Idle Spinners (`taskmgr.cpp`)**: Replace Dave's legacy VAX-era `IdleTask` busy-loop CPU-burn architecture (`Idle0` and `Idle1` spinning at `tskIDLE_PRIORITY + 1`) with native FreeRTOS idle hooks (`vApplicationIdleHook`) or tickless idle accounting. The current custom idle tasks consume massive CPU cycles simply measuring unspent time, starve priority 0 tasks like `prvIdleTask` (which reaps deleted task memory and stacks), and generate heat on battery/USB devices for zero architectural benefit.
 * [ ] **Data Structures**: Migrate raw C arrays to `std::array` across effects and math classes for bounds safety and range support.
 * [ ] **Memory Operations**: Audit manual `memset`/`memcpy` in network/display buffers; migrate to `std::fill`, `std::copy`, or value initialization.
 * [ ] **Ownership / Allocations**: Review raw `new` and `auto p = ...` in network/socket code for migration to `std::make_unique`.

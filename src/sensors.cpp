@@ -393,6 +393,30 @@ void SensorManager::begin()
 
 namespace
 {
+// Thermal Protection Limits (in °F)
+// Ambient thresholds (e.g. cabinet / enclosure air from DHT11)
+constexpr float kAmbientWarningTempF        = 125.0f;
+constexpr float kAmbientCriticalTempF       = 140.0f;
+constexpr float kAmbientHysteresisDeltaF    = 10.0f; // Drops below Warning - 10°F to clear
+constexpr float kAmbientCriticalHysteresisF = 5.0f;  // Drops below Critical - 5°F to downgrade
+
+// Die thresholds (internal ESP32 silicon junction temperature)
+constexpr float kDieWarningTempF            = 185.0f;
+constexpr float kDieCriticalTempF           = kDieWarningTempF + 20.0f; // 205.0°F (~96°C)
+constexpr float kDieHysteresisDeltaF        = 13.0f;                    // Recovers at Warning - 13°F = 172.0°F (~78°C)
+constexpr float kDieCriticalHysteresisF     = 10.0f;                    // Downgrades to Warning at Critical - 10°F = 195.0°F
+
+// Surge rates (°F / min) and baseline qualification floors
+constexpr uint32_t kWarmupGracePeriodMs     = 30000; // Ignore rapid boot warmup surge for 30s
+constexpr float kAmbientSurgeRateThreshold  = 8.0f;  // °F / min
+constexpr float kAmbientSurgeFloorF         = 105.0f;
+constexpr float kDieWarningSurgeRate        = 15.0f; // °F / min
+constexpr float kDieWarningSurgeFloorF      = 135.0f;
+constexpr float kDieCriticalSurgeRate       = 25.0f; // °F / min
+constexpr float kDieCriticalSurgeFloorF     = 150.0f;
+
+constexpr float kSteadyRateThreshold        = 1.0f;  // °F / min max for hysteresis recovery
+
 static ThermalState s_thermalState = ThermalState::Normal;
 
 static std::optional<float> s_lastRawAmbientF;
@@ -452,25 +476,32 @@ void SensorManager::EvaluateThermal(std::optional<float> rawAmbientTempF, std::o
         }
     }
 
+    // Allow a post-boot warmup grace period before tripwires evaluate surge rates.
+    // Latch completion so millis() 49.7-day rollover never re-engages warmup grace.
+    static bool s_warmupComplete = false;
+    if (!s_warmupComplete && now >= kWarmupGracePeriodMs)
+        s_warmupComplete = true;
+    const bool allowSurge = s_warmupComplete;
+
     // Determine target thermal state:
-    // 1. Critical Tripwire: Ambient >= 140°F, Die >= 195°F, or Die surge >= 25°F/min while >= 140°F
+    // 1. Critical Tripwire: Ambient >= kAmbientCriticalTempF, Die >= kDieCriticalTempF, or Die surge >= kDieCriticalSurgeRate while >= kDieCriticalSurgeFloorF
     bool isCritical = false;
-    if (s_latestRawAmbientF && *s_latestRawAmbientF >= 140.0f)
+    if (s_latestRawAmbientF && *s_latestRawAmbientF >= kAmbientCriticalTempF)
         isCritical = true;
-    if (rawDieTempF && *rawDieTempF >= 195.0f)
+    if (rawDieTempF && *rawDieTempF >= kDieCriticalTempF)
         isCritical = true;
-    if (rawDieTempF && *rawDieTempF >= 140.0f && s_dieRiseRate >= 25.0f)
+    if (rawDieTempF && *rawDieTempF >= kDieCriticalSurgeFloorF && allowSurge && s_dieRiseRate >= kDieCriticalSurgeRate)
         isCritical = true;
 
-    // 2. Warning Tripwire: Ambient >= 125°F, Die >= 175°F, Ambient surge >= 8°F/min while >= 105°F, or Die surge >= 15°F/min while >= 125°F
+    // 2. Warning Tripwire: Ambient >= kAmbientWarningTempF, Die >= kDieWarningTempF, Ambient surge >= kAmbientSurgeRateThreshold while >= kAmbientSurgeFloorF, or Die surge >= kDieWarningSurgeRate while >= kDieWarningSurgeFloorF
     bool isWarning = false;
-    if (s_latestRawAmbientF && *s_latestRawAmbientF >= 125.0f)
+    if (s_latestRawAmbientF && *s_latestRawAmbientF >= kAmbientWarningTempF)
         isWarning = true;
-    if (rawDieTempF && *rawDieTempF >= 175.0f)
+    if (rawDieTempF && *rawDieTempF >= kDieWarningTempF)
         isWarning = true;
-    if (s_latestRawAmbientF && *s_latestRawAmbientF >= 105.0f && s_ambientRiseRate >= 8.0f)
+    if (s_latestRawAmbientF && *s_latestRawAmbientF >= kAmbientSurgeFloorF && allowSurge && s_ambientRiseRate >= kAmbientSurgeRateThreshold)
         isWarning = true;
-    if (rawDieTempF && *rawDieTempF >= 125.0f && s_dieRiseRate >= 15.0f)
+    if (rawDieTempF && *rawDieTempF >= kDieWarningSurgeFloorF && allowSurge && s_dieRiseRate >= kDieWarningSurgeRate)
         isWarning = true;
 
     ThermalState nextState = ThermalState::Normal;
@@ -488,8 +519,8 @@ void SensorManager::EvaluateThermal(std::optional<float> rawAmbientTempF, std::o
         // Apply hysteresis when cooling down
         if (s_thermalState == ThermalState::Critical)
         {
-            bool ambientCooled = !s_latestRawAmbientF || *s_latestRawAmbientF < 135.0f;
-            bool dieCooled = !rawDieTempF || *rawDieTempF < 185.0f;
+            bool ambientCooled = !s_latestRawAmbientF || *s_latestRawAmbientF < (kAmbientCriticalTempF - kAmbientCriticalHysteresisF);
+            bool dieCooled = !rawDieTempF || *rawDieTempF < (kDieCriticalTempF - kDieCriticalHysteresisF);
             if (!ambientCooled || !dieCooled)
                 nextState = ThermalState::Critical;
             else
@@ -497,8 +528,8 @@ void SensorManager::EvaluateThermal(std::optional<float> rawAmbientTempF, std::o
         }
         else if (s_thermalState == ThermalState::Warning)
         {
-            bool ambientSafe = !s_latestRawAmbientF || (*s_latestRawAmbientF < 115.0f && s_ambientRiseRate <= 1.0f);
-            bool dieSafe = !rawDieTempF || (*rawDieTempF < 160.0f && s_dieRiseRate <= 1.0f);
+            bool ambientSafe = !s_latestRawAmbientF || (*s_latestRawAmbientF < (kAmbientWarningTempF - kAmbientHysteresisDeltaF) && s_ambientRiseRate <= kSteadyRateThreshold);
+            bool dieSafe = !rawDieTempF || (*rawDieTempF < (kDieWarningTempF - kDieHysteresisDeltaF) && s_dieRiseRate <= kSteadyRateThreshold);
             if (!ambientSafe || !dieSafe)
                 nextState = ThermalState::Warning;
             else

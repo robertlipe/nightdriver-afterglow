@@ -31,8 +31,11 @@
 //---------------------------------------------------------------------------
 
 
-#include <numeric>
+#include <algorithm>
 #include <new>
+#include <numeric>
+#include <span>
+#include <vector>
 
 #include "musiceffect.h"
 #include "random_utils.h"
@@ -45,7 +48,7 @@ class FireEffect : public EffectWithId<FireEffect>
 
     void construct()
     {
-        heat = std::make_unique<uint8_t[]>(CellCount());
+        heat.assign(CellCount(), 0);
     }
 
   protected:
@@ -58,7 +61,7 @@ class FireEffect : public EffectWithId<FireEffect>
     bool    bReversed;          // If reversed we draw from 0 outwards
     bool    bMirrored;          // If mirrored we split and duplicate the drawing
 
-    std::unique_ptr<uint8_t []> heat;
+    std::vector<uint8_t> heat;
 
     // When diffusing the fire upwards, these control how much to blend in from the cells below (ie: downward neighbors)
     // You can tune these coefficients to control how quickly and smoothly the fire spreads
@@ -74,7 +77,15 @@ class FireEffect : public EffectWithId<FireEffect>
 
   public:
 
-    FireEffect(const String & strName, int ledCount = NUM_LEDS, int cellsPerLED = 1, int cooling = 20, int sparking = 100, int sparks = 3, int sparkHeight = 4,  bool breversed = false, bool bmirrored = false)
+    explicit FireEffect(const String & strName,
+                        int ledCount = 0,
+                        int cellsPerLED = 1,
+                        int cooling = 20,
+                        int sparking = 100,
+                        int sparks = 3,
+                        int sparkHeight = 4,
+                        bool breversed = false,
+                        bool bmirrored = false)
     : EffectWithId<FireEffect>(strName),
           LEDCount(ledCount),
           CellsPerLED(cellsPerLED),
@@ -85,10 +96,22 @@ class FireEffect : public EffectWithId<FireEffect>
           bReversed(breversed),
           bMirrored(bmirrored)
     {
-        if (bMirrored)
+        if (bMirrored && LEDCount > 0)
             LEDCount = LEDCount / 2;
 
         construct();
+    }
+
+    bool Init(std::vector<std::shared_ptr<GFXBase>>& gfx) override
+    {
+        if (!LEDStripEffect::Init(gfx))
+            return false;
+        if (_cLEDs > 0)
+        {
+            LEDCount = bMirrored ? (_cLEDs / 2) : _cLEDs;
+            construct();
+        }
+        return true;
     }
 
     explicit FireEffect(const JsonObjectConst& jsonObject)
@@ -141,12 +164,21 @@ class FireEffect : public EffectWithId<FireEffect>
 
     virtual void GenerateSparks(float multiplier = 1.0)
     {
-        for (int i = 0 ; i < Sparks * multiplier; i++)
+        if (heat.empty())
+            return;
+
+        const int maxRange = std::min<int>(heat.size(), SparkHeight * CellsPerLED);
+        if (maxRange <= 0)
+            return;
+
+        const int sparksToTry = static_cast<int>(Sparks * multiplier);
+        for (int i = 0; i < sparksToTry; i++)
         {
             if (random(255) < Sparking)
             {
-                int y = CellCount() - 1 - random(SparkHeight * CellsPerLED);
-                heat[y] = random(200, 255);   // Can roll over which actually looks good!
+                size_t y = heat.size() - 1 - random(maxRange);
+                if (y < heat.size())
+                    heat[y] = random(200, 255);   // Can roll over which actually looks good!
             }
         }
     }
@@ -154,51 +186,57 @@ class FireEffect : public EffectWithId<FireEffect>
     virtual void DrawFire()
     {
         // First cool each cell by a little bit
-
         EVERY_N_MILLISECONDS(50)
         {
-          for (int i = 0; i < CellCount(); i++)
-          {
-            int coolingAmount = random(0, Cooling);
-            heat[i] = ::max(0, heat[i] - coolingAmount);
-          }
+            for (auto& h : heat)
+            {
+                int coolingAmount = random(0, Cooling);
+                h = (coolingAmount > h) ? 0 : (h - coolingAmount);
+            }
         }
 
         EVERY_N_MILLISECONDS(20)
         {
-          // Next drift heat up and diffuse it a little bit
-          for (int i = 0; i < CellCount(); i++)
-              heat[i] = std::min(255, (heat[i] * BlendSelf +
-                        heat[(i + 1) % CellCount()] * BlendNeighbor1 +
-                        heat[(i + 2) % CellCount()] * BlendNeighbor2 +
-                        heat[(i + 3) % CellCount()] * BlendNeighbor3)
-                        / BlendTotal);
+            // Next drift heat up and diffuse it a little bit
+            const size_t count = heat.size();
+            if (count >= 4)
+            {
+                for (size_t i = 0; i < count; i++)
+                {
+                    heat[i] = std::min<uint8_t>(255, (heat[i] * BlendSelf +
+                              heat[(i + 1) % count] * BlendNeighbor1 +
+                              heat[(i + 2) % count] * BlendNeighbor2 +
+                              heat[(i + 3) % count] * BlendNeighbor3)
+                              / BlendTotal);
+                }
+            }
         }
 
         // Randomly ignite new sparks down in the flame kernel
-
         EVERY_N_MILLISECONDS(20)
         {
             GenerateSparks(1.0);
         }
 
         // Finally, convert heat to a color
-
+        std::span<const uint8_t> heatSpan(heat);
         for (int i = 0; i < LEDCount; i++)
         {
-            auto begin = &heat[i * CellsPerLED];
-            auto end = begin + CellsPerLED;
-            int sum = std::accumulate(begin, end, 0);
-            auto avg = sum / CellsPerLED;
+            size_t offset = static_cast<size_t>(i) * CellsPerLED;
+            if (offset + CellsPerLED > heatSpan.size())
+                break;
+
+            auto cellSlice = heatSpan.subspan(offset, CellsPerLED);
+            int sum = std::accumulate(cellSlice.begin(), cellSlice.end(), 0);
+            int avg = sum / CellsPerLED;
 
             #if LANTERN
                 CRGB color = CRGB(avg, avg * .45, avg * .08);
             #else
-                CRGB color = GetBlackBodyHeatColor(avg/(float)std::numeric_limits<uint8_t>::max());
+                CRGB color = GetBlackBodyHeatColor(avg / 255.0f);
             #endif
 
             // If we're reversed, we work from the end back.  We don't reverse the bonus pixels
-
             int j = (!bReversed) ? i : LEDCount - 1 - i;
             setPixelsOnAllChannels(j, 1, color, false);
             if (bMirrored)
@@ -214,17 +252,17 @@ class PaletteFlameEffect : public FireEffect
     bool _ignoreGlobalColor;
 
   public:
-    PaletteFlameEffect(const String & strName,
-                       const CRGBPalette16 &palette,
-                       bool ignoreGlobalColor = false,
-                       int ledCount = NUM_LEDS,
-                       int cellsPerLED = 1,
-                       int cooling = 20,         // Was 1.8 for NightDriverStrip
-                       int sparking = 100,
-                       int sparks = 3,
-                       int sparkHeight = 3,
-                       bool reversed = false,
-                       bool mirrored = false)
+    explicit PaletteFlameEffect(const String & strName,
+                                const CRGBPalette16 &palette,
+                                int ledCount = 0,
+                                int cellsPerLED = 1,
+                                int cooling = 20,         // Was 1.8 for NightDriverStrip
+                                int sparking = 100,
+                                int sparks = 3,
+                                int sparkHeight = 3,
+                                bool reversed = false,
+                                bool mirrored = false,
+                                bool ignoreGlobalColor = false)
         : FireEffect(strName, ledCount, cellsPerLED, cooling, sparking, sparks, sparkHeight, reversed, mirrored),
           _palette(palette),
           _ignoreGlobalColor(ignoreGlobalColor)
@@ -274,18 +312,18 @@ class MusicalPaletteFire : public PaletteFlameEffect, protected BeatEffectBase
 {
   public:
 
-    MusicalPaletteFire(const String & strName,
-                       const CRGBPalette16 &palette,
-                       bool ignoreGlobalColor = false,
-                       int ledCount = NUM_LEDS,
-                       int cellsPerLED = 1,
-                       int cooling = 20,         // Was 1.8 for NightDriverStrip
-                       int sparking = 100,
-                       int sparks = 3,
-                       int sparkHeight = 3,
-                       bool reversed = false,
-                       bool mirrored = false)
-        : PaletteFlameEffect(strName, palette, ignoreGlobalColor, ledCount, cellsPerLED, cooling, sparking, sparks, sparkHeight, reversed, mirrored),
+    explicit MusicalPaletteFire(const String & strName,
+                                const CRGBPalette16 &palette,
+                                int ledCount = 0,
+                                int cellsPerLED = 1,
+                                int cooling = 20,         // Was 1.8 for NightDriverStrip
+                                int sparking = 100,
+                                int sparks = 3,
+                                int sparkHeight = 3,
+                                bool reversed = false,
+                                bool mirrored = false,
+                                bool ignoreGlobalColor = false)
+        : PaletteFlameEffect(strName, palette, ledCount, cellsPerLED, cooling, sparking, sparks, sparkHeight, reversed, mirrored, ignoreGlobalColor),
           BeatEffectBase(1.00, 0.01)
     {
     }
@@ -360,45 +398,49 @@ class ClassicFireEffect : public EffectWithId<ClassicFireEffect>
         delay(20);
     }
 
+    std::vector<uint8_t> _heat;
+
     void Fire(int Cooling, int Sparking, int Sparks)
     {
-        static std::unique_ptr<uint8_t[]> heat = std::make_unique<uint8_t[]>(NUM_LEDS);
-        setAllOnAllChannels(0,0,0);
+        if (_cLEDs == 0)
+            return;
 
-        // Step 1.  Cool down every cell a little
-        for (int i = 0; i < _cLEDs; i++)
+        if (_heat.size() < _cLEDs)
+            _heat.resize(_cLEDs, 0);
+
+        setAllOnAllChannels(0, 0, 0);
+
+        // Step 1. Cool down every cell a little
+        for (auto& h : _heat)
         {
             int cooldown = random_range(0, Cooling);
-            if (cooldown > heat[i])
-            {
-                heat[i] = 0;
-            }
-            else
-            {
-                heat[i] = heat[i] - cooldown;
-            }
+            h = (cooldown > h) ? 0 : (h - cooldown);
         }
 
-        // Step 2.  Heat from each cell drifts 'up' and diffuses a little
-        for (int k = _cLEDs - 1; k >= 3; k--)
+        // Step 2. Heat from each cell drifts 'up' and diffuses a little
+        for (int k = static_cast<int>(_cLEDs) - 1; k >= 3; k--)
         {
-            heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 3]) / 3;
+            _heat[k] = (_heat[k - 1] + _heat[k - 2] + _heat[k - 3]) / 3;
         }
 
-        // Step 3.  Randomly ignite new 'sparks' near the bottom
-        for (int frame = 0; frame < Sparks; frame++)
+        // Step 3. Randomly ignite new 'sparks' near the bottom
+        const int maxSparks = std::min<int>(5, static_cast<int>(_cLEDs));
+        if (maxSparks > 0)
         {
-            if (random(255) < Sparking)
+            for (int frame = 0; frame < Sparks; frame++)
             {
-                int y = random(5);
-                heat[y] = heat[y] + random(160, 255); // This randomly rolls over sometimes of course, and that's essential to the effect
+                if (random(255) < Sparking)
+                {
+                    int y = random(maxSparks);
+                    _heat[y] += random(160, 255);
+                }
             }
         }
 
-        // Step 4.  Convert heat to LED colors
-        for (int j = 0; j < _cLEDs; j++)
+        // Step 4. Convert heat to LED colors
+        for (size_t j = 0; j < _cLEDs; j++)
         {
-            setPixelHeatColor(j, heat[j]);
+            setPixelHeatColor(j, _heat[j]);
         }
     }
 
@@ -461,7 +503,7 @@ class SmoothFireEffect : public EffectWithId<SmoothFireEffect>
     bool _Turbo;
     bool _Mirrored;
 
-    float * _Temperatures = nullptr;
+    std::vector<float> _Temperatures;
 
   public:
     // Parameter:   Cooling   Sparks    driftPasses  drift sparkHeight   Turbo
@@ -525,38 +567,32 @@ class SmoothFireEffect : public EffectWithId<SmoothFireEffect>
 
     bool Init(std::vector<std::shared_ptr<GFXBase>>& gfx) override
     {
-        LEDStripEffect::Init(gfx);
-        _Temperatures = new (std::nothrow) float[_cLEDs];
-        if (!_Temperatures)
-        {
-            Serial.println("ERROR: Could not allocate memory for FireEffect");
+        if (!LEDStripEffect::Init(gfx))
             return false;
-        }
+        _Temperatures.assign(_cLEDs, 0.0f);
         return true;
     }
 
-    ~SmoothFireEffect()
-    {
-        delete[] _Temperatures;
-    }
+    ~SmoothFireEffect() override = default;
 
     void Draw() override
     {
         float deltaTime = (float)g_Values.AppTime.LastFrameTime();
         setAllOnAllChannels(0, 0, 0);
 
+        if (_Temperatures.size() < _cLEDs)
+            _Temperatures.resize(_cLEDs, 0.0f);
+
         float cooldown = random_range(0.0f, _Cooling) * deltaTime;
 
-        for (int i = 0; i < _cLEDs; i++)
-            if (cooldown > _Temperatures[i])
-                _Temperatures[i] = 0;
-            else
-                _Temperatures[i] = _Temperatures[i] - cooldown;
+        // Induction loop: cool down all cells branchlessly
+        for (auto& temp : _Temperatures)
+            temp = std::max(0.0f, temp - cooldown);
 
         // Heat from each cell drifts 'up' and diffuses a little
         for (int pass = 0; pass < _DriftPasses; pass++)
         {
-            for (int k = _cLEDs - 1; k >= 3; k--)
+            for (int k = static_cast<int>(_cLEDs) - 1; k >= 3; k--)
             {
                 float amount = 0.2f + g_Analyzer.VURatio(); // MIN(0.85f, _Drift * deltaTime);
                 float c0 = 1.0f - amount;
@@ -572,23 +608,30 @@ class SmoothFireEffect : public EffectWithId<SmoothFireEffect>
         }
 
         // Randomly ignite new 'sparks' near the bottom
-        for (int frame = 0; frame < _Sparks; frame++)
+        const int maxSpark = std::min<int>(_SparkHeight, static_cast<int>(_Temperatures.size()));
+        if (maxSpark > 0)
         {
-            if (random_range(0.0f, 1.0f) < 0.70f)
+            for (int frame = 0; frame < _Sparks; frame++)
             {
-                // NB: This randomly rolls over sometimes of course, and that's essential to the effect
-                int y = random_range(0, _SparkHeight);
-                _Temperatures[y] = (_Temperatures[y] + random_range(0.6f, 1.0f));
+                if (random_range(0.0f, 1.0f) < 0.70f)
+                {
+                    int y = random_range(0, maxSpark - 1);
+                    _Temperatures[y] += random_range(0.6f, 1.0f);
 
-                if (!_Turbo)
-                    while (_Temperatures[y] > 1.0f)
-                        _Temperatures[y] -= 1.0f;
-                else
-                    _Temperatures[y] = min(_Temperatures[y], 1.0f);
+                    if (!_Turbo)
+                    {
+                        while (_Temperatures[y] > 1.0f)
+                            _Temperatures[y] -= 1.0f;
+                    }
+                    else
+                    {
+                        _Temperatures[y] = std::min(_Temperatures[y], 1.0f);
+                    }
+                }
             }
         }
 
-        for (uint j = 0; j < _cLEDs; j++)
+        for (size_t j = 0; j < _Temperatures.size(); j++)
         {
             CRGB c = GetBlackBodyHeatColor(_Temperatures[j]);
             setPixelWithMirror(j, c);

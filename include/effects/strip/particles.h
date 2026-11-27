@@ -187,7 +187,7 @@ class FadingColoredObject : public FadingObject
         }
 
         CRGB c = _baseColor;
-        fadeToBlackBy(&c, 1, 255 * FadeoutAmount());
+        c.fadeToBlackBy(255 * FadeoutAmount());
         return c;
     }
 };
@@ -218,17 +218,17 @@ class FadingPaletteObject : public FadingObject
         CRGB c = ColorFromPalette(_palette, _colorIndex, 255, _blendType);
         if (Age() < PreignitionTime())
         {
-            fadeToBlackBy(&c, 1, 255 * FadeoutAmount());
+            c.fadeToBlackBy(255 * FadeoutAmount());
             return c;
         }
         else if (Age() >= PreignitionTime() && (Age() < (IgnitionTime() + PreignitionTime())))
         {
             CRGB c = CRGB::White;
-            fadeToBlackBy(&c, 1, 255 * FadeoutAmount());
+            c.fadeToBlackBy(255 * FadeoutAmount());
             return c;
         }
 
-        fadeToBlackBy(&c, 1, 255 * FadeoutAmount());
+        c.fadeToBlackBy(255 * FadeoutAmount());
         return c;
     }
 
@@ -677,7 +677,7 @@ class HotWhiteRingParticle : public FadingObject
               c = CRGB( 255, heatramp, 0);
           else                                  // coolest
               c = CRGB( heatramp, 0, 0);
-          fadeToBlackBy(&c, 1, 255 * FadeoutAmount());
+          c.fadeToBlackBy(255 * FadeoutAmount());
         }
 
         if (_iInsulator < 0)    // -1 is a major beat, all insulators

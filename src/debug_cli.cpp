@@ -128,39 +128,7 @@ static std::vector<std::string_view> Tokenize(std::string_view input)
     return output;
 }
 
-//
-// String Comparison
-//
-bool StringCompareInsensitive(std::string_view sv, const char *in_s)
-{
-    if (!in_s)
-        return false;
-    const unsigned char *s = (const unsigned char *)in_s;
-    for (unsigned char c : sv)
-    {
-        if (!*s || tolower(c) != tolower(*s))
-            return false;
-        s++;
-    }
-    return *s == '\0';
-}
 
-bool StringStartsWithInsensitive(std::string_view haystack, std::string_view needle)
-{
-    if (needle.length() > haystack.length())
-        return false;
-    return std::equal(needle.begin(), needle.end(), haystack.begin(),
-                      [](char ch1, char ch2) { return std::tolower(ch1) == std::tolower(ch2); });
-}
-
-bool ContainsInsensitive(std::string_view haystack, std::string_view needle)
-{
-    if (needle.empty())
-        return true;
-    auto it = std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end(),
-                          [](char ch1, char ch2) { return std::tolower(ch1) == std::tolower(ch2); });
-    return it != haystack.end();
-}
 
 
 //
@@ -229,7 +197,7 @@ static void PrintHelp(const cli_argv &argv)
             }
             else
             {
-                cli_printf("Command '%.*s' not found or ambiguous.\n", (int)target.length(), target.data());
+                cli_print("Command '", target, "' not found or ambiguous.\n");
             }
         }
     }
@@ -255,6 +223,50 @@ void cli_write(std::string_view text)
         _activeSession->WriteText(text);
     else
         ConsoleManager::Instance().Broadcast(text);
+}
+
+void cli_put(std::string_view sv)
+{
+    cli_write(sv);
+}
+
+void cli_put(const char* s)
+{
+    cli_write(s ? s : "(null)");
+}
+
+void cli_put(std::nullptr_t)
+{
+    cli_write("(null)");
+}
+
+void cli_put(char c)
+{
+    cli_write(std::string_view(&c, 1));
+}
+
+void cli_put(bool b)
+{
+    cli_write(b ? "true" : "false");
+}
+
+void cli_put(const String& s)
+{
+    cli_write(std::string_view(s.c_str(), s.length()));
+}
+
+void cli_put_signed(long long val)
+{
+    char buf[24];
+    auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), val);
+    cli_write(std::string_view(buf, ptr - buf));
+}
+
+void cli_put_unsigned(unsigned long long val)
+{
+    char buf[24];
+    auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), val);
+    cli_write(std::string_view(buf, ptr - buf));
 }
 
 //
@@ -285,7 +297,7 @@ void RunCommand(std::string_view cmd_line, std::shared_ptr<ConsoleSession> sessi
         }
         else
         {
-            cli_printf("Unknown command: %.*s\n", (int)argv[0].length(), argv[0].data());
+            cli_print("Unknown command: ", argv[0], "\n");
         }
     }
 
@@ -434,14 +446,14 @@ static std::optional<size_t> ResolveEffect(std::string_view arg)
     }
     else if (matches > 1)
     {
-        cli_printf("Error: Ambiguous match for '%.*s'. Candidates:\n", (int)arg.length(), arg.data());
+        cli_print("Error: Ambiguous match for '", arg, "'. Candidates:\n");
         for (const auto& c : candidates)
             cli_printf("  %s\n", c.c_str());
         return std::nullopt;
     }
     else
     {
-        cli_printf("Error: No effect matching '%.*s' found.\n", (int)arg.length(), arg.data());
+        cli_print("Error: No effect matching '", arg, "' found.\n");
         return std::nullopt;
     }
 }
@@ -668,7 +680,7 @@ static void DoCrashMe(const cli_argv& argv)
     }
     else
     {
-        cli_printf("Unknown mode: %.*s (try null, abort, wdt)\n", (int)mode.length(), mode.data());
+        cli_print("Unknown mode: ", mode, " (try null, abort, wdt)\n");
     }
 }
 
@@ -781,7 +793,7 @@ static void DoGpio(const cli_argv &argv)
         int pin = -1;
         if (!TryParseGpioPin(argv[1], pin))
         {
-            cli_printf("Invalid GPIO pin: '%.*s'\n", (int)argv[1].size(), argv[1].data());
+            cli_print("Invalid GPIO pin: '", argv[1], "'\n");
             return;
         }
         mask = (1ULL << pin);
@@ -842,9 +854,333 @@ static void DoDump(const cli_argv &argv)
 #endif
     else
     {
-        cli_printf("Unknown dump target: '%.*s'\n", (int)sub.size(), sub.data());
+        cli_print("Unknown dump target: '", sub, "'\n");
         cli_printf("Usage: dump [fds|gpio [pin]|heap|intr|tasks|timers]\n");
     }
+}
+
+static const char* GetPinConflictDescription(int pin)
+{
+#if defined(IR_REMOTE_PIN) && IR_REMOTE_PIN >= 0
+    if (pin == IR_REMOTE_PIN) return "IR Remote (IR_REMOTE_PIN)";
+#endif
+#if defined(I2S_BCLK_PIN) && I2S_BCLK_PIN >= 0
+    if (pin == I2S_BCLK_PIN) return "I2S Bit Clock (I2S_BCLK_PIN)";
+#endif
+#if defined(I2S_WS_PIN) && I2S_WS_PIN >= 0
+    if (pin == I2S_WS_PIN) return "I2S Word Select (I2S_WS_PIN)";
+#endif
+#if defined(I2S_DATA_IN_PIN) && I2S_DATA_IN_PIN >= 0
+    if (pin == I2S_DATA_IN_PIN) return "I2S Data In (I2S_DATA_IN_PIN)";
+#endif
+#if defined(DHT11_PIN) && DHT11_PIN >= 0
+    if (pin == DHT11_PIN) return "DHT11 Sensor (DHT11_PIN)";
+#endif
+    return nullptr;
+}
+
+static void DoStrip(const cli_argv &argv)
+{
+    auto &config = g_ptrSystem->GetDeviceConfig();
+    const auto &strips = config.GetStrips();
+    static constexpr std::string_view kApplyNotice = " Run 'strip apply' to commit and restart.\n";
+
+    auto printUsage = []() {
+        cli_write("Usage:\n"
+                  "  strip [list]                              - List configured channels\n"
+                  "  strip set <ch> pin <pin>                  - Set data GPIO pin\n"
+                  "  strip set <ch> clock <pin>                - Set SPI clock GPIO pin (APA102/SK9822)\n"
+                  "  strip set <ch> length <n>                 - Set pixel count\n"
+                  "  strip set <ch> offset <n>                 - Set pixel offset in canvas\n"
+                  "  strip set <ch> order <RGB|GRB|...>        - Set color order\n"
+                  "  strip set <ch> chipset <WS2812B|WS2811|..>- Set chipset\n"
+                  "  strip set <ch> enable <on|off>            - Enable or disable channel\n"
+                  "  strip add <pin> <len> [order] [cs] [off] [clk] - Add a new channel\n"
+                  "  strip remove <ch>                         - Remove a channel\n"
+                  "  strip apply                               - Save to /device.cfg and restart\n");
+    };
+
+    auto printStripsTable = [&strips]() {
+        if (strips.empty())
+        {
+            cli_write("No LED strips configured.\n");
+            return;
+        }
+        cli_write("Ch   Pin Clock Length Offset Order   Chipset  Status\n"
+                  "--   --- ----- ------ ------ -----   -------  ------\n");
+        for (size_t i = 0; i < strips.size(); ++i)
+        {
+            const auto &s = strips[i];
+            char clockBuf[16] = "--";
+            if (s.clockPin >= 0)
+                snprintf(clockBuf, sizeof(clockBuf), "%d", s.clockPin);
+
+            cli_printf("%2zu  %4d  %4s %6u %6u %-7s %-8s %s\n",
+                       i, s.dataPin, clockBuf, s.length, s.offset,
+                       ColorOrderToString(s.colorOrder),
+                       ChipsetToString(s.chipset),
+                       s.enabled ? "ENABLED" : "DISABLED");
+        }
+    };
+
+    if (argv.size() < 2 || StringCompareInsensitive(argv[1], "list"))
+    {
+        printStripsTable();
+        return;
+    }
+
+    std::string_view sub = argv[1];
+
+    if (StringCompareInsensitive(sub, "apply"))
+    {
+        cli_write("Saving configuration to /device.cfg...\n");
+        if (!config.FlushToDisk())
+        {
+            cli_write("Error: Failed to save /device.cfg to flash!\n");
+            return;
+        }
+        cli_write("Restarting system to reinitialize LED channels...\n");
+        esp_restart();
+        return;
+    }
+
+    if (StringCompareInsensitive(sub, "set"))
+    {
+        if (argv.size() < 5)
+        {
+            printUsage();
+            return;
+        }
+
+        auto chOpt = ParseInt<size_t>(argv[2]);
+        if (!chOpt || *chOpt >= strips.size())
+        {
+            cli_print("Invalid channel index: '", argv[2], "' (valid: 0..",
+                      strips.empty() ? 0 : strips.size() - 1, ")\n");
+            return;
+        }
+
+        size_t ch = *chOpt;
+        StripConfig sc = strips[ch];
+        std::string_view prop = argv[3];
+
+        if (StringCompareInsensitive(prop, "pin"))
+        {
+            int pin = -1;
+            if (!TryParseGpioPin(argv[4], pin))
+            {
+                cli_print("Invalid GPIO pin: '", argv[4], "'\n");
+                return;
+            }
+            if (const char *conflict = GetPinConflictDescription(pin))
+            {
+                cli_print("Warning: GPIO ", pin, " is already assigned to ", conflict, "!\n");
+            }
+            sc.dataPin = pin;
+            config.SetStrip(ch, sc);
+            cli_print("Channel ", ch, " pin set to ", pin, ".", kApplyNotice);
+        }
+        else if (StringCompareInsensitive(prop, "clock") || StringCompareInsensitive(prop, "clockpin"))
+        {
+            int pin = -1;
+            if (!TryParseGpioPin(argv[4], pin))
+            {
+                cli_print("Invalid GPIO pin: '", argv[4], "'\n");
+                return;
+            }
+            if (const char *conflict = GetPinConflictDescription(pin))
+            {
+                cli_print("Warning: GPIO ", pin, " is already assigned to ", conflict, "!\n");
+            }
+            sc.clockPin = pin;
+            config.SetStrip(ch, sc);
+            cli_print("Channel ", ch, " clock pin set to ", pin, ".", kApplyNotice);
+        }
+        else if (StringCompareInsensitive(prop, "length") || StringCompareInsensitive(prop, "count"))
+        {
+            auto lenOpt = ParseInt<uint16_t>(argv[4]);
+            if (!lenOpt || *lenOpt == 0)
+            {
+                cli_print("Invalid length: '", argv[4], "' (must be > 0)\n");
+                return;
+            }
+            sc.length = *lenOpt;
+            config.SetStrip(ch, sc);
+            cli_print("Channel ", ch, " length set to ", sc.length, ".", kApplyNotice);
+        }
+        else if (StringCompareInsensitive(prop, "offset"))
+        {
+            auto offOpt = ParseInt<uint16_t>(argv[4]);
+            if (!offOpt)
+            {
+                cli_print("Invalid offset: '", argv[4], "'\n");
+                return;
+            }
+            sc.offset = *offOpt;
+            config.SetStrip(ch, sc);
+            cli_print("Channel ", ch, " offset set to ", sc.offset, ".", kApplyNotice);
+        }
+        else if (StringCompareInsensitive(prop, "order"))
+        {
+            auto orderOpt = ParseColorOrder(argv[4]);
+            if (!orderOpt)
+            {
+                cli_print("Invalid color order: '", argv[4],
+                          "' (valid: RGB, RBG, GRB, GBR, BRG, BGR)\n");
+                return;
+            }
+            sc.colorOrder = *orderOpt;
+            config.SetStrip(ch, sc);
+            cli_print("Channel ", ch, " color order set to ", ColorOrderToString(sc.colorOrder), ".", kApplyNotice);
+        }
+        else if (StringCompareInsensitive(prop, "chipset"))
+        {
+            auto csOpt = ParseChipsetType(argv[4]);
+            if (!csOpt)
+            {
+                cli_print("Invalid chipset: '", argv[4],
+                          "' (valid: WS2812B, WS2811, WS2815, APA102, SK9822)\n");
+                return;
+            }
+            sc.chipset = *csOpt;
+            config.SetStrip(ch, sc);
+            cli_print("Channel ", ch, " chipset set to ", ChipsetToString(sc.chipset), ".", kApplyNotice);
+        }
+        else if (StringCompareInsensitive(prop, "enable"))
+        {
+            std::string_view val = argv[4];
+            bool enable = (StringCompareInsensitive(val, "on") ||
+                           StringCompareInsensitive(val, "true") ||
+                           StringCompareInsensitive(val, "1") ||
+                           StringCompareInsensitive(val, "yes"));
+            sc.enabled = enable;
+            config.SetStrip(ch, sc);
+            cli_print("Channel ", ch, enable ? " enabled." : " disabled.", kApplyNotice);
+        }
+        else
+        {
+            cli_print("Unknown property: '", prop,
+                      "'. Valid: pin, clock, length, offset, order, chipset, enable\n");
+        }
+        return;
+    }
+
+    if (StringCompareInsensitive(sub, "add"))
+    {
+        if (argv.size() < 4)
+        {
+            cli_write("Usage: strip add <pin> <length> [order] [chipset] [offset] [clock]\n");
+            return;
+        }
+
+        int pin = -1;
+        if (!TryParseGpioPin(argv[2], pin))
+        {
+            cli_print("Invalid GPIO pin: '", argv[2], "'\n");
+            return;
+        }
+
+        auto lenOpt = ParseInt<uint16_t>(argv[3]);
+        if (!lenOpt || *lenOpt == 0)
+        {
+            cli_print("Invalid length: '", argv[3], "' (must be > 0)\n");
+            return;
+        }
+
+        StripConfig sc;
+        sc.dataPin = pin;
+        sc.length = *lenOpt;
+        sc.offset = 0;
+        sc.colorOrder = EOrder::GRB;
+        sc.chipset = ChipsetType::WS2812B;
+        sc.enabled = true;
+
+        if (argv.size() > 4)
+        {
+            if (auto orderOpt = ParseColorOrder(argv[4]))
+                sc.colorOrder = *orderOpt;
+            else
+            {
+                cli_print("Invalid color order: '", argv[4], "'\n");
+                return;
+            }
+        }
+
+        if (argv.size() > 5)
+        {
+            if (auto csOpt = ParseChipsetType(argv[5]))
+                sc.chipset = *csOpt;
+            else
+            {
+                cli_print("Invalid chipset: '", argv[5], "'\n");
+                return;
+            }
+        }
+
+        if (argv.size() > 6)
+        {
+            if (auto offOpt = ParseInt<uint16_t>(argv[6]))
+                sc.offset = *offOpt;
+            else
+            {
+                cli_print("Invalid offset: '", argv[6], "'\n");
+                return;
+            }
+        }
+
+        if (argv.size() > 7)
+        {
+            int clockPin = -1;
+            if (TryParseGpioPin(argv[7], clockPin))
+            {
+                sc.clockPin = clockPin;
+                if (const char *conflict = GetPinConflictDescription(clockPin))
+                {
+                    cli_print("Warning: Clock GPIO ", clockPin, " is already assigned to ", conflict, "!\n");
+                }
+            }
+            else
+            {
+                cli_print("Invalid clock GPIO pin: '", argv[7], "'\n");
+                return;
+            }
+        }
+
+        if (const char *conflict = GetPinConflictDescription(pin))
+        {
+            cli_print("Warning: GPIO ", pin, " is already assigned to ", conflict, "!\n");
+        }
+
+        config.AddStrip(sc);
+        cli_print("Added channel ", config.GetStrips().size() - 1, " (pin ", sc.dataPin,
+                  ", len ", sc.length, ", offset ", sc.offset, ", ",
+                  ColorOrderToString(sc.colorOrder), ", ", ChipsetToString(sc.chipset), ").",
+                  kApplyNotice);
+        return;
+    }
+
+    if (StringCompareInsensitive(sub, "remove"))
+    {
+        if (argv.size() < 3)
+        {
+            cli_write("Usage: strip remove <ch>\n");
+            return;
+        }
+
+        auto chOpt = ParseInt<size_t>(argv[2]);
+        if (!chOpt || *chOpt >= strips.size())
+        {
+            cli_print("Invalid channel index: '", argv[2], "'\n");
+            return;
+        }
+
+        size_t ch = *chOpt;
+        config.RemoveStrip(ch);
+        cli_print("Removed channel ", ch, ".", kApplyNotice);
+        return;
+    }
+
+    printUsage();
 }
 
 static const command core_commands[] = {
@@ -855,9 +1191,9 @@ static const command core_commands[] = {
              if (auto val = ParseInt<int>(argv[1]))
                  g_ptrSystem->GetDeviceConfig().SetBrightness(std::clamp(*val, 0, 255));
              else
-                 cli_printf("Invalid brightness: '%.*s'\n", (int)argv[1].size(), argv[1].data());
+                 cli_print("Invalid brightness: '", argv[1], "'\n");
          }
-         cli_printf("Brightness: %lu\n", (unsigned long)g_ptrSystem->GetDeviceConfig().GetBrightness());
+         cli_print("Brightness: ", g_ptrSystem->GetDeviceConfig().GetBrightness(), "\n");
      }},
     {"cat", "Display file content", "Printing file...", DoCat},
     {"clearcoredump", "Erase the coredump partition", "Clearing...", DoClearCoredump},
@@ -898,7 +1234,7 @@ static const command core_commands[] = {
                  if (auto val = ParseInt<uint32_t>(hexStr, 16))
                      newColor = CRGB(*val);
                  else
-                     cli_printf("Invalid hex color: '%.*s'\n", (int)argv[1].size(), argv[1].data());
+                     cli_print("Invalid hex color: '", argv[1], "'\n");
              }
              else if (argv.size() == 4) // Assume R G B
              {
@@ -964,11 +1300,11 @@ static const command core_commands[] = {
              if (StringCompareInsensitive(levelStr, l.name))
              {
                  esp_log_level_set(std::string(tag).c_str(), l.level);
-                 cli_printf("Set level for tag '%s' to %d (%s)\n", std::string(tag).c_str(), l.level, l.name);
+                 cli_print("Set level for tag '", tag, "' to ", l.level, " (", l.name, ")\n");
                  return;
              }
          }
-         cli_printf("Invalid level '%s'. Valid: none error warn info debug verbose\n", std::string(levelStr).c_str());
+         cli_print("Invalid level '", levelStr, "'. Valid: none error warn info debug verbose\n");
      }},
     {"ls", "Show filesytem directory", "NAME", DoDirectoryListing},                    // Function pointer
     {"partitions", "Display partition table", "Partition Table:", DoPartitions},
@@ -1072,18 +1408,19 @@ static const command core_commands[] = {
     }},
     {"setsetting", "<key> <value> Set property of current effect", "Setting property:", [](const cli_argv& argv) {
         if (argv.size() < 3) {
-            cli_printf("Usage: setsetting <key> <value>\n");
+            cli_write("Usage: setsetting <key> <value>\n");
             return;
         }
         auto& effect = g_ptrSystem->GetEffectManager().GetCurrentEffect();
         if (effect.SetSetting(String(argv[1].data(), argv[1].length()), String(argv[2].data(), argv[2].length()))) {
-            cli_printf("Successfully set %.*s to %.*s.\n", (int)argv[1].length(), argv[1].data(), (int)argv[2].length(), argv[2].data());
+            cli_print("Successfully set ", argv[1], " to ", argv[2], ".\n");
             SaveEffectManagerConfig();
         } else {
-            cli_printf("Failed to set %.*s.\n", (int)argv[1].length(), argv[1].data());
+            cli_print("Failed to set ", argv[1], ".\n");
         }
     }},
     {"statuslog", "[on|off] Show/change periodic status logs", "Status logs.", DoStatusLog},
+    {"strip", "[list|set|add|remove|apply] Configure LED strip channels", "LED Strips:", DoStrip},
 #if HAS_SYSTEM_HARDWARE_HUB
     {"rtc", "[sync|read] Read or synchronize PCF85063 real-time clock", "RTC status:",
      [](const cli_argv &argv) {

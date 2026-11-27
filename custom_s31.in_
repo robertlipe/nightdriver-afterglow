@@ -1,0 +1,53 @@
+; ==============================================================================
+; Waiken-Smart ESP32-S31 CB V1.1 (wks_s31_cb)
+; ==============================================================================
+; Dongguan Waiken-Smart Technology (东莞市慧勤智远科技有限公司)
+; Module: ESP32-S31-WROOM-3-N16R16V (ESP32-S31NRV16)
+; SoC:    Dual-core 32-bit RISC-V @ 320 MHz + LP RISC-V Core
+; Memory: 16MB Flash (JEDEC 46 40 18), 16MB PSRAM
+; Radio:  Wi-Fi 6 (802.11ax), Bluetooth 5.4 (LE + Classic), 802.15.4 (Zigbee/Thread)
+; Power:  Dual USB-C ports (COM via CH343P, PWR input) -> 1.5A fuse -> SYS_5V
+;
+; Reference & Schematics:
+;   https://github.com/zhing2006/esp-gbx/blob/main/docs/boards/wks_s31_cb.md
+;   Tindie: https://www.tindie.com/products/adz1122/esp32-s31-development-board/
+;
+; Hardware Peripheral Map:
+;   - WS2812B RGB LED:  GPIO 37 (XL-2121RGBC-2812B via WNM2021 N-FET level-shifter Q3 to 5V;
+;                                also pinned out on P1 expansion header)
+;   - Audio Codec:       Everest ES8389 (I2C 0x10, I2S MCLK=2, BCLK=3, WS=4, DIN=5, DOUT=6)
+;   - Speaker Amps:      GPIO 7 (PA_CTRL, high=enable; two NS4150B class-D amps from SYS_5V)
+;   - I2C Bus:           SDA = GPIO 0, SCL = GPIO 1 (4.7k pullups; shared by ES8389, Touch, DVP)
+;   - MicroSD (TF Card): SDMMC Slot 0 (D0-D3 = GPIO 20-23, CLK = GPIO 24, CMD = GPIO 25)
+;   - Backlight:         GPIO 38 (BL_CTR to MP3302 EN via LEDC PWM, high=on)
+;   - Touch Controller:  Goodix GT1151Q (I2C 0x14, RST = GPIO 39, INT = GPIO 55)
+;   - Buttons:           KEY0 / Boot = GPIO 61 (active low, requires internal pullup), Reset = EN
+;   - Console UART:      TX0 = GPIO 58, RX0 = GPIO 59 (via on-board CH343P USB-C)
+;   - Native USB 2.0:    USB-A female connector wired directly to OTG DP/DM (5V VBUS)
+;   - RGB LCD Header:    40-pin FPC (PCLK=40, DE=43, HSYNC=44, VSYNC=45; B3-B7, G2-G7, R3-R7)
+; ==============================================================================
+
+[dev_esp32_s31]
+extends         = base
+board           = esp32-s31-coreboard-1
+monitor_speed   = 115200
+upload_speed    = 2921600
+build_flags     = ${base.build_flags}
+                  -DLED_PIN0=37
+
+[env:s31thingo-demo]
+extends         = dev_esp32_s31
+build_src_flags = ${dev_esp32_s31.build_src_flags}
+                  ${feature_audio.build_src_flags}
+                  -DEFFECTS_DEMO=1
+                  -DUSE_ALL_NETWORKING=1
+                  -DUSE_I2S_AUDIO=1
+                  -DI2S_MCLK_PIN=2
+                  -DI2S_BCLK_PIN=3
+                  -DI2S_WS_PIN=4
+                  -DINPUT_PIN=6
+                  -DAUDIO_PA_PIN=7
+                  -DNUM_LEDS=64
+                  -DPROJECT_NAME=\"ESP32-S31-Thingo\"
+lib_deps        = ${base.network_deps}
+                  ${dev_esp32_s31.lib_deps}

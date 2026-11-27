@@ -34,12 +34,20 @@
 #include <HTTPClient.h>
 #include <UrlEncode.h>
 #endif
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <cstring>
 #include <memory>
 #include <optional>
+#include <span>
+#include <string_view>
+#include <strings.h>
 
 #include "deviceconfig.h"
 #include "effectmanager.h"
 #include "jsonserializer.h"
+#include "string_utils.h"
 #include "systemcontainer.h"
 
 extern const char timezones_start[] asm("_binary_config_timezones_json_start");
@@ -63,6 +71,85 @@ extern const char timezones_start[] asm("_binary_config_timezones_json_start");
 // For the first 5 points, a comment has been added to the respective place in the existing code.
 // Generally speaking, one will also want to add logic to the webserver to retrieve and set the setting.
 
+namespace {
+
+struct ColorOrderEntry {
+    std::string_view name;
+    EOrder order;
+};
+
+constexpr auto kColorOrders = std::to_array<ColorOrderEntry>({
+    {"RGB", EOrder::RGB},
+    {"RBG", EOrder::RBG},
+    {"GRB", EOrder::GRB},
+    {"GBR", EOrder::GBR},
+    {"BRG", EOrder::BRG},
+    {"BGR", EOrder::BGR},
+});
+
+struct ChipsetEntry {
+    std::string_view name;
+    ChipsetType type;
+    std::span<const std::string_view> aliases;
+};
+
+constexpr std::string_view kWs2812Aliases[] = {"WS2812", "WS2813", "SK6812"};
+
+constexpr auto kChipsets = std::to_array<ChipsetEntry>({
+    {"WS2812B", ChipsetType::WS2812B, kWs2812Aliases},
+    {"WS2811",  ChipsetType::WS2811,  {}},
+    {"WS2815",  ChipsetType::WS2815,  {}},
+    {"APA102",  ChipsetType::APA102,  {}},
+    {"SK9822",  ChipsetType::SK9822,  {}},
+});
+
+} // namespace
+
+const char* ChipsetToString(ChipsetType type)
+{
+    for (const auto& e : kChipsets)
+    {
+        if (e.type == type)
+            return e.name.data();
+    }
+    return "WS2812B";
+}
+
+std::optional<ChipsetType> ParseChipsetType(std::string_view str)
+{
+    for (const auto& e : kChipsets)
+    {
+        if (EqualsIgnoreCase(e.name, str))
+            return e.type;
+        for (auto alias : e.aliases)
+        {
+            if (EqualsIgnoreCase(alias, str))
+                return e.type;
+        }
+    }
+    return std::nullopt;
+}
+
+const char* ColorOrderToString(EOrder order)
+{
+    for (const auto& e : kColorOrders)
+    {
+        if (e.order == order)
+            return e.name.data();
+    }
+    return "GRB";
+}
+
+std::optional<EOrder> ParseColorOrder(std::string_view str)
+{
+    for (const auto& e : kColorOrders)
+    {
+        if (EqualsIgnoreCase(e.name, str))
+            return e.order;
+    }
+    return std::nullopt;
+}
+
 void DeviceConfig::SaveToJSON() const
 {
     g_ptrSystem->GetJSONWriter().FlagWriter(writerIndex);
@@ -73,6 +160,8 @@ DeviceConfig::DeviceConfig()
     writerIndex = g_ptrSystem->GetJSONWriter().RegisterWriter(
         [this] { assert(SaveToJSONFile(DEVICE_CONFIG_FILE, *this)); }
     );
+
+    InitializeDefaultStrips();
 
     auto jsonDoc = CreateJsonDocument();
 
@@ -127,6 +216,19 @@ bool DeviceConfig::SerializeToJSON(JsonObject& jsonObject, bool includeSensitive
     jsonDoc[PortalTimeoutSecondsTag] = portalTimeoutSeconds;
     #endif
 
+    JsonArray stripArray = jsonDoc[StripsTag].to<JsonArray>();
+    for (const auto& sc : strips)
+    {
+        JsonObject obj = stripArray.add<JsonObject>();
+        obj["pin"] = sc.dataPin;
+        obj["clock"] = sc.clockPin;
+        obj["length"] = sc.length;
+        obj["offset"] = sc.offset;
+        obj["order"] = ColorOrderToString(sc.colorOrder);
+        obj["chipset"] = ChipsetToString(sc.chipset);
+        obj["enabled"] = sc.enabled;
+    }
+
 
     if (includeSensitive)
         jsonDoc[OpenWeatherApiKeyTag] = openWeatherApiKey;
@@ -180,6 +282,16 @@ bool DeviceConfig::DeserializeFromJSON(const JsonObjectConst& jsonObject, bool s
         }
     }
     #endif
+
+    if (jsonObject[StripsTag].is<JsonArrayConst>())
+    {
+        SetStripsFromJSON(jsonObject[StripsTag].as<JsonArrayConst>());
+    }
+
+    if (strips.empty())
+    {
+        InitializeDefaultStrips();
+    }
 
 
     if (ntpServer.isEmpty())
@@ -635,4 +747,146 @@ void DeviceConfig::SetAutoOrientation(bool newAutoOrientation)
 void DeviceConfig::SetTapDetection(bool newTapDetection)
 {
     SetAndSave(tapDetection, newTapDetection);
+}
+
+bool DeviceConfig::FlushToDisk()
+{
+    return SaveToJSONFile(DEVICE_CONFIG_FILE, *this);
+}
+
+void DeviceConfig::SetStrips(const std::vector<StripConfig>& newStrips)
+{
+    if (strips == newStrips)
+        return;
+    strips = newStrips;
+    SaveToJSON();
+}
+
+bool DeviceConfig::SetStrip(size_t index, const StripConfig& config)
+{
+    if (index >= strips.size())
+        return false;
+    if (strips[index] == config)
+        return true;
+    strips[index] = config;
+    return true;
+}
+
+bool DeviceConfig::AddStrip(const StripConfig& config)
+{
+    strips.push_back(config);
+    return true;
+}
+
+bool DeviceConfig::RemoveStrip(size_t index)
+{
+    if (index >= strips.size())
+        return false;
+    strips.erase(strips.begin() + index);
+    return true;
+}
+
+bool DeviceConfig::SetStripsFromJSON(const JsonArrayConst& array)
+{
+    std::vector<StripConfig> newStrips;
+    for (JsonObjectConst stripObj : array)
+    {
+        StripConfig sc;
+        sc.dataPin = stripObj["pin"] | -1;
+        sc.clockPin = stripObj["clock"] | -1;
+        sc.length = stripObj["length"] | static_cast<uint16_t>(60);
+        sc.offset = stripObj["offset"] | static_cast<uint16_t>(0);
+        if (const char* orderStr = stripObj["order"])
+        {
+            if (auto order = ParseColorOrder(orderStr))
+                sc.colorOrder = *order;
+        }
+        if (const char* csStr = stripObj["chipset"])
+        {
+            if (auto cs = ParseChipsetType(csStr))
+                sc.chipset = *cs;
+        }
+        sc.enabled = stripObj["enabled"] | true;
+        newStrips.push_back(sc);
+    }
+    if (newStrips.empty())
+        return false;
+    SetStrips(newStrips);
+    return true;
+}
+
+bool DeviceConfig::SetStripsFromJSON(const char* jsonString)
+{
+    if (!jsonString || *jsonString == '\0')
+        return false;
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, jsonString);
+    if (err)
+        return false;
+    if (doc.is<JsonArrayConst>())
+        return SetStripsFromJSON(doc.as<JsonArrayConst>());
+    return false;
+}
+
+void DeviceConfig::InitializeDefaultStrips()
+{
+    strips.clear();
+#if defined(LED_PINS)
+    constexpr int defaultPins[] = { LED_PINS };
+#else
+    constexpr int defaultPins[] = {
+#if NUM_CHANNELS >= 1 && LED_PIN0 >= 0
+        LED_PIN0,
+#endif
+#if NUM_CHANNELS >= 2 && LED_PIN1 >= 0
+        LED_PIN1,
+#endif
+#if NUM_CHANNELS >= 3 && LED_PIN2 >= 0
+        LED_PIN2,
+#endif
+#if NUM_CHANNELS >= 4 && LED_PIN3 >= 0
+        LED_PIN3,
+#endif
+#if NUM_CHANNELS >= 5 && LED_PIN4 >= 0
+        LED_PIN4,
+#endif
+#if NUM_CHANNELS >= 6 && LED_PIN5 >= 0
+        LED_PIN5,
+#endif
+#if NUM_CHANNELS >= 7 && LED_PIN6 >= 0
+        LED_PIN6,
+#endif
+#if NUM_CHANNELS >= 8 && LED_PIN7 >= 0
+        LED_PIN7,
+#endif
+    };
+#endif
+    constexpr size_t count = sizeof(defaultPins) / sizeof(defaultPins[0]);
+    if constexpr (count == 0)
+        return;
+
+    for (size_t i = 0; i < count; ++i)
+    {
+        if (defaultPins[i] < 0)
+            continue;
+        StripConfig sc;
+        sc.dataPin = defaultPins[i];
+        sc.clockPin = -1;
+        sc.offset = 0;
+#if defined(NUM_LEDS)
+        sc.length = NUM_LEDS;
+#elif defined(MATRIX_WIDTH)
+        sc.length = MATRIX_WIDTH * MATRIX_HEIGHT;
+#else
+        sc.length = 60;
+#endif
+#if defined(COLOR_ORDER)
+        sc.colorOrder = COLOR_ORDER;
+#else
+        sc.colorOrder = EOrder::GRB;
+#endif
+        sc.chipset = ChipsetType::WS2812B;
+        sc.enabled = true;
+        strips.push_back(sc);
+    }
 }

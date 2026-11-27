@@ -27,21 +27,27 @@ class PatternSMHolidayLights : public EffectWithId<PatternSMHolidayLights>
     uint8_t density = 50;
     uint8_t fadingSpeed = 10;
     uint8_t updateFromRGBWeight = 10;
-    const int scaleToNumLeds = std::max(1, NUM_LEDS / 256);
 
     void confetti()
     {
-        uint16_t idx = random16(NUM_LEDS);
-        for (unsigned i = 0; i < scaleToNumLeds; i++)
+        const int ledCount = g()->GetLEDCount();
+        if (ledCount <= 0)
+            return;
+        const int scale = std::max(1, ledCount / 256);
+        uint16_t idx = random16(ledCount);
+        for (int i = 0; i < scale; i++)
             if (random8() < density)
                 if ((g()->getPixel(idx).r + g()->getPixel(idx).g + g()->getPixel(idx).b) < 10)
-                    g()->leds[idx] = random(48, 16777216);
+                    g()->setPixel(idx, random(48, 16777216));
     }
 
     void addGlitter(uint8_t chanceOfGlitter)
     {
+        const int ledCount = g()->GetLEDCount();
+        if (ledCount <= 0)
+            return;
         if (random8() < chanceOfGlitter)
-            g()->leds[random16(NUM_LEDS)] = random(0, 16777215);
+            g()->setPixel(random16(ledCount), random(0, 16777215));
     }
 
     void spruce()

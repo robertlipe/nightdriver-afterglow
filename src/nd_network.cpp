@@ -991,10 +991,11 @@ namespace nd_network
     void DoStatsCommand(const DebugCLI::cli_argv &)
     {
         auto &bufferManager = g_ptrSystem->GetBufferManagers()[0];
+        const size_t stripPixels = g_ptrSystem->GetDevices().empty() ? 0 : g_ptrSystem->GetDevices()[0]->GetLEDCount();
 
-        DebugCLI::cli_printf("%s:%zux%d %zuK %ddB:%s",
+        DebugCLI::cli_printf("%s:%zux%zu %zuK %ddB:%s",
             FLASH_VERSION_NAME, g_ptrSystem->GetDevices().size(),
-            NUM_LEDS, (size_t)(ESP.getFreeHeap()/1024), abs(WiFi.RSSI()),
+            stripPixels, (size_t)(ESP.getFreeHeap()/1024), abs(WiFi.RSSI()),
             WiFi.isConnected() ? WiFi.localIP().toString().c_str() : "None");
         DebugCLI::cli_printf("BUFR:%02zu/%02zu [%lufps]",
             (size_t)bufferManager.Depth(), (size_t)bufferManager.BufferCount(),
@@ -1508,6 +1509,8 @@ void IRAM_ATTR ColorDataTaskEntry(void *)
         }
     }
 
+    std::vector<uint8_t> packetBuffer;
+
     for (;;)
     {
         if (socket < 0)
@@ -1517,17 +1520,22 @@ void IRAM_ATTR ColorDataTaskEntry(void *)
 
         if (frameEventListener.CheckAndClearNewFrameAvailable() && leds != nullptr)
         {
+            const size_t ledCount = effectManager.g()->GetLEDCount();
+
             if (socket >= 0)
             {
                 debugV("Sending color data packet");
-                // Potentially too large for the stack, so we allocate it on the heap instead
-                std::unique_ptr<ColorDataPacket> pPacket = std::make_unique<ColorDataPacket>();
-                pPacket->header = COLOR_DATA_PACKET_HEADER;
-                pPacket->width  = effectManager.g()->width();
-                pPacket->height = effectManager.g()->height();
-                memcpy(pPacket->colors, leds, sizeof(CRGB) * NUM_LEDS);
+                const size_t packetSize = sizeof(ColorDataPacketHeader) + ledCount * sizeof(CRGB);
+                if (packetBuffer.size() != packetSize)
+                    packetBuffer.resize(packetSize);
 
-                if (!_viewer.SendPacket(socket, pPacket.get(), sizeof(ColorDataPacket)))
+                auto* pHeader = reinterpret_cast<ColorDataPacketHeader*>(packetBuffer.data());
+                pHeader->header = COLOR_DATA_PACKET_HEADER;
+                pHeader->width  = effectManager.g()->width();
+                pHeader->height = effectManager.g()->height();
+                memcpy(packetBuffer.data() + sizeof(ColorDataPacketHeader), leds, ledCount * sizeof(CRGB));
+
+                if (!_viewer.SendPacket(socket, packetBuffer.data(), packetSize))
                 {
                     // If anything goes wrong, we close the socket so it can accept new incoming attempts
                     debugD("Closing color data socket after write failure");
@@ -1537,7 +1545,7 @@ void IRAM_ATTR ColorDataTaskEntry(void *)
             }
 
 #if COLORDATA_WEB_SOCKET_ENABLED
-            webSocketServer.SendColorData(leds, NUM_LEDS);
+            webSocketServer.SendColorData(leds, ledCount);
 #endif
         }
 

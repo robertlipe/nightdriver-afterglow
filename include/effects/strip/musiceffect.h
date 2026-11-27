@@ -139,7 +139,7 @@ class SimpleColorBeat : public BeatEffectBase, public EffectWithId<SimpleColorBe
         ProcessAudio();
 
         CRGB c = (CRGB)CRGB::Blue * (g_Analyzer.VURatio() * g_Values.AppTime.LastFrameTime() * 0.75);
-        setPixelsOnAllChannels(0, NUM_LEDS, c, true);
+        setPixelsOnAllChannels(0, _cLEDs, c, true);
 
         fadeAllChannelsToBlackBy(min(255.0,1000.0 * g_Values.AppTime.LastFrameTime()));
         delay(1);
@@ -162,25 +162,32 @@ class SimpleColorBeat : public BeatEffectBase, public EffectWithId<SimpleColorBe
         {
           c = CRGB::Cyan;
 
-          if (elapsed > 0.5)                                // Medium beats fill blue and proceed with insulator2
-          {
-            c = CHSV(beatsin8(4), 255, 255);
-            cInsulators = random(1, NUM_FANS);
-          }
-          else if (elapsed > 1.0)                           // Long beats fill purple and return
+          if (elapsed > 1.0)                                // Long beats fill purple and return
           {
             c = CRGB::Purple;
             setAllOnAllChannels(c.r, c.g, c.b);
             return;
           }
+          else if (elapsed > 0.5)                           // Medium beats fill blue and proceed with insulator2
+          {
+            c = CHSV(beatsin8(4), 255, 255);
+            cInsulators = random(1, NUM_FANS);
+          }
         }
 
-        int i;
+        int i = 0;
         for (int iPass = 0; iPass < cInsulators; iPass++)
         {
-          do {                                              // Pick a different insulator than was used last time by:
-            i = random(0, NUM_FANS);                        //  - Starting with a random number
-          } while (i == _iLastInsulator);                   //  - Repeating until it doesn't match the last pass
+          if (NUM_FANS > 1)
+          {
+            do {                                              // Pick a different insulator than was used last time by:
+              i = random(0, NUM_FANS);                        //  - Starting with a random number
+            } while (i == _iLastInsulator);                   //  - Repeating until it doesn't match the last pass
+          }
+          else
+          {
+            i = 0;
+          }
           _iLastInsulator = i;                              // Our current choice forms the new "last" choice for next pass
 
           DrawFanPixels(0, FAN_SIZE, c, Sequential, i);     // Draw twice to float-saturate our color

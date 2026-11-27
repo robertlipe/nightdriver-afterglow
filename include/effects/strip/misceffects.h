@@ -283,9 +283,9 @@ class ColorFillEffect : public EffectWithId<ColorFillEffect>
         if (_everyNth != 1)
           fillSolidOnAllChannels(CRGB::Black);
         if (!_ignoreGlobalColor && g_ptrSystem->GetDeviceConfig().ApplyGlobalColors())
-          fillSolidOnAllChannels(g_ptrSystem->GetDeviceConfig().GlobalColor(), 0, NUM_LEDS, _everyNth);
+          fillSolidOnAllChannels(g_ptrSystem->GetDeviceConfig().GlobalColor(), 0, _cLEDs, _everyNth);
         else
-          fillSolidOnAllChannels(_color, 0, NUM_LEDS, _everyNth);
+          fillSolidOnAllChannels(_color, 0, _cLEDs, _everyNth);
     }
 };
 
@@ -438,12 +438,21 @@ class TwinkleEffect : public EffectWithId<TwinkleEffect>
 
   public:
 
-    TwinkleEffect(int countToDraw = NUM_LEDS / 2, uint8_t fadeFactor = 10, int updateSpeed = 10)
+    TwinkleEffect(int countToDraw = 0, uint8_t fadeFactor = 10, int updateSpeed = 10)
       : EffectWithId<TwinkleEffect>("Twinkle"),
         _countToDraw(countToDraw),
         _fadeFactor(fadeFactor),
         _updateSpeed(updateSpeed)
     {
+    }
+
+    bool Init(std::vector<std::shared_ptr<GFXBase>>& gfx) override
+    {
+        if (!LEDStripEffect::Init(gfx))
+            return false;
+        if (_countToDraw == 0 && _cLEDs > 0)
+            _countToDraw = _cLEDs / 2;
+        return true;
     }
 
     explicit TwinkleEffect(const JsonObjectConst& jsonObject)
@@ -488,9 +497,10 @@ class TwinkleEffect : public EffectWithId<TwinkleEffect>
             for (int iLoop = 0; iLoop < 2; iLoop++)
             {
               int iNew = -1;
-              for (int iPass = 0; iPass < NUM_LEDS * 20; iPass++)
+              size_t totalLeds = _cLEDs > 0 ? _cLEDs : 1;
+              for (size_t iPass = 0; iPass < totalLeds * 20; iPass++)
               {
-                  size_t i = random(0, NUM_LEDS);
+                  size_t i = random(0, totalLeds);
                   if (_GFX[0]->getPixel(i) != CRGB::Black)
                       continue;
                   if (litPixels.end() != find(litPixels.begin(), litPixels.end(), i))

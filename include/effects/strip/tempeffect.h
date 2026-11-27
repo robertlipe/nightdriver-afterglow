@@ -34,8 +34,10 @@
 
 #if ENABLE_AUDIO
 
+#include <algorithm>
 #include <array>
 #include <deque>
+#include <vector>
 
 #include "colordata.h"
 #include "values.h"
@@ -45,6 +47,7 @@ class SimpleInsulatorBeatEffect : public EffectWithId<SimpleInsulatorBeatEffect>
   protected:
 
     std::deque<int> _lit;
+    std::vector<int> _available;
 
     void Draw() override
     {
@@ -54,34 +57,25 @@ class SimpleInsulatorBeatEffect : public EffectWithId<SimpleInsulatorBeatEffect>
 
     void HandleBeat(bool bMajor, float elapsed, float span) override
     {
-        while (_lit.size() >= NUM_FANS - 1)
+        const int numFans = max(1, min<int>(NUM_FANS, this->_cLEDs / max(1, FAN_SIZE)));
+        while ((int)_lit.size() >= numFans - 1 && !_lit.empty())
         {
             _lit.pop_front();
         }
 
-        std::array<bool, NUM_FANS> isLit = {false};
-        for (int litIdx : _lit)
+        _available.clear();
+        for (int f = 0; f < numFans; ++f)
         {
-            if (litIdx >= 0 && litIdx < NUM_FANS)
+            if (std::find(_lit.begin(), _lit.end(), f) == _lit.end())
             {
-                isLit[litIdx] = true;
-            }
-        }
-
-        std::array<int, NUM_FANS> available;
-        size_t availableCount = 0;
-        for (int f = 0; f < NUM_FANS; ++f)
-        {
-            if (!isLit[f])
-            {
-                available[availableCount++] = f;
+                _available.push_back(f);
             }
         }
 
         size_t i = 0;
-        if (availableCount > 0)
+        if (!_available.empty())
         {
-            i = available[random(0, availableCount)];
+            i = _available[random(0, _available.size())];
         }
 
         _lit.push_back(i);
@@ -105,6 +99,7 @@ class SimpleInsulatorBeatEffect2 : public EffectWithId<SimpleInsulatorBeatEffect
   protected:
 
     std::deque<int> _lit;
+    std::vector<int> _available;
 
     void Draw() override
     {
@@ -114,34 +109,25 @@ class SimpleInsulatorBeatEffect2 : public EffectWithId<SimpleInsulatorBeatEffect
 
     void HandleBeat(bool bMajor, float elapsed, float span) override
     {
-        while (_lit.size() >= NUM_FANS - 1)
+        const int numFans = max(1, min<int>(NUM_FANS, this->_cLEDs / max(1, FAN_SIZE)));
+        while ((int)_lit.size() >= numFans - 1 && !_lit.empty())
         {
             _lit.pop_front();
         }
 
-        std::array<bool, NUM_FANS> isLit = {false};
-        for (int litIdx : _lit)
+        _available.clear();
+        for (int f = 0; f < numFans; ++f)
         {
-            if (litIdx >= 0 && litIdx < NUM_FANS)
+            if (std::find(_lit.begin(), _lit.end(), f) == _lit.end())
             {
-                isLit[litIdx] = true;
-            }
-        }
-
-        std::array<int, NUM_FANS> available;
-        size_t availableCount = 0;
-        for (int f = 0; f < NUM_FANS; ++f)
-        {
-            if (!isLit[f])
-            {
-                available[availableCount++] = f;
+                _available.push_back(f);
             }
         }
 
         size_t i = 0;
-        if (availableCount > 0)
+        if (!_available.empty())
         {
-            i = available[random(0, availableCount)];
+            i = _available[random(0, _available.size())];
         }
 
         _lit.push_back(i);

@@ -195,7 +195,8 @@ SystemContainer::BufferManagerContainer& SystemContainer::SetupBufferManagers()
         uint32_t memtouse = ESP.getFreeHeap() - RESERVE_MEMORY;
     #endif
 
-    uint32_t memtoalloc = (_ptrDevices->size() * (sizeof(LEDBuffer) + NUM_LEDS * sizeof(CRGB)));
+    const size_t ledsPerDevice = _ptrDevices->empty() ? 0 : _ptrDevices->front()->GetLEDCount();
+    uint32_t memtoalloc = (_ptrDevices->size() * (sizeof(LEDBuffer) + ledsPerDevice * sizeof(CRGB)));
     uint32_t cBuffers = memtouse / memtoalloc;
 
     if (cBuffers < MIN_BUFFERS)

@@ -38,7 +38,8 @@ LEDBuffer::LEDBuffer(std::shared_ptr<GFXBase> pStrand) :
              _timeStampMicroseconds(0),
              _timeStampSeconds(0)
 {
-    _leds.reset(new CRGB[NUM_LEDS]);
+    const size_t count = _pStrand ? _pStrand->GetLEDCount() : 0;
+    _leds.reset(new CRGB[count]);
 }
 
 uint64_t LEDBuffer::Seconds()      const  { return _timeStampSeconds;      }
@@ -92,7 +93,8 @@ bool LEDBuffer::UpdateFromWire(std::span<const uint8_t> payloadData)
         debugW("Data size mismatch");
         return false;
     }
-    if (length32 > NUM_LEDS)
+    const size_t maxLeds = _pStrand ? _pStrand->GetLEDCount() : 0;
+    if (length32 > maxLeds)
     {
         debugW("More data than we have LEDs\n");
         return false;

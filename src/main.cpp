@@ -505,10 +505,6 @@ void setup()
         #endif
     #endif
 
-    #if INCOMING_WIFI_ENABLED
-        g_ptrSystem->SetupSocketServer(NetworkPort::IncomingWiFi, NUM_LEDS);  // $C000 is free RAM on the C64, fwiw!
-    #endif
-
     #if ENABLE_WIFI && ENABLE_WEBSERVER
         g_ptrSystem->SetupWebServer();
 
@@ -612,6 +608,16 @@ void setup()
     #endif
 
     #if INCOMING_WIFI_ENABLED
+        size_t maxStrandLeds = 0;
+        for (const auto& dev : devices)
+        {
+            maxStrandLeds = std::max(maxStrandLeds, (size_t)dev->GetLEDCount());
+        }
+        if (maxStrandLeds == 0)
+        {
+            maxStrandLeds = NUM_LEDS;
+        }
+        g_ptrSystem->SetupSocketServer(NetworkPort::IncomingWiFi, maxStrandLeds);
         g_ptrSystem->SetupBufferManagers();
     #endif
 

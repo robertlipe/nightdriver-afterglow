@@ -30,8 +30,14 @@
 
 #include "globals.h"
 
+#include <bitset>
+#include <iterator>
+#include <vector>
+
 #include "deviceconfig.h"
 #include "effectmanager.h"
+#include "fl/channels/channel.h"
+#include "fl/channels/config.h"
 #include "nd_panic.h"
 #include "systemcontainer.h"
 #include "values.h"
@@ -39,60 +45,130 @@
 
 void WS281xGFX::AddLEDs(std::vector<std::shared_ptr<GFXBase>>& devices)
 {
-    // Macro to add LEDs to a channel
+    debugI("Adding LEDs to FastLED via Channels API...");
 
-    #if FASTLED_EXPERIMENTAL_ESP32_RGBW_ENABLED
-        #define ADD_CHANNEL(channel) \
-            debugI("Adding %zu LEDs to pin %d from channel %d on FastLED.", devices[channel]->GetLEDCount(), LED_PIN ## channel, channel); \
-            FastLED.addLeds<WS2812, LED_PIN ## channel, COLOR_ORDER>(devices[channel]->leds, devices[channel]->GetLEDCount()).setRgbw(Rgbw(kRGBWDefaultColorTemp, FASTLED_EXPERIMENTAL_ESP32_RGBW_MODE )); \
-            pinMode(LED_PIN ## channel, OUTPUT)
-    #else
-        #define ADD_CHANNEL(channel) \
-            debugI("Adding %zu LEDs to pin %d from channel %d on FastLED.", devices[channel]->GetLEDCount(), LED_PIN ## channel, channel); \
-            FastLED.addLeds<WS2812B, LED_PIN ## channel, COLOR_ORDER>(devices[channel]->leds, devices[channel]->GetLEDCount()); \
-            pinMode(LED_PIN ## channel, OUTPUT)
-    #endif
+    if (devices.empty())
+        return;
 
-    debugI("Adding LEDs to FastLED...");
+    const auto& strips = g_ptrSystem->GetDeviceConfig().GetStrips();
+    CRGB* masterBuffer = devices[0]->leds;
+    const size_t masterBufferSize = devices[0]->GetLEDCount();
+    std::bitset<64> seenPins;
 
-    // The following "unrolled conditional compile loop" to set up the channels is needed because the LED pin
-    //   is a template parameter to FastLED.addLeds()
+    for (size_t ch = 0; ch < strips.size(); ++ch)
+    {
+        const auto& strip = strips[ch];
+        if (!strip.enabled || strip.dataPin < 0)
+            continue;
 
-    #if NUM_CHANNELS >= 1 && LED_PIN0 >= 0
-        ADD_CHANNEL(0);
-    #endif
+        // Check all required pins before recording any pin in seenPins
+        if (static_cast<size_t>(strip.dataPin) < seenPins.size() && seenPins.test(strip.dataPin))
+        {
+            debugW("Strip %zu: GPIO %d already assigned to a previous channel; skipping duplicate to avoid hardware driver corruption",
+                   ch, strip.dataPin);
+            continue;
+        }
 
-    #if NUM_CHANNELS >= 2 && LED_PIN1 >= 0
-        ADD_CHANNEL(1);
-    #endif
+        const bool isSpi = (strip.chipset == ChipsetType::APA102 || strip.chipset == ChipsetType::SK9822);
+        if (isSpi)
+        {
+            if (strip.clockPin == strip.dataPin)
+            {
+                debugW("Strip %zu: data pin and clock pin cannot be identical (GPIO %d); skipping",
+                       ch, strip.dataPin);
+                continue;
+            }
+            if (strip.clockPin >= 0 && static_cast<size_t>(strip.clockPin) < seenPins.size() && seenPins.test(strip.clockPin))
+            {
+                debugW("Strip %zu: clock GPIO %d already assigned to a previous channel; skipping duplicate",
+                       ch, strip.clockPin);
+                continue;
+            }
+        }
 
-    #if NUM_CHANNELS >= 3 && LED_PIN2 >= 0
-        ADD_CHANNEL(2);
-    #endif
+        // All pins are available; now reserve them
+        if (static_cast<size_t>(strip.dataPin) < seenPins.size())
+            seenPins.set(strip.dataPin);
+        if (isSpi && strip.clockPin >= 0 && static_cast<size_t>(strip.clockPin) < seenPins.size())
+            seenPins.set(strip.clockPin);
 
-    #if NUM_CHANNELS >= 4 && LED_PIN3 >= 0
-        ADD_CHANNEL(3);
-    #endif
+        size_t offset = strip.offset;
+        size_t len = strip.length;
 
-    #if NUM_CHANNELS >= 5 && LED_PIN4 >= 0
-        ADD_CHANNEL(4);
-    #endif
+        if (offset >= masterBufferSize)
+        {
+            debugE("Strip %zu offset (%zu) exceeds master buffer size (%zu)! Skipping.",
+                   ch, offset, masterBufferSize);
+            continue;
+        }
+        if (offset + len > masterBufferSize)
+        {
+            debugW("Strip %zu range [%zu..%zu] exceeds master buffer (%zu). Clamping length.",
+                   ch, offset, offset + len, masterBufferSize);
+            len = masterBufferSize - offset;
+        }
 
-    #if NUM_CHANNELS >= 6 && LED_PIN5 >= 0
-        ADD_CHANNEL(5);
-    #endif
+        debugI("Adding %zu LEDs to pin %d from offset %zu on FastLED (chipset %s, order %s).",
+               len, strip.dataPin, offset,
+               ChipsetToString(strip.chipset), ColorOrderToString(strip.colorOrder));
 
-    #if NUM_CHANNELS >= 7 && LED_PIN6 >= 0
-        ADD_CHANNEL(6);
-    #endif
+        fl::ChannelPtr channel = nullptr;
+        if (strip.chipset == ChipsetType::APA102 || strip.chipset == ChipsetType::SK9822)
+        {
+            if (strip.clockPin < 0)
+            {
+                debugE("Strip %zu: %s requires a clock pin (clockPin < 0); skipping.",
+                       ch, ChipsetToString(strip.chipset));
+                continue;
+            }
+            auto encoder = (strip.chipset == ChipsetType::APA102)
+                ? fl::SpiEncoder::apa102()
+                : fl::SpiEncoder::sk9822();
+            fl::SpiChipsetConfig spiConfig(strip.dataPin, strip.clockPin, encoder);
+            fl::ChannelConfig config(
+                spiConfig,
+                fl::span<CRGB>(&masterBuffer[offset], len),
+                strip.colorOrder
+            );
+            channel = FastLED.add(config);
+            pinMode(strip.clockPin, OUTPUT);
+        }
+        else
+        {
+            fl::ChipsetTimingConfig timing;
+            switch (strip.chipset)
+            {
+            case ChipsetType::WS2815:
+                timing = fl::makeTimingConfig<fl::TIMING_WS2815>();
+                break;
+            case ChipsetType::WS2811:
+            case ChipsetType::WS2812B:
+            default:
+                timing = fl::makeTimingConfig<fl::TIMING_WS2812_800KHZ>();
+                break;
+            }
 
-    #if NUM_CHANNELS >= 8 && LED_PIN7 >= 0
-        ADD_CHANNEL(7);
-    #endif
+            fl::ClocklessChipset chipset(strip.dataPin, timing);
+            fl::ChannelConfig config(
+                chipset,
+                fl::span<CRGB>(&masterBuffer[offset], len),
+                strip.colorOrder
+            );
 
-    #ifdef POWER_LIMIT_MW
-        set_max_power_in_milliwatts(POWER_LIMIT_MW);                // Set brightness limit
-    #endif
+            channel = FastLED.add(config);
+        }
+#if FASTLED_EXPERIMENTAL_ESP32_RGBW_ENABLED
+        if (channel)
+        {
+            channel->setRgbw(Rgbw(kRGBWDefaultColorTemp, FASTLED_EXPERIMENTAL_ESP32_RGBW_MODE));
+        }
+#endif
+        pinMode(strip.dataPin, OUTPUT);
+    }
+
+#ifdef POWER_LIMIT_MW
+    set_max_power_in_milliwatts(POWER_LIMIT_MW);
+#endif
 }
 
 WS281xGFX::WS281xGFX(size_t w, size_t h) : GFXBase(w, h)
@@ -111,15 +187,58 @@ WS281xGFX::~WS281xGFX()
 
 void WS281xGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& devices)
 {
-    // We don't support more than 8 parallel channels
-    #if NUM_CHANNELS > 8
-        #error The maximum value of NUM_CHANNELS (number of parallel channels) is 8
-    #endif
-
-    for (int i = 0; i < NUM_CHANNELS; i++)
+    const auto& strips = g_ptrSystem->GetDeviceConfig().GetStrips();
+    if (strips.empty())
     {
-        debugW("Allocating WS281xGFX for channel %d", i);
-        devices.push_back(std::make_shared<WS281xGFX>(MATRIX_WIDTH, MATRIX_HEIGHT));
+        for (int i = 0; i < NUM_CHANNELS; i++)
+        {
+            debugW("Allocating WS281xGFX for channel %d (legacy fallback)", i);
+            devices.push_back(std::make_shared<WS281xGFX>(MATRIX_WIDTH, MATRIX_HEIGHT));
+        }
+    }
+    else
+    {
+        std::bitset<64> seenPins;
+        size_t masterPixels = MATRIX_WIDTH * MATRIX_HEIGHT;
+        for (const auto& s : strips)
+        {
+            if (!s.enabled || s.dataPin < 0)
+                continue;
+
+            if (static_cast<size_t>(s.dataPin) < seenPins.size() && seenPins.test(s.dataPin))
+                continue;
+
+            const bool isSpi = (s.chipset == ChipsetType::APA102 || s.chipset == ChipsetType::SK9822);
+            if (isSpi)
+            {
+                if (s.clockPin == s.dataPin)
+                    continue;
+                if (s.clockPin >= 0 && static_cast<size_t>(s.clockPin) < seenPins.size() && seenPins.test(s.clockPin))
+                    continue;
+            }
+
+            if (static_cast<size_t>(s.dataPin) < seenPins.size())
+                seenPins.set(s.dataPin);
+            if (isSpi && s.clockPin >= 0 && static_cast<size_t>(s.clockPin) < seenPins.size())
+                seenPins.set(s.clockPin);
+
+            size_t needed = static_cast<size_t>(s.offset) + s.length;
+            if (needed > masterPixels)
+                masterPixels = needed;
+        }
+
+        debugW("Allocating master WS281xGFX canvas with %zu pixels for %zu configured strip(s)",
+               masterPixels, strips.size());
+        size_t w = masterPixels;
+        size_t h = 1;
+#if MATRIX_HEIGHT > 1
+        if (masterPixels == MATRIX_WIDTH * MATRIX_HEIGHT)
+        {
+            w = MATRIX_WIDTH;
+            h = MATRIX_HEIGHT;
+        }
+#endif
+        devices.push_back(std::make_shared<WS281xGFX>(w, h));
     }
 
     AddLEDs(devices);
@@ -150,14 +269,22 @@ void WS281xGFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsD
         return;
     }
 
-    auto& effectManager = g_ptrSystem->GetEffectManager();
-
-    for (int i = 0; i < NUM_CHANNELS; i++)
+    fadeLightBy(leds, _ledcount, 255 - g_ptrSystem->GetDeviceConfig().GetBrightness());
+    uint8_t showScale = g_Values.Fader;
+    if (g_Values.ThermalThrottle == 0)
     {
-        FastLED[i].setLeds(effectManager.g(i)->leds, pixelsDrawn);
-        fadeLightBy(FastLED[i].leds(), FastLED[i].size(), 255 - g_ptrSystem->GetDeviceConfig().GetBrightness());
+        showScale = 0; // Emergency shutdown
     }
-    FastLED.show(min(g_Values.Fader, g_Values.ThermalThrottle)); //Shows the pixels
+    else if (g_ptrSystem->GetDeviceConfig().GetBrightness() <= 8)
+    {
+        // Board is already at minimal hardware brightness; avoid integer truncation to absolute zero
+        showScale = g_Values.Fader;
+    }
+    else
+    {
+        showScale = min(g_Values.Fader, g_Values.ThermalThrottle);
+    }
+    FastLED.show(showScale); // Shows the pixels
 
     g_Values.FPS = FastLED.getFPS();
     #ifdef POWER_LIMIT_MW
@@ -165,7 +292,7 @@ void WS281xGFX::PostProcessFrame(uint16_t localPixelsDrawn, uint16_t wifiPixelsD
     #else
         g_Values.Brite = 100.0 * g_ptrSystem->GetDeviceConfig().GetBrightness() / 255;
     #endif
-    g_Values.Brite = (g_Values.Brite * min(g_Values.Fader, g_Values.ThermalThrottle)) / 255.0f;
-    g_Values.Watts = calculate_unscaled_power_mW(effectManager.g()->leds, pixelsDrawn) / 1000; // 1000 for mw->W
+    g_Values.Brite = (g_Values.Brite * showScale) / 255.0f;
+    g_Values.Watts = calculate_unscaled_power_mW(leds, pixelsDrawn) / 1000; // 1000 for mw->W
 }
 

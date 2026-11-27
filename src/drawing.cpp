@@ -93,7 +93,7 @@ uint16_t WiFiDraw()
             {
                 l_usLastWifiDraw = micros();
                 g_Values.Fader = 255;
-                debugV("Calling LEDBuffer::Draw from wire with %d/%d pixels.", pixelsDrawn, NUM_LEDS);
+                debugV("Calling LEDBuffer::Draw from wire with %d/%lu pixels.", pixelsDrawn, (unsigned long)pBuffer->Length());
                 pBuffer->DrawBuffer();
                 // In case we drew some pixels and then drew 0 due a failure, we want to return a positive
                 // number of pixels drawn so the caller knows we did in fact render.
@@ -135,7 +135,7 @@ uint16_t LocalDraw()
                     #endif
                 #endif
 
-                return NUM_LEDS;
+                return effectManager.g()->GetLEDCount();
             }
             else
             {
@@ -223,7 +223,7 @@ void ShowOnboardRGBLED()
             ledcWrite(2, 255 - c.g);
             ledcWrite(3, 255 - c.b);
         #else
-            int iLed = NUM_LEDS / 2;
+            int iLed = graphics->GetLEDCount() / 2;
             ledcWrite(1, 255 - graphics->leds[iLed].r); // write red component to channel 1, etc.
             ledcWrite(2, 255 - graphics->leds[iLed].g);
             ledcWrite(3, 255 - graphics->leds[iLed].b);

@@ -121,7 +121,7 @@ class PatternSMColorPopcorn : public EffectWithId<PatternSMColorPopcorn>
 
     void Draw() override
     {
-        fadeToBlackBy(g()->leds, NUM_LEDS, 60);
+        fadeAllChannelsToBlackBy(60);
 
         EVERY_N_MILLISECONDS(16)
         {

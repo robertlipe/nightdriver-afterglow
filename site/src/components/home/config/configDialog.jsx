@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Dialog, DialogActions, DialogContent, DialogTitle, Button, Box, TextField, Checkbox, FormControlLabel, FormLabel, GlobalStyles, InputLabel, FormHelperText, IconButton, Icon, Stack, Slider, FormControl } from "@mui/material";
+import { Dialog, DialogActions, DialogContent, DialogTitle, Button, Box, TextField, Checkbox, FormControlLabel, FormLabel, GlobalStyles, InputLabel, FormHelperText, IconButton, Icon, Stack, Slider, FormControl, Typography, CircularProgress } from "@mui/material";
 import {useTheme} from "@mui/material";
 import httpPrefix from "../../../espaddr";
 import PropTypes from "prop-types";
 import parse from 'html-react-parser';
 import { RgbColorPicker } from "react-colorful";
+import StripsConfigEditor from "./stripsConfig";
 
 // Base styling for inputs.     
 const textFieldProps = {
@@ -343,7 +344,14 @@ const numberChanged = (value, error, description, min, max, setError, setHelper,
 const ConfigDialog = ({heading, effectIndex, open, setOpen, saveCallback}) => {
 
     const settingsEndpoint = `${httpPrefix !== undefined ? httpPrefix : ""}/settings${effectIndex !== undefined ? '/effect': ''}`;
-    const [content, setContent] = useState(<h2>Configuration Loading...</h2>);
+    const [content, setContent] = useState(
+        <Box sx={{ py: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+            <CircularProgress size={36} />
+            <Typography variant="body1" color="text.secondary">
+                Loading configuration...
+            </Typography>
+        </Box>
+    );
     const [saveData, setSaveData] = useState({});
     const [errorFields, setErrorFields] = useState(new Set());
     const [disableSubmit, setDisableSubmit] = useState(false);
@@ -366,7 +374,8 @@ const ConfigDialog = ({heading, effectIndex, open, setOpen, saveCallback}) => {
     };
 
     
-    useMemo(() => {
+    useEffect(() => {
+        let isMounted = true;
         const spec = `${settingsEndpoint}/specs${effectIndex !== undefined ? `?effectIndex=${effectIndex}` : ''}`;
         const current = `${settingsEndpoint}${effectIndex !== undefined ? `?effectIndex=${effectIndex}` : ''}`;
         const updateData = (name, value) => {
@@ -390,25 +399,84 @@ const ConfigDialog = ({heading, effectIndex, open, setOpen, saveCallback}) => {
             setDisableSubmit(errorFields.size > 0);
         };
 
-        const fetchConfig = async () => {
-            const [specData, curConfData] = await Promise.all([
-                fetch(spec).then(r => r.json()),
-                fetch(current).then(r => r.json())]); 
-            setContent(<Box>
-                {specData.map((setting) => {
-                    if(setting.name in curConfData) {
-                        setting.value = curConfData[setting.name];
-                    }    
-                    return <ConfigInput key={setting.name} setting={setting} updateData={updateData} updateError={updateError}></ConfigInput>;
-                })}
-            </Box>);
+        const fetchConfig = async (attempt = 1) => {
+            try {
+                const [specResp, curConfResp] = await Promise.all([
+                    fetch(spec, { signal: AbortSignal.timeout(2500) }),
+                    fetch(current, { signal: AbortSignal.timeout(2500) })
+                ]);
+                if (!specResp.ok || !curConfResp.ok) {
+                    throw new Error(`HTTP error ${specResp.status || curConfResp.status}`);
+                }
+                const [specData, curConfData] = await Promise.all([
+                    specResp.json(),
+                    curConfResp.json()
+                ]);
+                if (!isMounted) return;
+
+                setContent(<Box>
+                    {specData.map((setting) => {
+                        if(setting.name in curConfData) {
+                            setting.value = curConfData[setting.name];
+                        }    
+                        return <ConfigInput key={setting.name} setting={setting} updateData={updateData} updateError={updateError}></ConfigInput>;
+                    })}
+                    {effectIndex === undefined && curConfData.strips && (
+                        <StripsConfigEditor
+                            strips={curConfData.strips}
+                            onChange={(newStrips) => updateData('strips', JSON.stringify(newStrips))}
+                            updateError={updateError}
+                        />
+                    )}
+                </Box>);
+                setDisableSubmit(false);
+            } catch (err) {
+                if (!isMounted) return;
+                console.warn(`Error fetching config (attempt ${attempt}):`, err);
+                if (attempt <= 15) {
+                    setContent(
+                        <Box sx={{ py: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                            <CircularProgress size={36} />
+                            <Typography variant="h6" color="text.secondary">
+                                Reconnecting to device...
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Attempt {attempt} of 15. The device may be rebooting.
+                            </Typography>
+                        </Box>
+                    );
+                    setDisableSubmit(true);
+                    setTimeout(() => {
+                        if (isMounted) fetchConfig(attempt + 1);
+                    }, 1200);
+                } else {
+                    setContent(
+                        <Box sx={{ py: 3, textAlign: 'center' }}>
+                            <Typography variant="h6" color="error">
+                                Failed to connect to device
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 2 }}>
+                                Please check that the device is powered on and connected to WiFi.
+                            </Typography>
+                            <Button variant="outlined" onClick={() => fetchConfig(1)}>
+                                Retry
+                            </Button>
+                        </Box>
+                    );
+                    setDisableSubmit(true);
+                }
+            }
         };
+
         fetchConfig();
-    // No need to re-render on error change as that's pushed from sub Components
+
+        return () => {
+            isMounted = false;
+        };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [effectIndex]);
 
-    return <Dialog open={open} onClose={handleCancel}>
+    return <Dialog open={open} onClose={handleCancel} maxWidth="md" fullWidth>
         <DialogTitle>{heading} Configuration</DialogTitle>
         <DialogContent>
             {content}

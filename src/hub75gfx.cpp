@@ -63,7 +63,7 @@ int HUB75GFX::EstimatePowerDraw()
     constexpr auto mwPerPixelBlue  = 1.75f;
 
     float totalPower = kBaseLoad;
-    for (int i = 0; i < NUM_LEDS; i++)
+    for (int i = 0; i < (int)_ledcount; i++)
     {
         const auto pixel = leds[i];
         totalPower += pixel.r * mwPerPixelRed   / 255.0f;

@@ -4,7 +4,7 @@ This file documents the custom reliability, diagnostic, and performance improvem
 
 (This file is extensively AI generated. #sorrynotsorry.)
 
-*Last Updated: October 18, 2026*
+*Last Updated: November 26, 2026*
 
 ---
 
@@ -31,6 +31,14 @@ This file documents the custom reliability, diagnostic, and performance improvem
 ### 6. Timezone Buffer Overflow Guard
 - **Fix**: Fixed potential buffer overflow in DeviceConfig timezone handling.
 
+### 7. FreeRTOS Task Manager Idle Yield & Task Stack Reaping (`src/taskmgr.cpp`)
+- **Issue**: Dynamic background FreeRTOS tasks (such as stock quotes and weather fetchers) ended with `vTaskDelete(NULL)`. In FreeRTOS, deleted task stacks and TCBs can only be reaped by the kernel's idle task (`prvIdleTask` at priority 0). NightDriver's custom `TaskManager` created `Idle0` and `Idle1` tasks at `tskIDLE_PRIORITY + 1` running busy-wait loops, completely starving priority 0 and causing a permanent 9.3 KB internal SRAM leak on every background fetch.
+- **Fix**: Added a periodic `vTaskDelay(1)` yield inside `IdleTask::ProcessIdleTime()`, allowing the kernel idle task to run and immediately reclaim all 9.3 KB of deleted task memory.
+
+### 8. Eradication of Compile-Time `NUM_LEDS` Across Effects & Core
+- **Issue**: Compile-time `NUM_LEDS` hardcoded in effects, LED buffer allocations, onboard LED status, and networking caused buffer overflows on long strips and read-past-the-end hazards on short strips. In `SocketServer` and `ColorDataPacket`, packets larger than `NUM_LEDS` were dropped over WiFi.
+- **Fix**: Decoupled all 1D strip and 2D matrix effects, `LEDBuffer`, `SocketServer`, and `LEDViewer` to dynamically query `GetLEDCount()` and `FastLED.count()`. Replaced fixed-array packet structs with dynamic headers and persistent zero-allocation buffers, completely eliminating `NUM_LEDS` from effect execution paths.
+
 ---
 
 ## 📊 Diagnostics & Diagnostic Console Commands
@@ -52,8 +60,16 @@ This file documents the custom reliability, diagnostic, and performance improvem
 - **`statuslog [on|off]`**: Disables/enables the periodic 5-second console status print.
 - **`stats` update**: Now outputs the number of active WebSocket clients (`WS  : frames:X effects:Y`) to diagnose socket exhaustion.
 - **`heap` update**: Replaced the direct ESP-IDF `heap_caps_print_heap_info` call (which writes directly to raw serial stdout) with a custom query and format using `cli_printf`. This enables the `heap` command to print correctly over telnet as well as serial.
-- **`settings` & `setsetting`**: View and dynamically tune effect parameters (like `spd` for speed) in real-time without
-  recompiling.
+- **`settings` & `setsetting`**: View and dynamically tune effect parameters (like `spd` for speed) in real-time without recompiling.
+- **`strip`**: Manage multi-channel LED hardware (`strip list`, `strip set`, `strip add`, `strip remove`, `strip apply`) dynamically over the CLI.
+- **`rtc`**: Read and write hardware RTC registers directly over serial or telnet.
+
+### 5. Three-Tier Zero-Allocation Console Standard (`cli_write` / `cli_print` / `cli_printf`)
+- **Optimization**: Completely eliminated dangerous `%.*s` and `(int)sv.size()` format patterns across `debug_cli.cpp`.
+- **`cli_write(string_view)`**: Emits static text, banners, and help menus with 0 format overhead and zero allocations.
+- **`cli_print(Args&&...)`**: Variadic fold expression using non-template primitive outputters and `std::to_chars` for branchless, locale-independent integer conversions.
+- **`cli_printf(fmt, ...)`**: Strictly reserved for aligned columnar tables and floating-point values.
+- **Zero-Heap Streaming (`funopen`)**: Replaced temporary intermediate string/vector allocations for large command dumps (`cat`, `dmesg`, `vTaskList`) with direct BSD `funopen` cookie streams.
 
 ---
 
@@ -69,19 +85,43 @@ This file documents the custom reliability, diagnostic, and performance improvem
 
 ---
 
-## 🌡️ Sensors & Environmental Telemetry
+## 🌡️ Sensors, Climate & Motion Telemetry
 
-### 1. Unified Sensor Management (`include/sensors.h` & `src/sensors.cpp`)
-- **Abstracted Interface**: Introduced `SensorManager` to encapsulate initialization, periodic updates, and status checks of hardware sensors, decoupling telemetry from specific driver structures.
+### 1. Unified `SystemHardwareHub` & Sensor Abstraction (`src/systemhardwarehub.cpp`)
+- **Shared I2C Bus Management**: Cleanly unified the SHTC3 climate sensor, QMI8658 6-axis IMU, PCF85063 real-time clock, and ES7210 microphone ADC on GPIO 47 (SDA) and GPIO 48 (SCL) under a `SystemHardwareHub` singleton, guaranteeing zero bus contention between telemetry and audio threads.
+- **Asynchronous SHTC3 Climate Sensor**: Implemented a non-blocking 3-stage asynchronous state machine (`Idle` $\rightarrow$ `Waking` $\rightarrow$ `Measuring` $\rightarrow$ `Idle`) over I2C. This eliminated all `vTaskDelay` and `delayMicroseconds` stalls, keeping sensor reads completely transparent to the 60 FPS animation loop.
 - **ESP32-C6 Chip Core Temperature**: Integrated the native ESP-IDF `temperature_sensor` driver on supported targets, surfacing internal chip temperature directly to telemetry.
 - **`std::optional` Telemetry Values (`include/values.h`)**: Refactored `g_Values` temperature and humidity fields to use `std::optional<float>` instead of floating-point magic numbers (like `-999.0f`), ensuring precise indication of sensor status.
+- **Unified Thermal Self-Preservation & Calibration**: Unified thermal safety throttling across all display drivers (`Hub75GFX`, `ESPHub75GFX`, `WS281xGFX`). Progressively scales down display brightness above critical thermal thresholds ($> 120^\circ\text{F} / 50^\circ\text{C}$) to prevent thermal runaway in tight acrylic enclosures, with a user-configurable calibration offset (`tempoffset`) to compensate for internal enclosure heat rise.
 
-### 2. Reliable DHT11 Timing & Preemption Lock
+### 2. Physical Interactivity & Motion ("Drop to Switch", Auto-Orient, Tilt Sand)
+- **"Drop to Switch" / Knock Advance (Desk Tap)**: Uses the QMI8658 6-axis IMU to detect 3D acceleration jerk impulses ($> 18\,\text{m/s}^2$ with 600 ms debounce). Simply picking up the clock/matrix and setting it down firmly on the desk triggers `NextEffect()`, advancing animations without needing a phone, web browser, or remote control. Can be toggled live via the `tap [on|off]` CLI command.
+- **Auto-Orientation (Gravity Inversion)**: Detects 180-degree physical inversion debounced over 200 ms based on the QMI8658 gravity vector. Automatically rotates both `MatrixPanel_I2S_DMA` and `ESPHome` hub75 drivers using `std::reverse_copy` directly on the DMA buffer, with live CLI overrides via `rotate [0|90|180|270|auto [on|off]]`.
+- **Tilt-Reactive Sand (`PatternSMSand`)**: Ingests real-time horizontal IMU tilt vectors, transforming coordinates to account for display orientation. Dynamic slope prioritization and plateau sliding allow simulated sand grains to avalanche downhill toward physical gravity.
+
+### 3. PCF85063 Real-Time Clock (RTC) Integration
+- **Zero-Wait Boot Time**: Reads battery-backed PCF85063 RTC on boot, seeding the system clock instantly so time-dependent matrix clocks display correct time seconds before WiFi or NTP associate.
+- **NTP Back-Propagation**: Whenever SNTP achieves a synchronized time solution, it automatically commits the exact UTC time back to the hardware RTC registers.
+- **`rtc` CLI Command**: Direct register-level inspection and manipulation (`rtc`, `rtc set`) over serial or telnet.
+
+### 4. Reliable DHT11 Timing & Preemption Lock
 - **Interrupt Preemption Fix**: Wrapped the 4ms timing-critical bit-reading sequence in `noInterrupts()` and `interrupts()`. This prevents FreeRTOS tick interrupts (running every 1ms) from preempting the CPU mid-read and triggering timing timeouts.
 - **Dynamic Clock Speed Calibration & Generous Timeouts**: Removed hardcoded CPU cycle timeouts, replacing them with dynamic clock calculations (e.g. using `ESP.getCpuFreqMHz()`) to support any CPU clock speed. Increased timing-critical handshake and bit timeouts to 500µs to eliminate sporadic high-pulse timeouts (especially on the 40th/final bit, index 39) caused by flash cache misses or minor signal rise-time delays.
 - **Bus Contention Fix**: Shortened the active-high start signal drive time from 40µs to 2µs. This prevents host-side active-high drive contention when the DHT11 sensor starts driving the data line low (which it does as early as 20µs).
 - **Background Retries**: Added background retry logic (retrying once every 10 seconds for up to 12 attempts) during startup. This allows the system to boot immediately without blocking, while gracefully waiting for the DHT11 sensor to stabilize and power up.
-- **Thermal Safety Throttle**: Configured automatic brightness throttling (capping `g_Values.Brite` at `10.0f`) if ambient temperatures exceed 120°F to prevent overheating in enclosed cabinets.
+
+---
+
+## 🎤 Audio Pipeline & ES7210 Microphone ADC
+
+### 1. Dedicated ES7210 4-Channel Audio ADC Driver (`src/es7210.cpp`)
+- **Hardware Integration**: Implemented a standalone driver for the Everest Semiconductor ES7210 4-channel microphone ADC over the shared I2C bus on the Waveshare ESP32-S3 RGB Matrix board.
+- **I2S Master Clocking**: Configured ESP32 I2S master clocking with a 6.144 MHz MCLK and 16-bit stereo Philips I2S protocol.
+- **Feedback Suppression**: Actively clamps the speaker PA amplifier enable pin (GPIO 11) low during mic-only listening to eliminate inductive speaker hum and feedback loops.
+
+### 2. Audio Squelch Gates & AGC Calibration
+- **Calibrated Squelch Threshold**: Lowered `quietEnvFloorGate` from 100k to 40k so normal, comfortable living room conversation and background music punch through cleanly without false triggers during dead silence.
+- **AGC Tuning**: Calibrated the Automatic Gain Control pipeline (30 dB PGA, 1:1 software gain, uncapped AGC) to provide responsive spectrum dynamics across whisper-quiet rooms and loud audio.
 ---
 
 ## 📞 Telnet Server & Connection Hijacking
@@ -227,6 +267,27 @@ This file documents the custom reliability, diagnostic, and performance improvem
 
 ### 12. Windows CI Pipeline Parallelism
 - **Feature**: Added Windows build job, fixed cross-platform Python scripts, and enabled parallel execution.
+
+---
+
+## 🌈 Dynamic FastLED Channels & Multi-Strip Topology
+
+### 1. FastLED 3.10 Non-Template Channels Engine
+- **Decoupling**: Replaced the compile-time template macro towers (`AddLEDs8Way`, etc.) in `src/ws281xgfx.cpp` with FastLED 3.10's non-template Channels API (`FastLED.add(fl::ChannelConfig)`).
+- **No More 8-Channel Ceiling**: Stripped away the historical `#error The maximum value of NUM_CHANNELS is 8` limit, allowing arbitrary $N$-strip hardware topologies (e.g. 16-channel controllers like LightCrafter-16).
+- **Collision Protection**: Added bitset-based GPIO deduplication to ensure multiple channels cannot claim the same pin and corrupt hardware drivers.
+
+### 2. Multi-Strip Topologies & Canvas Slicing
+- **Slicing Architecture**: Dynamically sizes the master graphics canvas to accommodate arbitrary strip offsets (`masterBuffer[strip.offset]`).
+- **Mirrored Strips**: Multiple pins share `offset = 0` to clock identical pixel data simultaneously across multiple branches with zero extra RAM or CPU.
+- **Contiguous Ribbons**: Strips set sequential offsets to form one seamless virtual ribbon spanning multiple GPIO outputs.
+- **Unified Board Notation (`-DLED_PINS`)**: Added comma-separated array notation (`-DLED_PINS=16,17,18...`) in `platformio.ini`, eliminating dozens of separate preprocessor definitions and accelerating build caching.
+
+### 3. Web UI & REST Settings
+- **Visual Canvas Preview**: Built an interactive strip layout editor in the React frontend (`/settings`) allowing live channel configuration, drag-and-drop ordering, and visual canvas preview.
+- **REST Persistence**: Staged edits save to LittleFS `/device.cfg` with safe transaction confirmation and reboot triggers.
+
+---
 
 ## ⚡ Hardware Upgrades
 

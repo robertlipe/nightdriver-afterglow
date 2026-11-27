@@ -90,6 +90,7 @@ private:
 
     int                         _port;
     int                         _numLeds;
+    size_t                      _maxPacketSize;
     int                         _server_fd;
     struct sockaddr_in          _address;
     std::vector<uint8_t> _pBuffer;

@@ -26,7 +26,6 @@ class PatternSMStarshipTroopers : public EffectWithId<PatternSMStarshipTroopers>
     static constexpr TProgmemRGBPalette16 WaterfallColors_p FL_PROGMEM = {
         0x000000, 0x060707, 0x101110, 0x151717, 0x1C1D22, 0x242A28, 0x363B3A, 0x313634,
         0x505552, 0x6B6C70, 0x98A4A1, 0xC1C2C1, 0xCACECF, 0xCDDEDD, 0xDEDFE0, 0xB2BAB9}; //* Orange
-    const float SPEED_ADJ = (float)NUM_LEDS / 256;
     static constexpr int CHANCE = 2048;
 
     uint8_t speed = 200; // 1-255
@@ -65,7 +64,6 @@ class PatternSMStarshipTroopers : public EffectWithId<PatternSMStarshipTroopers>
 
     void Draw() override
     {
-        //   fadeToBlackBy(leds, NUM_LEDS, map(speed, 1, 255, 5, 10));
         switch (dir)
         {
         case 0: // Up

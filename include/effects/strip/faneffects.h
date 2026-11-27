@@ -55,11 +55,15 @@ enum PixelOrder
 
 inline void RotateForward(int iStart, int length = FAN_SIZE, int count = 1)
 {
+  if (iStart < 0 || iStart + length > (int)FastLED.size())
+    return;
   std::rotate(&FastLED.leds()[iStart], &FastLED.leds()[iStart + count], &FastLED.leds()[iStart + length]);
 }
 
 inline void RotateReverse(int iStart, int length = FAN_SIZE, int count = 1)
 {
+  if (iStart < 0 || iStart + length > (int)FastLED.size())
+    return;
   std::rotate(&FastLED.leds()[iStart], &FastLED.leds()[iStart + length - count], &FastLED.leds()[iStart + length]);
 }
 
@@ -81,10 +85,13 @@ inline void RotateAll(bool bForward = true, int count = 1)
 
 inline void RotateFan(int iFan, bool bForward = true, int count = 1)
 {
+  int iStart = iFan * FAN_SIZE;
+  if (iStart < 0 || iStart + FAN_SIZE > (int)FastLED.size())
+    return;
   if (bForward)
-    RotateForward(iFan * FAN_SIZE, FAN_SIZE, count);
+    RotateForward(iStart, FAN_SIZE, count);
   else
-    RotateReverse(iFan * FAN_SIZE, FAN_SIZE, count);
+    RotateReverse(iStart, FAN_SIZE, count);
 }
 
 // Get the pixel position working our way over a circle, rather than around it.
@@ -121,7 +128,7 @@ inline int GetFanPixelOrder(int iPos, PixelOrder order = Sequential)
   if (iPos >= NUM_FANS * FAN_SIZE)
   {
     if (order == TopDown)
-      return NUM_LEDS - 1 - (iPos - NUM_FANS * FAN_SIZE);
+      return (int)FastLED.size() - 1 - (iPos - NUM_FANS * FAN_SIZE);
     else
       return iPos;
   }
@@ -144,7 +151,7 @@ inline int GetFanPixelOrder(int iPos, PixelOrder order = Sequential)
     return fanBase + ((GetRingPixelPosition(fanPos, RING_SIZE_0) + LED_FAN_OFFSET_RL) % FAN_SIZE);
 
   case Reverse:
-    return NUM_LEDS - 1 - fanPos;
+    return (int)FastLED.size() - 1 - fanPos;
 
   case Sequential:
   default:
@@ -162,8 +169,12 @@ inline void ClearFanPixels(float fPos, float count, PixelOrder order = Sequentia
   fPos += iFan * FAN_SIZE;
   while (count > 0)
   {
-    for (int i = 0; i < NUM_CHANNELS; i++)
-      FastLED[i][GetFanPixelOrder(fPos + (int)count, order)] = CRGB::Black;
+    auto index = GetFanPixelOrder(fPos + (int)count, order);
+    for (int i = 0; i < FastLED.count(); i++)
+    {
+      if (index >= 0 && index < (int)FastLED[i].size())
+        FastLED[i][index] = CRGB::Black;
+    }
     count--;
   }
 }
@@ -233,35 +244,43 @@ inline void DrawFanPixels(float fPos, float count, CRGB color, PixelOrder order 
 {
   fPos += iFan * FAN_SIZE;
 
-  if (fPos + count > NUM_LEDS)
+  if (fPos < 0.0f || count < 0.0f)
   {
-    debugE("DrawFanPixels called with fPos=%f, count=%f, but there are only %d LEDs", fPos, count, NUM_LEDS);
+    debugE("DrawFanPixels called with invalid fPos=%f, count=%f", fPos, count);
     return;
   }
 
-  if (count < 0)
-  {
-    debugE("Negative count in DrawFanPixels");
+  // On setups where physical LEDs < virtual LEDs, cleanly ignore pixels past the physical strip.
+  if (fPos >= (float)FastLED.size())
     return;
+
+  // Clamp count so we don't attempt to draw past the physical strip.
+  if (fPos + count > (float)FastLED.size())
+  {
+    count = (float)FastLED.size() - fPos;
   }
+
   // Calculate how much the first pixel will hold
 
   float availFirstPixel = 1.0f - (fPos - (long)(fPos));
   float amtFirstPixel = min(availFirstPixel, count);
-  float remaining = min(count, FastLED.size() - fPos);
+  float remaining = count;
   int iPos = fPos;
 
   // Blend (add) in the color of the first partial pixel
 
-  if (remaining > 0.0f && amtFirstPixel > 0.0f && iPos < NUM_LEDS)
+  if (remaining > 0.0f && amtFirstPixel > 0.0f && iPos < (int)FastLED.size())
   {
-    for (int i = 0; i < NUM_CHANNELS; i++)
+    auto index = GetFanPixelOrder(iPos, order);
+    CRGB newColor = LEDStripEffect::ColorFraction(color, amtFirstPixel);
+    for (int i = 0; i < FastLED.count(); i++)
     {
-      auto index = GetFanPixelOrder(iPos, order);
-      CRGB newColor = LEDStripEffect::ColorFraction(color, amtFirstPixel);
-      auto l = FastLED[i][index];
-      l += newColor;
-      FastLED[i][index] = l;
+      if (index >= 0 && index < (int)FastLED[i].size())
+      {
+        auto l = FastLED[i][index];
+        l += newColor;
+        FastLED[i][index] = l;
+      }
     }
     iPos++;
     remaining -= amtFirstPixel;
@@ -269,10 +288,14 @@ inline void DrawFanPixels(float fPos, float count, CRGB color, PixelOrder order 
 
   // Now draw any full pixels in the middle
 
-  while (remaining > 1.0f && iPos < NUM_LEDS)
+  while (remaining > 1.0f && iPos < (int)FastLED.size())
   {
-    for (int i = 0; i < NUM_CHANNELS; i++)
-      FastLED[i][GetFanPixelOrder(iPos, order)] += color;
+    auto index = GetFanPixelOrder(iPos, order);
+    for (int i = 0; i < FastLED.count(); i++)
+    {
+      if (index >= 0 && index < (int)FastLED[i].size())
+        FastLED[i][index] += color;
+    }
     iPos++;
     remaining--;
   }
@@ -281,8 +304,13 @@ inline void DrawFanPixels(float fPos, float count, CRGB color, PixelOrder order 
 
   if (remaining > 0.0f)
   {
-    for (int i = 0; i < NUM_CHANNELS; i++)
-      FastLED[i][GetFanPixelOrder(iPos, order)] += LEDStripEffect::ColorFraction(color, remaining);
+    auto index = GetFanPixelOrder(iPos, order);
+    CRGB tailColor = LEDStripEffect::ColorFraction(color, remaining);
+    for (int i = 0; i < FastLED.count(); i++)
+    {
+      if (index >= 0 && index < (int)FastLED[i].size())
+        FastLED[i][index] += tailColor;
+    }
   }
 }
 
@@ -294,40 +322,58 @@ inline void DrawFanPixels(float fPos, float count, CRGB color, PixelOrder order 
 
 inline void DrawRingPixels(float fPos, float count, CRGB color, int iInsulator, int iRing, bool bMerge = true)
 {
+  if (iRing < 0 || iRing >= MAX_RINGS)
+  {
+    debugE("DrawRingPixels called with invalid iRing=%d (MAX_RINGS=%d)", iRing, MAX_RINGS);
+    return;
+  }
+
   // bPos will be the start of this ring (relative to NUM_LEDS)
   int bPos = 0;
   for (int i = 0; i < iRing; i++)
     bPos += g_aRingSizeTable[i];
   bPos += iInsulator * FAN_SIZE;
 
-  if (bPos + fPos + count > NUM_LEDS + 1) // +1 because we work in the 0..1.0 range when drawing
+  if (fPos < 0.0f || count < 0.0f)
   {
-    debugE("DrawFanPixels called with fPos=%f, count=%f, but there are only %d LEDs", fPos, count, NUM_LEDS);
+    debugE("DrawRingPixels called with invalid fPos=%f, count=%f", fPos, count);
     return;
   }
 
-  if (count < 0)
-  {
-    debugE("Negative count in DrawFanPixels");
+  // On setups where physical LEDs < virtual LEDs (or insulator offset walks off strip),
+  // cleanly ignore drawing outside physical controller buffer rather than logging an error.
+  if (bPos + fPos >= (float)FastLED.size())
     return;
+
+  // Clamp count so we don't attempt to draw past the physical strip
+  if (bPos + fPos + count > (float)FastLED.size())
+  {
+    count = (float)FastLED.size() - (bPos + fPos);
   }
+
   // Calculate how much the first pixel will hold
 
   float availFirstPixel = 1.0f - (fPos - (long)(fPos));
   float amtFirstPixel = min(availFirstPixel, count);
-  float remaining = min(count, FastLED.size() - fPos);
+  float remaining = count;
   int iPos = fPos;
   // Blend (add) in the color of the first partial pixel
 
   iPos %= GetRingSize(iRing);
   if (remaining > 0.0f && amtFirstPixel > 0.0f)
   {
-    for (int i = 0; i < NUM_CHANNELS; i++)
+    int idx = bPos + iPos;
+    CRGB newColor = LEDStripEffect::ColorFraction(color, amtFirstPixel);
+    for (int i = 0; i < FastLED.count(); i++)
     {
-      if (!bMerge)
-        FastLED[i][bPos + iPos] = CRGB::Black;
-      FastLED[i][bPos + iPos++] += LEDStripEffect::ColorFraction(color, amtFirstPixel);
+      if (idx >= 0 && idx < (int)FastLED[i].size())
+      {
+        if (!bMerge)
+          FastLED[i][idx] = CRGB::Black;
+        FastLED[i][idx] += newColor;
+      }
     }
+    iPos++;
     remaining -= amtFirstPixel;
   }
 
@@ -335,13 +381,18 @@ inline void DrawRingPixels(float fPos, float count, CRGB color, int iInsulator, 
 
   while (remaining > 1.0f)
   {
-    for (int i = 0; i < NUM_CHANNELS; i++)
+    iPos %= GetRingSize(iRing);
+    int idx = bPos + iPos;
+    for (int i = 0; i < FastLED.count(); i++)
     {
-      iPos %= GetRingSize(iRing);
-      if (!bMerge)
-        FastLED[i][bPos + iPos] = CRGB::Black;
-      FastLED[i][bPos + iPos++] += color;
+      if (idx >= 0 && idx < (int)FastLED[i].size())
+      {
+        if (!bMerge)
+          FastLED[i][idx] = CRGB::Black;
+        FastLED[i][idx] += color;
+      }
     }
+    iPos++;
     remaining--;
   }
 
@@ -350,11 +401,16 @@ inline void DrawRingPixels(float fPos, float count, CRGB color, int iInsulator, 
   iPos %= GetRingSize(iRing);
   if (remaining > 0.0f)
   {
-    for (int i = 0; i < NUM_CHANNELS; i++)
+    int idx = bPos + iPos;
+    CRGB tailColor = LEDStripEffect::ColorFraction(color, remaining);
+    for (int i = 0; i < FastLED.count(); i++)
     {
-      if (!bMerge)
-        FastLED[i][bPos + iPos] = CRGB::Black;
-      FastLED[i][bPos + iPos++] += LEDStripEffect::ColorFraction(color, remaining);
+      if (idx >= 0 && idx < (int)FastLED[i].size())
+      {
+        if (!bMerge)
+          FastLED[i][idx] = CRGB::Black;
+        FastLED[i][idx] += tailColor;
+      }
     }
   }
 }
@@ -390,28 +446,32 @@ class FanBeatEffect : public EffectWithId<FanBeatEffect>
 
   void Draw() override
   {
-    fadeToBlackBy(FastLED.leds(), NUM_LEDS, 20);
+    fadeAllChannelsToBlackBy(20);
     DrawEffect();
     delay(20);
   }
 
   void OnBeat()
   {
+    const int numFans = min<int>(NUM_FANS, _cLEDs / max(1, FAN_SIZE));
+    if (numFans <= 0)
+      return;
     int passes = (int)g_Analyzer.VURatio();
     for (int iPass = 0; iPass < passes; iPass++)
     {
-      int iFan = random(0, NUM_FANS);
+      int iFan = random(0, numFans);
       int innerPasses = random(1, (int)g_Analyzer.VURatio());
       CRGB c = CHSV(random(0, 255), 255, 255);
 
       for (int iInnerPass = 0; iInnerPass < innerPasses; iInnerPass++)
       {
-        DrawFanPixels(0, FAN_SIZE, c, Sequential, iFan++);
+        if (iFan < numFans)
+          DrawFanPixels(0, FAN_SIZE, c, Sequential, iFan++);
       }
     }
 
     CRGB c = CHSV(random(0, 255), 255, 255);
-    for (int i = NUM_FANS * FAN_SIZE; i < NUM_LEDS; i++)
+    for (size_t i = numFans * FAN_SIZE; i < _cLEDs; i++)
       g()->setPixel(i, c);
   }
 
@@ -459,23 +519,27 @@ public:
 
   void Draw() override
   {
+    int openLen = static_cast<int>(_cLEDs) - DRAW_LEN;
+    if (openLen <= 0)
+      return;
+    const int numFans = min<int>(NUM_FANS, _cLEDs / max(1, FAN_SIZE));
     static float i = 0;
     EVERY_N_MILLISECONDS(30)
     {
       i += 0.5f;
 
-      if (i >= OPEN_LEN)
-        i -= OPEN_LEN;
+      if (i >= openLen)
+        i -= openLen;
 
       FastLED.clear();
       float t = i;
-      for (int z = 0; z < NUM_FANS; z += 3)
+      for (int z = 0; z < numFans; z += 3)
       {
         CRGB c = CHSV(z * 48, 255, 255);
         DrawFanPixels(t, DRAW_LEN, c, BottomUp);
         t += FAN_SIZE * 3;
-        if (t >= OPEN_LEN)
-          t -= OPEN_LEN;
+        if (t >= openLen)
+          t -= openLen;
       }
 
       FastLED.show();
@@ -497,9 +561,11 @@ public:
 
   void Draw() override
   {
+    const int numFans = min<int>(NUM_FANS, _cLEDs / max(1, FAN_SIZE));
+
     EVERY_N_MILLISECONDS(250)
     {
-      for (int i = 0; i < NUM_FANS; i++)
+      for (int i = 0; i < numFans; i++)
       {
         if (random(0, 100) < 40) // 40% Chance of attempting to do something
         {
@@ -536,13 +602,11 @@ public:
 
     EVERY_N_MILLISECONDS(20) // Update the reels based on the direction
     {
-      for (int i = 0; i < NUM_FANS; i++)
+      for (int i = 0; i < numFans; i++)
       {
-        ReelPos[i] = (ReelPos[i] + ReelDir[i]);
-        if (ReelPos[i] < 0)
+        ReelPos[i] = fmod(ReelPos[i] + ReelDir[i], (float)FAN_SIZE);
+        if (ReelPos[i] < 0.0f)
           ReelPos[i] += FAN_SIZE;
-        if (ReelPos[i] >= FAN_SIZE)
-          ReelPos[i] -= FAN_SIZE;
       }
     }
 
@@ -555,13 +619,32 @@ public:
 
   void DrawEffect()
   {
-    for (int i = 0; i < NUM_FANS; i++)
+    const int numFans = min<int>(NUM_FANS, _cLEDs / max(1, FAN_SIZE));
+    int fanBase = 0;
+    for (int i = 0; i < numFans; i++, fanBase += FAN_SIZE)
     {
       float pos = ReelPos[i];
-      DrawFanPixels(i * FAN_SIZE + pos, 1, CRGB::White);
-      DrawFanPixels(i * FAN_SIZE + fmod(pos + 1, FAN_SIZE), 1, CRGB::Blue);
-      DrawFanPixels(i * FAN_SIZE + fmod(pos + FAN_SIZE / 2, FAN_SIZE), 1, CRGB::White);
-      DrawFanPixels(i * FAN_SIZE + fmod(pos + FAN_SIZE / 2 + 1, FAN_SIZE), 1, CRGB::Blue);
+      auto drawWrapped = [fanBase](float relPos, CRGB color)
+      {
+        float p = fmod(relPos, (float)FAN_SIZE);
+        if (p < 0.0f)
+          p += FAN_SIZE;
+        if (fanBase + (int)p < (int)FastLED.size())
+        {
+          if (fanBase + p + 1.0f <= FastLED.size())
+            DrawFanPixels(fanBase + p, 1.0f, color);
+          else
+          {
+            float avail = FastLED.size() - (fanBase + p);
+            DrawFanPixels(fanBase + p, avail, color);
+            DrawFanPixels(fanBase, 1.0f - avail, color);
+          }
+        }
+      };
+      drawWrapped(pos, CRGB::White);
+      drawWrapped(pos + 1.0f, CRGB::Blue);
+      drawWrapped(pos + FAN_SIZE / 2.0f, CRGB::White);
+      drawWrapped(pos + FAN_SIZE / 2.0f + 1.0f, CRGB::Blue);
     }
   }
 };
@@ -580,9 +663,11 @@ public:
 
   void Draw() override
   {
+    const int numFans = min<int>(NUM_FANS, _cLEDs / max(1, FAN_SIZE));
+
     EVERY_N_MILLISECONDS(250)
     {
-      for (int i = 0; i < NUM_FANS; i++)
+      for (int i = 0; i < numFans; i++)
       {
         if (random(0, 100) < 50 * g_Analyzer.VURatio()) // 40% Chance of attempting to do something
         {
@@ -627,13 +712,11 @@ public:
 
     EVERY_N_MILLISECONDS(20) // Update the reels based on the direction
     {
-      for (int i = 0; i < NUM_FANS; i++)
+      for (int i = 0; i < numFans; i++)
       {
-        ReelPos[i] = (ReelPos[i] + ReelDir[i] * (2 + g_Analyzer.VURatio()));
-        if (ReelPos[i] < 0)
+        ReelPos[i] = fmod(ReelPos[i] + ReelDir[i] * (2 + g_Analyzer.VURatio()), (float)FAN_SIZE);
+        if (ReelPos[i] < 0.0f)
           ReelPos[i] += FAN_SIZE;
-        if (ReelPos[i] >= FAN_SIZE)
-          ReelPos[i] -= FAN_SIZE;
       }
     }
 
@@ -646,15 +729,23 @@ public:
 
   void DrawEffect()
   {
-    for (int i = 0; i < NUM_FANS; i++)
+    const int numFans = min<int>(NUM_FANS, _cLEDs / max(1, FAN_SIZE));
+    int fanBase = 0;
+    for (int i = 0; i < numFans; i++, fanBase += FAN_SIZE)
     {
+      if (fanBase >= (int)FastLED.size())
+        break;
       if (ReelDir[i] != 0)
       {
         int pos = ReelPos[i];
         ClearFanPixels(0, 16, Sequential, i);
         for (int x = 0; x < FAN_SIZE; x++)
         {
-          DrawFanPixels(i * FAN_SIZE + ((pos + x) % FAN_SIZE), 1, ColorFromPalette(RainbowColors_p, ColorOffset[i] + x * 4, 255, NOBLEND));
+          int pixelIdx = fanBase + ((pos + x) % FAN_SIZE);
+          if (pixelIdx < (int)FastLED.size())
+          {
+            DrawFanPixels(pixelIdx, 1, ColorFromPalette(RainbowColors_p, ColorOffset[i] + x * 4, 255, NOBLEND));
+          }
         }
       }
     }
@@ -703,15 +794,15 @@ public:
 
   void Draw() override
   {
+    const int numFans = min<int>(NUM_FANS, _cLEDs / max(1, FAN_SIZE));
+
     EVERY_N_MILLISECONDS(20) // Update the reels based on the direction
     {
-      for (int i = 0; i < NUM_FANS; i++)
+      for (int i = 0; i < numFans; i++)
       {
-        ReelPos[i] = (ReelPos[i] + 0.25f);
-        if (ReelPos[i] < 0)
+        ReelPos[i] = fmod(ReelPos[i] + 0.25f, (float)FAN_SIZE);
+        if (ReelPos[i] < 0.0f)
           ReelPos[i] += FAN_SIZE;
-        if (ReelPos[i] >= FAN_SIZE)
-          ReelPos[i] -= FAN_SIZE;
       }
     }
 
@@ -724,10 +815,15 @@ public:
 
   void DrawEffect()
   {
-    for (int i = 0; i < NUM_FANS; i++)
+    const int numFans = min<int>(NUM_FANS, _cLEDs / max(1, FAN_SIZE));
+    for (int i = 0; i < numFans; i++)
     {
+      const int fanBase = i * FAN_SIZE;
+      if (fanBase >= (int)FastLED.size())
+        break;
       ClearFanPixels(0, FAN_SIZE, Sequential, i);
-      for (int x = 0; x < FAN_SIZE; x++)
+      const int maxDraw = min<int>(FAN_SIZE, (int)FastLED.size() - fanBase);
+      for (int x = 0; x < maxDraw; x++)
       {
         float q = fmod(ReelPos[i] + x, FAN_SIZE);
         CRGB c = ColorFromPalette(_Palette, 255.0f * q / FAN_SIZE, 255, NOBLEND);
@@ -783,13 +879,14 @@ public:
   void DrawEffect()
   {
     static uint8_t basehue = 0;
-    uint8_t hue = basehue;
     EVERY_N_MILLISECONDS(20)
     {
       basehue += 1;
     }
-    for (int i = 0; i < NUM_LEDS; i++)
-      DrawFanPixels(i, 1, CHSV(hue += _step, 255, 255), _order);
+    const size_t drawCount = min(this->_cLEDs, FastLED.size());
+    uint8_t hue = basehue;
+    for (size_t i = 0; i < drawCount; i++, hue += _step)
+      DrawFanPixels(i, 1, CHSV(hue, 255, 255), _order);
   }
 };
 
@@ -807,13 +904,14 @@ public:
   void DrawEffect()
   {
     static uint8_t basehue = 0;
-    uint8_t hue = basehue;
     EVERY_N_MILLISECONDS(20)
     {
       basehue += 2;
     }
-    for (int i = 0; i < NUM_LEDS; i++)
-      DrawFanPixels(i, 1, CHSV(hue += 8, 255, 255), BottomUp);
+    const size_t drawCount = min(this->_cLEDs, FastLED.size());
+    uint8_t hue = basehue;
+    for (size_t i = 0; i < drawCount; i++, hue += 8)
+      DrawFanPixels(i, 1, CHSV(hue, 255, 255), BottomUp);
   }
 };
 
@@ -831,13 +929,14 @@ public:
   void DrawEffect()
   {
     static uint8_t basehue = 0;
-    uint8_t hue = basehue;
     EVERY_N_MILLISECONDS(30)
     {
       basehue += 1;
     }
-    for (int i = 0; i < NUM_LEDS; i++)
-      DrawFanPixels(i, 1, CHSV(hue += 4, 255, 255), TopDown);
+    const size_t drawCount = min(this->_cLEDs, FastLED.size());
+    uint8_t hue = basehue;
+    for (size_t i = 0; i < drawCount; i++, hue += 4)
+      DrawFanPixels(i, 1, CHSV(hue, 255, 255), TopDown);
   }
 };
 
@@ -855,13 +954,14 @@ public:
   void DrawEffect()
   {
     static uint8_t basehue = 0;
-    uint8_t hue = basehue;
     EVERY_N_MILLISECONDS(30)
     {
       basehue += 1;
     }
-    for (int i = 0; i < NUM_LEDS; i++)
-      DrawFanPixels(i, 1, CHSV(hue += 4, 255, 255), Sequential);
+    const size_t drawCount = min(this->_cLEDs, FastLED.size());
+    uint8_t hue = basehue;
+    for (size_t i = 0; i < drawCount; i++, hue += 4)
+      DrawFanPixels(i, 1, CHSV(hue, 255, 255), Sequential);
   }
 };
 
@@ -878,7 +978,8 @@ public:
   void Draw() override
   {
     PaletteEffectBase<SpinningPaletteEffect>::Draw();
-    for (int i = 0; i < NUM_FANS; i++)
+    const int numFans = min<int>(NUM_FANS, _cLEDs / max(1, FAN_SIZE));
+    for (int i = 0; i < numFans; i++)
     {
       RotateFan(i, (i / 2) * 2 == i ? true : false, iRotate);
     }
@@ -906,10 +1007,11 @@ public:
   void DrawEffect()
   {
     static uint8_t basehue = 0;
-    uint8_t hue = basehue;
     basehue += 8;
-    for (int i = 0; i < NUM_LEDS; i++)
-      DrawFanPixels(i, 1, CHSV(hue += 16, 255, 255), RightLeft);
+    const size_t drawCount = min(this->_cLEDs, FastLED.size());
+    uint8_t hue = basehue;
+    for (size_t i = 0; i < drawCount; i++, hue += 16)
+      DrawFanPixels(i, 1, CHSV(hue, 255, 255), RightLeft);
   }
 };
 
@@ -929,10 +1031,11 @@ public:
   void DrawEffect()
   {
     static uint8_t basehue = 0;
-    uint8_t hue = basehue;
     basehue += 8;
-    for (int i = 0; i < NUM_LEDS; i++)
-      DrawFanPixels(i, 1, CHSV(hue += 16, 255, 255), LeftRight);
+    const size_t drawCount = min(this->_cLEDs, FastLED.size());
+    uint8_t hue = basehue;
+    for (size_t i = 0; i < drawCount; i++, hue += 16)
+      DrawFanPixels(i, 1, CHSV(hue, 255, 255), LeftRight);
   }
 };
 
@@ -1116,14 +1219,16 @@ public:
 
         int j = (!bReversed || i > FAN_SIZE) ? i : LEDCount - 1 - i;
         uint x = GetFanPixelOrder(j, order);
-        if (x < NUM_LEDS)
+        if (iChannel < FastLED.count() && x < FastLED[iChannel].size())
         {
             FastLED[iChannel][x] = color;
 
             if (bMirrored)
             {
                 // Use bReversed here to match the reversal in the main index calculation
-                FastLED[iChannel][bReversed ? (2 * LEDCount - 1 - i) : LEDCount + i] = color;
+                size_t mirrorIdx = bReversed ? (2 * LEDCount - 1 - i) : LEDCount + i;
+                if (mirrorIdx < FastLED[iChannel].size())
+                    FastLED[iChannel][mirrorIdx] = color;
             }
         }
 
@@ -1184,7 +1289,8 @@ public:
   virtual void DrawColor(CRGB color, int phase)
   {
     const int lineLen = FAN_SIZE;
-    int q = beatsin16(24, 0, NUM_LEDS - lineLen, 0, phase);
+    int maxPos = static_cast<int>(FastLED.size()) > lineLen ? (static_cast<int>(FastLED.size()) - lineLen) : 0;
+    int q = beatsin16(24, 0, maxPos, 0, phase);
     DrawFanPixels(q, lineLen, color, BottomUp);
   }
 
@@ -1209,8 +1315,9 @@ public:
   void Draw() override
   {
     FastLED.clear();
+    const int numFans = min<int>(NUM_FANS, _cLEDs / max(1, FAN_SIZE));
     int iFan = 0;
-    for (int sat = 255; sat >= 0 && iFan < NUM_FANS; sat -= 32)
+    for (int sat = 255; sat >= 0 && iFan < numFans; sat -= 32)
     {
       DrawFanPixels(0, FAN_SIZE, CRGB(CHSV(HUE_RED, sat, 255)), Sequential, iFan++);
     }
@@ -1227,7 +1334,8 @@ class RingTestEffect : public EffectWithId<RingTestEffect>
 
     void Draw() override
     {
-      for (int i = 0; i < NUM_FANS; i++)
+      const int numFans = min<int>(NUM_FANS, _cLEDs / max(1, FAN_SIZE));
+      for (int i = 0; i < numFans; i++)
       {
         for (int c = 0; c < NUM_RINGS; c++)
         {

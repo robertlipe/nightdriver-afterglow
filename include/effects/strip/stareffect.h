@@ -225,7 +225,7 @@ class ColorCycleStar : public Star
     virtual CRGB Render(TBlendType blend)
     {
         CRGB c = ColorFromPalette(_palette, millis() / 2048.0f, _brightness, blend);
-        fadeToBlackBy(&c, 1, 255 * FadeoutAmount());
+        c.fadeToBlackBy(255 * FadeoutAmount());
         return c;
     }
 
@@ -258,7 +258,7 @@ class MultiColorStar : public Star
     virtual CRGB Render(TBlendType blend)
     {
         CRGB c = ColorFromPalette(_palette, _hue, _brightness, blend);
-        fadeToBlackBy(&c, 1, 255 * FadeoutAmount());
+        c.fadeToBlackBy(255 * FadeoutAmount());
         return c;
     }
 

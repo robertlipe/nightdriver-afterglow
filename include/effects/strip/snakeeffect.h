@@ -67,12 +67,32 @@ class SnakeEffect : public EffectWithId<SnakeEffect>
 
   public:
 
-    SnakeEffect(const char * strName, int ledCount = NUM_LEDS, int snakeSpeed = dSnakeSpeed)
+    SnakeEffect(const char * strName, int ledCount = 0, int snakeSpeed = dSnakeSpeed)
         : EffectWithId<SnakeEffect>(strName),
           LEDCount(ledCount),
           SnakeSpeed(snakeSpeed)
     {
         construct();
+    }
+
+    bool Init(std::vector<std::shared_ptr<GFXBase>>& gfx) override
+    {
+        if (!LEDStripEffect::Init(gfx))
+            return false;
+        if (LEDCount == 0 && _cLEDs > 0)
+        {
+            LEDCount = _cLEDs;
+            lastLEDIndex = LEDCount - 1;
+            Reset();
+        }
+        else if (LEDCount > 0)
+        {
+            if (_cLEDs > 0 && LEDCount > _cLEDs)
+                LEDCount = _cLEDs;
+            lastLEDIndex = LEDCount - 1;
+            Reset();
+        }
+        return true;
     }
 
     explicit SnakeEffect(const JsonObjectConst& jsonObject)

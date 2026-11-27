@@ -24,7 +24,8 @@ class PatternSMWisp : public EffectWithId<PatternSMWisp>
     static constexpr int CENTER_Y_MAJOR =
         MATRIX_HEIGHT / 2 + (MATRIX_HEIGHT % 2); // center of the YGREK matrix, shifted up if the height is even
 
-    CRGB ledsbuff[NUM_LEDS]; // копия массива leds[] целиком
+    static constexpr size_t BUFFER_SIZE = MATRIX_WIDTH * MATRIX_HEIGHT;
+    CRGB ledsbuff[BUFFER_SIZE]; // копия массива leds[] целиком
 
     static constexpr int WISP_NUM_LAYERS = 1; // в кометах используется 1 слой, но для огня 2018 нужно 2
     static constexpr int WISP_NUM_LAYERSMAX = 2;
@@ -83,7 +84,7 @@ class PatternSMWisp : public EffectWithId<PatternSMWisp>
                     (PixelB.nscale8(ease8InOutApprox(fraction))); // lerp8by8(PixelA, PixelB, fraction );
             }
         }
-        memcpy(g()->leds, ledsbuff, sizeof(CRGB) * NUM_LEDS);
+        memcpy(g()->leds, ledsbuff, sizeof(CRGB) * std::min(BUFFER_SIZE, static_cast<size_t>(g()->GetLEDCount())));
     }
 
     void MoveFractionalNoiseY(int amplitude = 1, float shift = 0)
@@ -117,7 +118,7 @@ class PatternSMWisp : public EffectWithId<PatternSMWisp>
                     (PixelA.nscale8(ease8InOutApprox(255 - fraction))) + (PixelB.nscale8(ease8InOutApprox(fraction)));
             }
         }
-        memcpy(g()->leds, ledsbuff, sizeof(CRGB) * NUM_LEDS);
+        memcpy(g()->leds, ledsbuff, sizeof(CRGB) * std::min(BUFFER_SIZE, static_cast<size_t>(g()->GetLEDCount())));
     }
 
     void FillNoise(int layer)
