@@ -29,7 +29,9 @@ const isSpiChipset = (chipset) => chipset === 'APA102' || chipset === 'SK9822';
  * Visual canvas segmentation map
  */
 const CanvasPreview = ({ strips }) => {
-    const activeStrips = strips.filter(s => s.enabled);
+    const activeStrips = strips
+        .map((s, origIdx) => ({ ...s, origIdx }))
+        .filter(s => s.enabled);
     if (activeStrips.length === 0) return null;
 
     let maxPixel = 0;
@@ -49,30 +51,47 @@ const CanvasPreview = ({ strips }) => {
                     Virtual Canvas Mapping (Total: {maxPixel} pixels)
                 </Typography>
             </Box>
-            <Box sx={{ display: 'flex', width: '100%', height: 24, borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}>
-                {activeStrips.map((s, idx) => {
-                    const widthPercent = Math.max(5, ((s.length || 0) / maxPixel) * 100);
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                {activeStrips.map((s) => {
+                    const offset = s.offset || 0;
+                    const length = s.length || 0;
+                    const leftPercent = (offset / maxPixel) * 100;
+                    const widthPercent = Math.max(2, (length / maxPixel) * 100);
                     return (
                         <Box
-                            key={idx}
+                            key={s.origIdx}
                             sx={{
-                                width: `${widthPercent}%`,
-                                bgcolor: colors[idx % colors.length],
-                                color: '#fff',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '0.72rem',
-                                fontWeight: 'bold',
+                                position: 'relative',
+                                width: '100%',
+                                height: 22,
+                                borderRadius: 1,
                                 overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                px: 0.5,
-                                borderRight: '1px solid rgba(0,0,0,0.2)'
+                                bgcolor: 'action.hover'
                             }}
-                            title={`Ch ${idx}: Pin ${s.pin}, [${s.offset}..${s.offset + s.length}] (${s.length} px)`}
                         >
-                            Ch {idx}: [{s.offset}..{s.offset + s.length}]
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    left: `${leftPercent}%`,
+                                    width: `${Math.min(100 - leftPercent, widthPercent)}%`,
+                                    height: '100%',
+                                    bgcolor: colors[s.origIdx % colors.length],
+                                    color: '#fff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 'bold',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    px: 0.5,
+                                    borderRadius: 0.5
+                                }}
+                                title={`Ch ${s.origIdx}: Pin ${s.pin}, [${offset}..${offset + length}] (${length} px)`}
+                            >
+                                Ch {s.origIdx}: [{offset}..{offset + length}]
+                            </Box>
                         </Box>
                     );
                 })}
