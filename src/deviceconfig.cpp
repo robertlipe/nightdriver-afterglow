@@ -161,6 +161,8 @@ DeviceConfig::DeviceConfig()
         [this] { assert(SaveToJSONFile(DEVICE_CONFIG_FILE, *this)); }
     );
 
+    InitializeDefaultStrips();
+
     auto jsonDoc = CreateJsonDocument();
 
     if (LoadJSONFile(DEVICE_CONFIG_FILE, jsonDoc))
@@ -174,7 +176,6 @@ DeviceConfig::DeviceConfig()
         debugW("DeviceConfig could not be loaded from JSON, using defaults");
 
         SetTimeZone(timeZone, true);
-        InitializeDefaultStrips();
 
         SaveToJSON();
     }

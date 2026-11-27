@@ -77,15 +77,15 @@ class FireEffect : public EffectWithId<FireEffect>
 
   public:
 
-    FireEffect(const String & strName,
-		    int ledCount = 0,
-		    int cellsPerLED = 1,
-		    int cooling = 20,
-		    int sparking = 100,
-		    int sparks = 3,
-		    int sparkHeight = 4,
-		    bool breversed = false,
-		    bool bmirrored = false)
+    explicit FireEffect(const String & strName,
+                        int ledCount = 0,
+                        int cellsPerLED = 1,
+                        int cooling = 20,
+                        int sparking = 100,
+                        int sparks = 3,
+                        int sparkHeight = 4,
+                        bool breversed = false,
+                        bool bmirrored = false)
     : EffectWithId<FireEffect>(strName),
           LEDCount(ledCount),
           CellsPerLED(cellsPerLED),
@@ -252,17 +252,17 @@ class PaletteFlameEffect : public FireEffect
     bool _ignoreGlobalColor;
 
   public:
-    PaletteFlameEffect(const String & strName,
-                       const CRGBPalette16 &palette,
-                       bool ignoreGlobalColor = false,
-                       int ledCount = 0,
-                       int cellsPerLED = 1,
-                       int cooling = 20,         // Was 1.8 for NightDriverStrip
-                       int sparking = 100,
-                       int sparks = 3,
-                       int sparkHeight = 3,
-                       bool reversed = false,
-                       bool mirrored = false)
+    explicit PaletteFlameEffect(const String & strName,
+                                const CRGBPalette16 &palette,
+                                int ledCount = 0,
+                                int cellsPerLED = 1,
+                                int cooling = 20,         // Was 1.8 for NightDriverStrip
+                                int sparking = 100,
+                                int sparks = 3,
+                                int sparkHeight = 3,
+                                bool reversed = false,
+                                bool mirrored = false,
+                                bool ignoreGlobalColor = false)
         : FireEffect(strName, ledCount, cellsPerLED, cooling, sparking, sparks, sparkHeight, reversed, mirrored),
           _palette(palette),
           _ignoreGlobalColor(ignoreGlobalColor)
@@ -312,18 +312,18 @@ class MusicalPaletteFire : public PaletteFlameEffect, protected BeatEffectBase
 {
   public:
 
-    MusicalPaletteFire(const String & strName,
-                       const CRGBPalette16 &palette,
-                       bool ignoreGlobalColor = false,
-                       int ledCount = 0,
-                       int cellsPerLED = 1,
-                       int cooling = 20,         // Was 1.8 for NightDriverStrip
-                       int sparking = 100,
-                       int sparks = 3,
-                       int sparkHeight = 3,
-                       bool reversed = false,
-                       bool mirrored = false)
-        : PaletteFlameEffect(strName, palette, ignoreGlobalColor, ledCount, cellsPerLED, cooling, sparking, sparks, sparkHeight, reversed, mirrored),
+    explicit MusicalPaletteFire(const String & strName,
+                                const CRGBPalette16 &palette,
+                                int ledCount = 0,
+                                int cellsPerLED = 1,
+                                int cooling = 20,         // Was 1.8 for NightDriverStrip
+                                int sparking = 100,
+                                int sparks = 3,
+                                int sparkHeight = 3,
+                                bool reversed = false,
+                                bool mirrored = false,
+                                bool ignoreGlobalColor = false)
+        : PaletteFlameEffect(strName, palette, ledCount, cellsPerLED, cooling, sparking, sparks, sparkHeight, reversed, mirrored, ignoreGlobalColor),
           BeatEffectBase(1.00, 0.01)
     {
     }

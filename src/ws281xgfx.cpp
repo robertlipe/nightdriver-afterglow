@@ -92,27 +92,51 @@ void WS281xGFX::AddLEDs(std::vector<std::shared_ptr<GFXBase>>& devices)
                len, strip.dataPin, offset,
                ChipsetToString(strip.chipset), ColorOrderToString(strip.colorOrder));
 
-        fl::ChipsetTimingConfig timing;
-        switch (strip.chipset)
+        fl::ChannelPtr channel = nullptr;
+        if (strip.chipset == ChipsetType::APA102 || strip.chipset == ChipsetType::SK9822)
         {
-        case ChipsetType::WS2815:
-            timing = fl::makeTimingConfig<fl::TIMING_WS2815>();
-            break;
-        case ChipsetType::WS2811:
-        case ChipsetType::WS2812B:
-        default:
-            timing = fl::makeTimingConfig<fl::TIMING_WS2812_800KHZ>();
-            break;
+            if (strip.clockPin < 0)
+            {
+                debugE("Strip %zu: %s requires a clock pin (clockPin < 0); skipping.",
+                       ch, ChipsetToString(strip.chipset));
+                continue;
+            }
+            auto encoder = (strip.chipset == ChipsetType::APA102)
+                ? fl::SpiEncoder::apa102()
+                : fl::SpiEncoder::sk9822();
+            fl::SpiChipsetConfig spiConfig(strip.dataPin, strip.clockPin, encoder);
+            fl::ChannelConfig config(
+                spiConfig,
+                fl::span<CRGB>(&masterBuffer[offset], len),
+                strip.colorOrder
+            );
+            channel = FastLED.add(config);
+            pinMode(strip.clockPin, OUTPUT);
         }
+        else
+        {
+            fl::ChipsetTimingConfig timing;
+            switch (strip.chipset)
+            {
+            case ChipsetType::WS2815:
+                timing = fl::makeTimingConfig<fl::TIMING_WS2815>();
+                break;
+            case ChipsetType::WS2811:
+            case ChipsetType::WS2812B:
+            default:
+                timing = fl::makeTimingConfig<fl::TIMING_WS2812_800KHZ>();
+                break;
+            }
 
-        fl::ClocklessChipset chipset(strip.dataPin, timing);
-        fl::ChannelConfig config(
-            chipset,
-            fl::span<CRGB>(&masterBuffer[offset], len),
-            strip.colorOrder
-        );
+            fl::ClocklessChipset chipset(strip.dataPin, timing);
+            fl::ChannelConfig config(
+                chipset,
+                fl::span<CRGB>(&masterBuffer[offset], len),
+                strip.colorOrder
+            );
 
-        auto channel = FastLED.add(config);
+            channel = FastLED.add(config);
+        }
 #if FASTLED_EXPERIMENTAL_ESP32_RGBW_ENABLED
         if (channel)
         {
@@ -178,7 +202,7 @@ void WS281xGFX::InitializeHardware(std::vector<std::shared_ptr<GFXBase>>& device
         size_t w = masterPixels;
         size_t h = 1;
 #if MATRIX_HEIGHT > 1
-        if (strips.size() == 1 && masterPixels == MATRIX_WIDTH * MATRIX_HEIGHT)
+        if (masterPixels == MATRIX_WIDTH * MATRIX_HEIGHT)
         {
             w = MATRIX_WIDTH;
             h = MATRIX_HEIGHT;

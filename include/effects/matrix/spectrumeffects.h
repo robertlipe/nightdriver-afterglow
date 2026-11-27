@@ -87,13 +87,14 @@ class InsulatorSpectrumEffect : public EffectWithId<InsulatorSpectrumEffect>, pu
     {
         // Use const reference to avoid copying PeakData
         const PeakData & peaks = g_Analyzer.Peaks();
+        const int numFans = min<int>(NUM_FANS, _cLEDs / max(1, FAN_SIZE));
 
-        for (int band = 0; band < min(NUM_BANDS, NUM_FANS); band++)
+        for (int band = 0; band < min(NUM_BANDS, numFans); band++)
         {
-            CRGB color = ColorFromPalette(_Palette, ::map(band, 0, min(NUM_BANDS, NUM_FANS), 0, 255) + beatsin8(1) );
+            CRGB color = ColorFromPalette(_Palette, ::map(band, 0, min(NUM_BANDS, numFans), 0, 255) + beatsin8(1) );
             color = color.fadeToBlackBy(255 - 255 * peaks[band]);
             color = color.fadeToBlackBy((2.0 - g_Analyzer.VURatio()) * 228);
-            DrawRingPixels(0, FAN_SIZE * peaks[band], color, NUM_FANS-1-band, 0);
+            DrawRingPixels(0, FAN_SIZE * peaks[band], color, numFans - 1 - band, 0);
         }
 
         ProcessAudio();
@@ -104,11 +105,12 @@ class InsulatorSpectrumEffect : public EffectWithId<InsulatorSpectrumEffect>, pu
 
     virtual void HandleBeat(bool bMajor, float elapsed, float span) override
     {
+        const int numFans = max(1, min<int>(NUM_FANS, _cLEDs / max(1, FAN_SIZE)));
         int iInsulator;
         do
         {
-          iInsulator = random(0, NUM_FANS);
-        } while (NUM_FANS > 3 && iInsulator == _iLastInsulator);
+          iInsulator = random(0, numFans);
+        } while (numFans > 3 && iInsulator == _iLastInsulator);
         _iLastInsulator = iInsulator;
 
 
@@ -195,7 +197,7 @@ class VUMeterVertical : public VUMeter
 
     virtual inline void EraseVUMeter(std::vector<std::shared_ptr<GFXBase>> & GFX, int start, int yVU) const override
     {
-        for (int i = start; i <= GFX[0]->width(); i++)
+        for (int i = start; i < GFX[0]->width(); i++)
             for (auto& device : GFX)
                 device->setPixel(i, yVU, CRGB::Black);
     }
